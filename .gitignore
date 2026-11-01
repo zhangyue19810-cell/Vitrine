@@ -51,3 +51,11 @@ Thumbs.db
 .env.*
 *.pem
 *.key
+
+# 本地租户 / 账号敏感配置（禁止提交）
+secrets/
+*.secret
+*.secrets
+tenant-id*
+microsoft-tenant-id
+config.local.*
