@@ -50,6 +50,20 @@ stroke is treated as one continuous curve rather than two unrelated sides.
 - The sheet remains a modal and keeps focus / Escape behaviour, so the rest of the launcher cannot be
   operated behind it.
 
+## Standalone browser preview
+
+The field is extracted without the launcher transport in `demo/mobius/` and uses local demo data.
+It can be rebuilt with:
+
+```sh
+npm run check:mobius-preview
+npm run build:mobius-preview
+python3 -m http.server 4173 --bind 0.0.0.0 --directory .stage/mobius-preview
+```
+
+The preview intentionally keeps only the Three.js content field: Möbius ribbon, archive faces, artwork,
+hover tooltip, orbit camera, selection and an on-surface simulated download progress.
+
 ## Verification
 
 Executed:
