@@ -46,6 +46,12 @@ export interface Settings {
   };
 }
 
+/**
+ * Public Azure application (client) ID built into Vitrine for Microsoft device-code login.
+ * Client IDs are not secrets. The account can still override this in Settings → Accounts & keys.
+ */
+export const DEFAULT_MS_CLIENT_ID = "7d584720-c4ba-42f5-bcc7-0ec98897fb2b";
+
 /** Optional owner UUID for offline accounts. Empty by default; the player sets it in settings. */
 export const DEFAULT_OWNER_UUID = "";
 
@@ -57,7 +63,7 @@ export const DEFAULT_SETTINGS: Settings = {
   network: { proxy: "system", proxyUrl: "" },
   java: { autoInstall: true, extraPaths: [] },
   launch: { memory: "auto", jvmPreset: "default", jvmArgs: "", gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
-  accounts: { msClientId: "", curseforgeKey: "", ownerUuid: DEFAULT_OWNER_UUID },
+  accounts: { msClientId: DEFAULT_MS_CLIENT_ID, curseforgeKey: "", ownerUuid: DEFAULT_OWNER_UUID },
   ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "auto", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1 },
 };
 
@@ -168,7 +174,7 @@ export function applySettings(current: Settings, patch: unknown): Settings {
     if (accounts.msClientId !== undefined) {
       const id = text("Azure 应用 ID", accounts.msClientId, 100);
       if (id && !UUID.test(id)) throw new SettingsError("Azure 应用（客户端）ID 应当是形如 xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx 的 GUID");
-      next.accounts.msClientId = id;
+      next.accounts.msClientId = id || DEFAULT_MS_CLIENT_ID;
     }
     if (accounts.curseforgeKey !== undefined) next.accounts.curseforgeKey = text("CurseForge API 密钥", accounts.curseforgeKey, 300);
     if (accounts.ownerUuid !== undefined) {

@@ -106,7 +106,7 @@ function sections(): Section[] {
           name: "微软登录的 Azure 应用 ID",
           path: "accounts.msClientId",
           field: { kind: "text", mono: true, placeholder: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" },
-          desc: html`微软账号登录需要一个你自己在 Azure 门户注册的“公共客户端”应用（开启“允许公共客户端流”），再把它的应用（客户端）ID 填在这里。新应用还需要通过 Mojang 的审核，才能访问 Minecraft 服务。不使用正版登录可以不填，离线和外置登录不受影响。`,
+          desc: html`Vitrine 已内置一个已通过 Mojang 审核、用于设备码登录的公共 Azure 客户端，通常不需要修改。若你想使用自己的 Azure 应用，可在这里覆盖它的“应用程序（客户端）ID”；自己的应用同样需要开启“允许公共客户端流”并通过 Mojang 审核。清空后会恢复内置值。`,
         },
         { name: "CurseForge API 密钥", path: "accounts.curseforgeKey", field: { kind: "text", secret: true, mono: true }, desc: "用于浏览和安装 CurseForge 的整合包与模组。可在 CurseForge for Studios 控制台免费申请；不填则只能使用 Modrinth（或内容镜像）。" },
         { name: "离线账号默认 UUID", path: "accounts.ownerUuid", field: { kind: "text", mono: true }, desc: "添加离线账号时默认使用的 UUID，保持不变可以让存档、背包和权限始终对应同一个玩家。" },

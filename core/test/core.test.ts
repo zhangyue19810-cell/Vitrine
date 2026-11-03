@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Core } from "../src/core";
-import { DEFAULT_OWNER_UUID } from "../src/settings";
+import { DEFAULT_MS_CLIENT_ID, DEFAULT_OWNER_UUID } from "../src/settings";
 import { startWsServer, type WsServer } from "../src/ws-server";
 import { currentOs } from "../src/util/os";
 import { startFakeMojang, type FakeWorld } from "./helpers/fake-mojang";
@@ -75,6 +75,8 @@ describe("the core over the development transport", () => {
       const boot = await client.call("app.bootstrap");
       assert.equal(boot.system.version, "9.9.9");
       assert.equal(boot.settings.accounts.ownerUuid, DEFAULT_OWNER_UUID);
+      assert.equal(boot.settings.accounts.msClientId, DEFAULT_MS_CLIENT_ID);
+      assert.equal(boot.system.hasMicrosoftClientId, true);
       assert.equal(boot.settings.ui.pauseWhenGameRuns, true);
       assert.equal(boot.settings.ui.whenUnfocused, "pause");
       assert.equal(boot.settings.ui.releaseGpuWhenGameRuns, true);

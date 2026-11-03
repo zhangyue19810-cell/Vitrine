@@ -21,7 +21,7 @@ Windows 版是用官方 Electron 运行时重新打包的，**还没有在真实
 首次运行 SmartScreen 可能拦截（没有代码签名证书）。详细说明见 [docs/WINDOWS-README.txt](docs/WINDOWS-README.txt)。
 
 - 数据在 `%APPDATA%\Vitrine`；在 `Vitrine.exe` 旁边放一个空的 `portable.txt` 就变成便携模式（数据放进 `data\`）。
-- **微软正版登录需要你自己的 Azure 应用 ID**（设置 → 账号与密钥），而且新应用要通过 Mojang 的审核；不填也能用离线 / 外置登录。
+- **微软正版登录已内置通过 Mojang 审核的公共 Azure 客户端 ID**，无需自己注册应用；也可以在 设置 → 账号与密钥 覆盖为自己的 Azure 应用 ID。离线 / 外置登录不受影响。
 - CurseForge 需要免费申请的 API 密钥（可选；不填仍可用 Modrinth 与内容镜像）。
 
 ## 从源码运行
@@ -84,7 +84,7 @@ scripts/       dev-backend、dev-demo、图标生成、Electron 打包、Windows
 
 ## 已知限制
 
-见 [docs/PCL2-FEATURE-MATRIX.md](docs/PCL2-FEATURE-MATRIX.md) 最后一节。最重要的几条：没有内置微软登录的 Client ID；没有自定义背景 / 音乐 /
+见 [docs/PCL2-FEATURE-MATRIX.md](docs/PCL2-FEATURE-MATRIX.md) 最后一节。最重要的几条：微软登录内置客户端已通过 Mojang 审核，但仍需用真实账号做最终流程验证；没有自定义背景 / 音乐 /
 联机 / 皮肤更换；崩溃分析的规则库有限；Windows 版没有签名，也还没在真机上充分使用。
 
 ## 许可

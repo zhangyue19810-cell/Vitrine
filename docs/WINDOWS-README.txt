@@ -32,15 +32,13 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
   · 并行下载线程（默认 32）、单文件分段数（默认 4 段，可断点续传）、限速、重试次数、代理都可以调。
     整合包有成千上万个小文件，线程多比较快；网络不稳或被限流时调低。
 
-五、两个需要你自己申请的东西（我们没有、也不应该替你带一个）
-  · 微软正版登录需要一个你自己的 Azure “公共客户端”应用 ID：
-      Azure 门户 → Microsoft Entra ID → 应用注册 → 新注册，
-      受支持的账户类型选“任何组织目录中的账户和个人 Microsoft 账户”；
-      注册后在“身份验证”里把“允许公共客户端流”设为“是”；
-      把“应用程序(客户端) ID”填进 设置 → 账号与密钥。
-      新注册的应用还要按 Mojang 的说明（https://aka.ms/AppRegInfo）提交审核，通过之前
-      登录会被 Mojang 拒绝，启动器会提示“app-not-approved”。
-      不用正版登录的话可以不管，离线账户和外置登录不受影响。
+五、账号与密钥
+  · 微软正版登录已内置通过 Mojang 审核的公共 Azure 客户端 ID，正常不需要自己注册应用。
+      如果要用自己的应用，可在 设置 → 账号与密钥 覆盖 Client ID；应用需要：
+      “任何组织目录中的账户和个人 Microsoft 账户” + “允许公共客户端流”，
+      并按照 Mojang 的说明（https://aka.ms/AppRegInfo）提交审核。
+      审核通过前，Minecraft 服务会拒绝登录，启动器会提示“app-not-approved”。
+      离线账户和外置登录不受影响。
   · CurseForge API 密钥（可选）：到 CurseForge for Studios 控制台免费申请，填进同一页。
       不填时仍然可以用 Modrinth，以及内容镜像提供的 CurseForge 数据。
 

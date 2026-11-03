@@ -102,9 +102,9 @@ function buildMicrosoft(panel: HTMLElement) {
     setHtml(
       panel,
       html`<div class="notice warn" style="flex-direction:column"><b>需要先配置 Azure 应用 ID</b>
-        <div>微软登录使用“设备代码流”：启动器给你一个代码，你在浏览器里登录并输入它。这需要一个由你注册的 Azure 应用，并且新应用要通过 Mojang 的审核才能访问 Minecraft 服务。</div>
+        <div>微软登录使用“设备代码流”：启动器给你一个代码，你在浏览器里登录并输入它。当前没有可用的 Azure 客户端 ID，请在设置中填写一个已开启公共客户端流、并通过 Mojang 审核的应用 ID。</div>
         <div><button class="btn sm" data-act="open-settings-accounts">打开设置</button></div></div>
-        <div class="muted" style="margin-top:14px;font-size:12.5px;line-height:1.8">暂时不想配置的话，可以使用“离线账号”或“外置登录”，它们不受影响。</div>`,
+        <div class="muted" style="margin-top:14px;font-size:12.5px;line-height:1.8">也可以继续使用“离线账号”或“外置登录”，它们不受影响。</div>`,
     );
     return;
   }
