@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Vitrine 琉匣 — 玻璃柜里的 Minecraft 启动器。" />
+    <title>Vitrine 琉匣</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <style>
+      /* Painted before any script runs, so the window is never white while the interface loads. */
+      html,
+      body {
+        margin: 0;
+        height: 100%;
+        background: #eae5e1;
+      }
+      @media (prefers-color-scheme: dark) {
+        html:not([data-theme="light"]),
+        body {
+          background: #11181b;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main id="viewport"><div id="stage"></div></main>
+    <noscript>Vitrine 需要启用 JavaScript。</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

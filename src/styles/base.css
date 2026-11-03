@@ -1,0 +1,535 @@
+@import "../fonts.css";
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+:root {
+  /* Painted per frame by theme.ts while the light/dark wave runs; these are the light defaults. */
+  --paper: rgb(234, 229, 225);
+  --paper-rgb: 234, 229, 225;
+  --panel: rgb(237, 235, 228);
+  --panel-rgb: 237, 235, 228;
+  --field: rgb(231, 227, 217);
+  --ink: rgb(8, 10, 8);
+  --ink-rgb: 8, 10, 8;
+  --muted: rgb(119, 117, 109);
+  --line: rgb(170, 165, 154);
+  --accent: rgb(31, 158, 142);
+  --accent-ink: rgb(21, 112, 96);
+  --accent-rgb: 31, 158, 142;
+  --on-accent: rgb(255, 255, 255);
+  --on-danger: rgb(255, 255, 255);
+  --danger: rgb(176, 58, 46);
+  --warn: rgb(178, 118, 24);
+  --ok: rgb(40, 130, 84);
+  --font: "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, "Microsoft YaHei", monospace;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  font-family: var(--font);
+  color: var(--ink);
+  background: var(--paper);
+  font-synthesis: none;
+  color-scheme: light;
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-dark-surface="true"] {
+  color-scheme: dark;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  /* `clip` cannot be scrolled even from script (focus() / scrollIntoView on a slid-in sheet used to nudge the stage sideways). */
+  overflow: clip;
+  background: var(--paper);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  border: 0;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:disabled,
+button[aria-disabled="true"] {
+  cursor: default;
+}
+
+a {
+  color: var(--accent-ink);
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+::selection {
+  background: rgba(var(--accent-rgb), 0.3);
+}
+
+kbd {
+  font: inherit;
+}
+
+/* Thin, quiet scrollbars: the page is mostly hairlines. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+#viewport {
+  position: relative;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  overflow: clip;
+  background: var(--paper);
+}
+
+#stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  overflow: hidden;
+  overflow: clip;
+  transform-origin: center;
+  isolation: isolate;
+  background: var(--paper);
+}
+
+.three-scene {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 0.45s;
+}
+
+.three-scene canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#stage[data-booted="true"] .three-scene {
+  opacity: 1;
+}
+
+/* Without a 3D scene (low-end machines, a released scene) the shelf is replaced by a quiet paper texture. */
+#stage[data-scene="off"] .three-scene {
+  opacity: 0;
+}
+
+.scene-atmosphere {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg, rgba(var(--paper-rgb), 0.75), transparent 22%),
+    linear-gradient(0deg, rgba(var(--paper-rgb), 0.8), transparent 22%),
+    radial-gradient(ellipse at 48% 48%, transparent 38%, rgba(var(--paper-rgb), 0.5) 92%);
+}
+
+.scene-atmosphere::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: var(--detail-shade, 0);
+  background: linear-gradient(90deg, transparent 30%, rgba(var(--paper-rgb), 0.35) 44%, rgba(var(--paper-rgb), 0.94) 56%, var(--paper) 100%);
+}
+
+/* The scanning marks the scene draws over the extracted cassette while an instance page is open. */
+#inspection-marks {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 4;
+  pointer-events: none;
+  opacity: 0;
+  color: var(--ink);
+  fill: currentColor;
+}
+
+#inspection-lines {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+}
+
+#inspection-point {
+  fill: currentColor;
+}
+
+#inspection-text {
+  position: absolute;
+  left: 0;
+  top: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------------------------------ brand + navigation */
+
+.brand {
+  position: absolute;
+  left: 52px;
+  top: 40px;
+  z-index: 6;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  pointer-events: none;
+}
+
+.brand-mark {
+  width: 46px;
+  height: 46px;
+  color: var(--ink);
+  flex: none;
+}
+
+.brand-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.brand-text h1 {
+  margin: 0;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: 6px;
+}
+
+.brand-text div {
+  margin-top: 8px;
+  font-size: 10.5px;
+  letter-spacing: 2.2px;
+  color: var(--muted);
+}
+
+.system-nav {
+  position: absolute;
+  right: 52px;
+  top: 36px;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 1px;
+}
+
+.nav-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 14px;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.nav-button:hover {
+  border-color: var(--line);
+}
+
+.nav-button .glyph {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.nav-button .key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.nav-button .count {
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.nav-button .dot {
+  position: absolute;
+  right: 6px;
+  top: 6px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.nav-button[data-busy="false"] .dot {
+  display: none;
+}
+
+.nav-account {
+  max-width: 220px;
+}
+
+.nav-account .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.avatar {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 11px;
+  font-weight: 700;
+  image-rendering: pixelated;
+  background-size: cover;
+}
+
+.window-controls {
+  display: flex;
+  margin-left: 10px;
+  padding-left: 10px;
+  border-left: 1px solid var(--line);
+}
+
+.window-controls button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 15px;
+}
+
+.window-controls button:hover {
+  color: var(--ink);
+  background: rgba(var(--ink-rgb), 0.06);
+}
+
+.window-controls button[data-act="win-close"]:hover {
+  background: var(--danger);
+  color: var(--on-danger);
+}
+
+.system-footer {
+  position: absolute;
+  left: 52px;
+  right: 52px;
+  bottom: 26px;
+  z-index: 6;
+  display: flex;
+  align-items: center;
+  gap: 36px;
+  font-size: 10.5px;
+  letter-spacing: 0.9px;
+  color: var(--muted);
+}
+
+.system-footer > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.system-footer > .push {
+  margin-left: auto;
+}
+
+.system-footer button {
+  font-size: 10.5px;
+  letter-spacing: 1px;
+}
+
+.system-footer button:hover {
+  color: var(--ink);
+}
+
+.status-light {
+  width: 6px;
+  height: 6px;
+  background: var(--ok);
+  display: inline-block;
+}
+
+.status-light[data-state="off"] {
+  background: var(--danger);
+}
+
+.status-light[data-state="busy"] {
+  background: var(--accent);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/*
+ * While nobody is looking at the launcher (minimised, another window has the focus, a game is running in front of it)
+ * every animation stops, not just the 3D scene; they all pick up again the moment the window is focused. A sheet or the
+ * launch screen covering the scene is different — the page is in use, its spinners keep turning and only the 3D loop
+ * stops (see app/scheduler.ts, which sets data-perf).
+ */
+:root[data-perf="hidden"] *,
+:root[data-perf="hidden"] *::before,
+:root[data-perf="hidden"] *::after,
+:root[data-perf="blurred"] *,
+:root[data-perf="blurred"] *::before,
+:root[data-perf="blurred"] *::after,
+:root[data-perf="game-blurred"] *,
+:root[data-perf="game-blurred"] *::before,
+:root[data-perf="game-blurred"] *::after {
+  animation-play-state: paused !important;
+}
+
+/* ------------------------------------------------------------------------------------------ toasts */
+
+.toast-root {
+  position: absolute;
+  left: 50%;
+  bottom: 70px;
+  z-index: 60;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  max-width: min(640px, 90vw);
+  padding: 12px 20px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 13px;
+  letter-spacing: 0.4px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.22);
+  animation: toast-in 0.28s var(--ease) both;
+  pointer-events: auto;
+}
+
+.toast[data-kind="error"] {
+  background: var(--danger);
+  color: var(--on-danger);
+}
+
+.toast[data-kind="ok"] {
+  background: var(--accent-ink);
+  color: var(--on-accent);
+}
+
+.toast.leaving {
+  animation: toast-out 0.22s ease-in both;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ reduced motion */
+
+#stage.reduce-motion *,
+#stage.reduce-motion *::before,
+#stage.reduce-motion *::after {
+  animation-duration: 0.001s !important;
+  animation-delay: 0s !important;
+  transition-duration: 0.001s !important;
+  transition-delay: 0s !important;
+}
+
+/* Desktop shell (frameless window): the top bar and sheet headers drag the window; every control inside stays clickable. */
+.drag-strip {
+  display: none;
+}
+
+html[data-shell="electron"] .drag-strip {
+  display: block;
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 36px;
+  z-index: 4;
+  -webkit-app-region: drag;
+}
+
+html[data-shell="electron"] .system-nav,
+html[data-shell="electron"] .system-nav * {
+  -webkit-app-region: no-drag;
+}
+
+html[data-shell="electron"] .sheet-head {
+  -webkit-app-region: drag;
+}
+
+html[data-shell="electron"] .sheet-head button,
+html[data-shell="electron"] .sheet-head input,
+html[data-shell="electron"] .sheet-head select,
+html[data-shell="electron"] .sheet-tools {
+  -webkit-app-region: no-drag;
+}
+
+/* Text selection must not start inside the drag area. */
+html[data-shell="electron"] .drag-strip,
+html[data-shell="electron"] .sheet-head {
+  user-select: none;
+}

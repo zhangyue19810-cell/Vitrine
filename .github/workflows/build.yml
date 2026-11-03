@@ -1,0 +1,42 @@
+# Tests on Linux, builds the Windows portable zip on a Windows runner and keeps it as a workflow artifact.
+# (Written alongside the project; it has not been run on GitHub yet — check the first run.)
+name: build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  package-windows:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/gen-licenses.mjs
+      - run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Vitrine-win-x64
+          path: |
+            release/*.zip
+            release/SHA256SUMS.txt

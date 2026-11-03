@@ -1,0 +1,52 @@
+{
+  "name": "vitrine-launcher",
+  "productName": "Vitrine",
+  "version": "0.1.0",
+  "description": "Vitrine (琉匣) — a Minecraft launcher with a glass-archive 3D interface, built on the MIT-licensed RhineLabUI frontend.",
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "type": "module",
+  "main": "dist-electron/main.cjs",
+  "scripts": {
+    "postinstall": "node scripts/patch-rolling-number.mjs",
+    "dev": "vite --host 127.0.0.1",
+    "dev:backend": "tsx scripts/dev-backend.ts",
+    "typecheck": "tsc -p tsconfig.json && tsc -p core/tsconfig.json && tsc -p electron/tsconfig.json",
+    "check:browse-mobius": "node scripts/check-browse-mobius.mjs",
+    "test": "tsx --test core/test/*.test.ts",
+    "build:web": "vite build",
+    "build:electron": "node scripts/build-electron.mjs",
+    "build": "npm run build:web && npm run build:electron",
+    "start": "npm run build && electron .",
+    "dist:win": "node scripts/package-win.mjs",
+    "dev:demo": "tsx scripts/dev-demo.ts"
+  },
+  "dependencies": {
+    "@kitlangton/rolling-number": "0.4.1",
+    "three": "^0.183.0"
+  },
+  "devDependencies": {
+    "@electron/asar": "^4.3.1",
+    "@resvg/resvg-js": "^2.6.2",
+    "@types/node": "^22.10.0",
+    "@types/three": "^0.183.0",
+    "@types/ws": "^8.5.13",
+    "@types/yauzl": "^2.10.3",
+    "@types/yazl": "^2.4.5",
+    "electron": "45.0.0",
+    "esbuild": "^0.28.2",
+    "https-proxy-agent": "^7.0.6",
+    "playwright-core": "^1.50.0",
+    "resedit": "^3.1.0",
+    "smol-toml": "^1.3.1",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vite": "^7.3.1",
+    "ws": "^8.18.0",
+    "yauzl": "^3.2.0",
+    "yazl": "^3.3.1"
+  }
+}

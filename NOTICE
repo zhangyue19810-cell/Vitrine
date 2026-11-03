@@ -1,0 +1,43 @@
+Vitrine 琉匣 — third-party notices
+==================================
+
+Vitrine is released under the MIT License (see LICENSE). It contains, is derived from, or is distributed
+together with the following third-party work. Their licences stay with them.
+
+1. RhineLabUI — https://github.com/LBEILC/RhineLabUI
+   MIT License, Copyright (c) 2026 LBEILC.
+   The 3D interface (scene, glass-archive look, layout system, shaders, the archive-cassette.glb model
+   and the interaction design) is derived from RhineLabUI and changed into a launcher front end.
+   The licence text is reproduced in LICENSE.
+
+2. MiSans — Xiaomi / 小米科技有限责任公司
+   Copyright (c) 2020-2025 Beijing Xiaomi Mobile Software Co., Ltd. All Rights Reserved.
+   Distributed unmodified as split web-font shards (misans-webfont 4.3.1 by mobeicanyue) and used under the
+   MiSans font licence. See public/fonts/NOTICE.txt and public/fonts/MiSans-license.pdf
+   (in the packaged app: resources/app.asar → dist/fonts/).
+
+3. three.js 0.183 — https://threejs.org — MIT License, Copyright (c) 2010-2026 three.js authors.
+
+4. @kitlangton/rolling-number 0.4.1 — MIT License, Copyright (c) 2026 Kit Langton.
+   Licence text: public/licenses/rolling-number.txt.
+
+5. Bundled into the desktop application's core (esbuild, dist-electron/main.cjs):
+   yauzl 3.x (MIT, Josh Wolfe) · yazl 3.x (MIT, Josh Wolfe) · pend (MIT, Andrew Kelley) · buffer-crc32 (MIT, Brian J. Brennan)
+   · smol-toml 1.x (BSD-3-Clause, Squirrel Chat) · https-proxy-agent 7.x and agent-base 7.x (MIT, Nathan Rajlich)
+   · debug 4.x (MIT, Josh Junon and contributors) · ms 2.x (MIT, Vercel).
+   Development only, not shipped in the desktop app: ws (MIT) for the browser-development transport,
+   Vite, TypeScript, tsx, esbuild, resedit, @electron/asar, @resvg/resvg-js.
+   The licence texts of the bundled packages (including three.js and rolling-number) are in THIRD-PARTY-LICENSES.txt
+   (regenerate with: node scripts/gen-licenses.mjs).
+
+6. Electron 45 (MIT, Copyright (c) Electron contributors and GitHub Inc.) and Chromium — the runtime shipped in
+   the Windows package. Their licences are in the package: LICENSE and LICENSES.chromium.html.
+
+7. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
+   BMCLAPI (https://bmclapi2.bangbang93.com), MCIM (https://mod.mcimirror.top), Modrinth, CurseForge,
+   Fabric / Quilt / Forge / NeoForge / OptiFine metadata and download hosts.
+   Please respect their terms of use and rate limits.
+
+"Minecraft" is a trademark of Mojang Synergies AB / Microsoft. Vitrine is not an official Minecraft product and
+is not approved by or associated with Mojang or Microsoft.
+Vitrine contains no source code from PCL / PCL2 or any other launcher; it is an independent implementation.

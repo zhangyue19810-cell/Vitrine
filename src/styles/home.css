@@ -1,0 +1,466 @@
+/* The home screen: the shelf fills the stage; the selected instance is described on the right. */
+
+.home,
+.detail {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  transition: opacity 0.4s var(--ease), transform 0.5s var(--ease);
+}
+
+.home > *,
+.detail > * {
+  pointer-events: auto;
+}
+
+#stage[data-mode="detail"] .home {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+#stage:not([data-mode="detail"]) .detail {
+  opacity: 0;
+  transform: translateX(24px);
+}
+
+#stage[data-mode="detail"] .home > *,
+#stage:not([data-mode="detail"]) .detail > * {
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------------------------------ callout */
+
+.callout {
+  position: absolute;
+  right: 64px;
+  top: 35%;
+  width: min(540px, 42%);
+}
+
+.callout-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.callout-eyebrow .slash {
+  opacity: 0.55;
+}
+
+.callout-title {
+  margin: 16px 0 0;
+  font-size: 30px;
+  font-weight: 750;
+  line-height: 1.16;
+  letter-spacing: 0.3px;
+  overflow-wrap: anywhere;
+}
+
+.callout-title button {
+  display: inline;
+  font: inherit;
+  text-align: left;
+  letter-spacing: inherit;
+}
+
+.callout-title .arrow {
+  display: inline-block;
+  margin-left: 10px;
+  font-size: 20px;
+  font-weight: 400;
+  transition: transform 0.25s var(--ease);
+}
+
+.callout-title button:hover .arrow {
+  transform: translate(3px, -3px);
+}
+
+.callout-rule {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin: 16px 0 14px;
+}
+
+.callout-rule::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  background: var(--ink);
+  flex: none;
+}
+
+.callout-rule::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--ink);
+  transform-origin: right center;
+}
+
+.callout-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  font-size: 15px;
+}
+
+.callout-summary .side {
+  flex: none;
+  font-size: 11px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.callout-meta {
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.callout-note {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  max-height: 3.2em;
+  overflow: hidden;
+}
+
+.callout-actions {
+  margin-top: 26px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.callout[data-kind="action"] .callout-meta {
+  display: none;
+}
+
+/* ------------------------------------------------------------------------------------------ counter, ticks, lanes */
+
+.counter {
+  position: absolute;
+  left: 52px;
+  bottom: 74px;
+}
+
+.counter .label {
+  font-size: 10.5px;
+  letter-spacing: 2px;
+  color: var(--muted);
+}
+
+.counter .value {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.counter .value b {
+  font-size: 58px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.counter .value i {
+  font-style: normal;
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.ticks {
+  position: absolute;
+  left: max(250px, 21%);
+  bottom: 86px;
+  display: flex;
+  align-items: center;
+  gap: 22px;
+}
+
+.ticks .arrow-btn,
+.lane-nav .arrow-btn {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  font-weight: 200;
+  line-height: 1;
+  transition: transform 0.2s var(--ease), color 0.2s;
+}
+
+.ticks .arrow-btn:hover,
+.lane-nav .arrow-btn:hover {
+  color: var(--accent-ink);
+}
+
+.ticks .arrow-btn[data-dir="up"]:hover {
+  transform: translateY(-3px);
+}
+
+.ticks .arrow-btn[data-dir="down"]:hover {
+  transform: translateY(3px);
+}
+
+.lane-nav .arrow-btn[data-dir="prev"]:hover {
+  transform: translateX(-3px);
+}
+
+.lane-nav .arrow-btn[data-dir="next"]:hover {
+  transform: translateX(3px);
+}
+
+.ticks .marks {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  height: 36px;
+}
+
+.ticks .marks i {
+  width: 1px;
+  height: 14px;
+  background: var(--line);
+  transition: height 0.25s var(--ease), background 0.25s;
+}
+
+.ticks .marks i[data-on="true"] {
+  height: 36px;
+  background: var(--ink);
+}
+
+.lane-nav {
+  position: absolute;
+  right: 64px;
+  bottom: 80px;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.lane-nav .name {
+  min-width: 128px;
+  text-align: left;
+}
+
+.lane-nav .name small {
+  display: block;
+  font-size: 10px;
+  letter-spacing: 1.6px;
+  color: var(--muted);
+}
+
+.lane-nav .name b {
+  display: block;
+  margin-top: 3px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.hint {
+  position: absolute;
+  left: 50%;
+  bottom: 52px;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  letter-spacing: 1.4px;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+
+.hint kbd {
+  display: inline-block;
+  min-width: 18px;
+  margin: 0 3px;
+  padding: 1px 5px;
+  text-align: center;
+  border: 1px solid var(--line);
+  font-size: 10px;
+}
+
+.hover-label {
+  position: absolute;
+  left: 0;
+  top: 0;
+  z-index: 7;
+  padding: 6px 10px;
+  background: var(--ink);
+  color: var(--paper);
+  font-size: 11.5px;
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.hover-label[data-show="true"] {
+  opacity: 1;
+}
+
+.hover-label b {
+  margin-right: 8px;
+  font-weight: 400;
+  opacity: 0.6;
+}
+
+/* ------------------------------------------------------------------------------------------ detail (manage an instance) */
+
+.back-button {
+  position: absolute;
+  left: 52px;
+  top: 118px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  padding: 8px 0;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.back-button:hover {
+  color: var(--ink);
+}
+
+.back-button .arrow {
+  font-size: 20px;
+  font-weight: 300;
+  transition: transform 0.2s var(--ease);
+}
+
+.back-button:hover .arrow {
+  transform: translateX(-4px);
+}
+
+.detail-panel {
+  position: absolute;
+  left: 45%;
+  right: 52px;
+  top: 104px;
+  bottom: 64px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.detail-head {
+  flex: none;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.detail-head .titles {
+  min-width: 0;
+}
+
+.detail-head .eyebrow {
+  font-size: 10.5px;
+  letter-spacing: 1.6px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+.detail-head h2 {
+  margin: 8px 0 0;
+  font-size: 28px;
+  font-weight: 750;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.detail-head .sub {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.detail-head .actions {
+  flex: none;
+  display: flex;
+  gap: 8px;
+}
+
+.detail-rule {
+  flex: none;
+  height: 1px;
+  margin: 16px 0 0;
+  background: var(--ink);
+  transform-origin: left center;
+}
+
+.detail-tabs {
+  flex: none;
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  border-bottom: 1px solid var(--line);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.detail-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.detail-tabs button {
+  position: relative;
+  padding: 12px 16px;
+  font-size: 13px;
+  letter-spacing: 0.8px;
+  color: var(--muted);
+  white-space: nowrap;
+  transition: color 0.2s;
+}
+
+.detail-tabs button:hover {
+  color: var(--ink);
+}
+
+.detail-tabs button[aria-selected="true"] {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.detail-tabs button[aria-selected="true"]::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -1px;
+  height: 2px;
+  background: var(--accent);
+}
+
+.detail-tabs .count {
+  margin-left: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 18px 6px 18px 0;
+}

@@ -1,56 +1,35 @@
-# DSH / 本地环境
-.dsh/
-
-# 构建产物
-build/
-out/
-bin/
-target/
+node_modules/
+backups/
 dist/
-*.jar
-*.class
-*.exe
-*.dll
-*.so
-*.dylib
-
-# Gradle / Maven
-.gradle/
-mvnw
-mvnw.cmd
-.mvn/
-pom.xml.tag
-pom.xml.releaseBackup
-pom.xml.versionsBackup
-pom.xml.next
-dependency-reduced-pom.xml
-
-# IDE / 编辑器
-.idea/
-.vscode/
-*.iml
-*.ipr
-*.iws
-*.swp
-*.swo
-*~
-
-# 运行日志与临时文件
-logs/
-*.log
-*.tmp
-*.temp
-*.pid
-
-# 操作系统
-.DS_Store
-Thumbs.db
-
-# 环境变量与密钥
+.tools/
+*.mp4
+*.blend1
+optix7cache.db
+reference/*.jpg
+reference/**/*.jpg
+art/.cache/
+.worktrees/
+release/
+video/
+__pycache__/
+*.pyc
 .env
 .env.*
-*.pem
-*.key
+!.env.example
+
+reference/local-files-connection.js
+
+# Local integration checkout
+.main-integration/
+
+# Individually licensed MyFonts kit; install locally, never publish to Git.
+public/fonts/novecento/
+.vercel/
+.wrangler/
+.stage/
+.cache/
+dist-electron/
+tmp/
 
 # 本地租户 / 账号敏感配置（禁止提交）
 secrets/
@@ -59,3 +38,9 @@ secrets/
 tenant-id*
 microsoft-tenant-id
 config.local.*
+
+# DSH workspace metadata
+.dsh/
+
+# Local dependency mount
+/node_modules
