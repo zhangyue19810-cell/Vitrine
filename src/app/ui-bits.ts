@@ -4,6 +4,18 @@ import { formatPlayTime, loaderLabel, relativeTime } from "./format";
 import { displayName, primaryLoader } from "./records";
 import type { InstanceSummary, PublicAccount } from "./types";
 
+function displaySkinUrl(value: string | undefined): string {
+  const safe = safeUrl(value);
+  if (!safe) return "";
+  try {
+    const url = new URL(safe);
+    if (url.protocol === "http:" && /(^|\.)minecraft\.net$/i.test(url.hostname)) url.protocol = "https:";
+    return url.toString();
+  } catch {
+    return "";
+  }
+}
+
 /** Small pieces of markup shared by several views. */
 
 export const ACCOUNT_TYPE_LABEL: Record<string, string> = { microsoft: "微软", offline: "离线", authlib: "外置登录" };
@@ -11,7 +23,7 @@ export const ACCOUNT_TYPE_LABEL: Record<string, string> = { microsoft: "微软",
 /** The player's face, cut out of the skin texture (the 8×8 head plus the hat layer), or an initial when there is no skin. */
 export function avatar(account: Pick<PublicAccount, "name" | "skinUrl"> | undefined, large = false): Raw {
   const cls = `avatar${large ? " lg" : ""}`;
-  const skin = safeUrl(account?.skinUrl);
+  const skin = displaySkinUrl(account?.skinUrl);
   if (account && skin) {
     const url = `url(&quot;${skin.replace(/["()\\]/g, "")}&quot;)`;
     return raw(`<span class="${cls}" style="background-image:${url},${url};background-size:800%;background-position:14.2857% 14.2857%,71.4286% 14.2857%;background-color:var(--field)"></span>`);

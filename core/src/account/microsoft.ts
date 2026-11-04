@@ -78,6 +78,9 @@ async function send(
 
 const form = (values: Record<string, string>) => new URLSearchParams(values).toString();
 
+/** Microsoft texture URLs are often http; the app UI only permits https images. */
+export const secureMinecraftTextureUrl = (value: string | undefined): string | undefined => value?.replace(/^http:\/\//i, "https://");
+
 const XSTS_ERRORS: Record<number, [AuthError["reason"], string]> = {
   2148916233: ["no-xbox-account", "这个微软账户还没有 Xbox 账户。请先到 xbox.com 创建 Xbox 档案，然后再登录。"],
   2148916235: ["region-blocked", "你所在的国家或地区不提供 Xbox 服务，无法使用该账户登录。"],
@@ -201,9 +204,9 @@ export class MicrosoftAuth {
       profile: {
         id: formatUuid(profile.json.id),
         name: profile.json.name,
-        skinUrl: skin?.url,
+        skinUrl: secureMinecraftTextureUrl(skin?.url),
         skinVariant: skin?.variant?.toUpperCase() === "SLIM" ? "slim" : "classic",
-        capeUrl: cape?.url,
+        capeUrl: secureMinecraftTextureUrl(cape?.url),
       },
     };
   }

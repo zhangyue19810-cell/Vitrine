@@ -133,8 +133,8 @@ async function startMicrosoftMock(state: MsState): Promise<{ server: MockServer;
       return json(200, {
         id: OWNER.replace(/-/g, ""),
         name: "WindPlayer",
-        skins: [{ state: "ACTIVE", url: "https://textures.example/skin.png", variant: "SLIM" }],
-        capes: [{ state: "ACTIVE", url: "https://textures.example/cape.png" }],
+        skins: [{ state: "ACTIVE", url: "http://textures.example/skin.png", variant: "SLIM" }],
+        capes: [{ state: "ACTIVE", url: "http://textures.example/cape.png" }],
       });
     }
     res.writeHead(404);
@@ -248,6 +248,7 @@ describe("account manager", () => {
     assert.equal(account.type, "microsoft");
     assert.equal(account.name, "WindPlayer");
     assert.equal(account.signedIn, true);
+    assert.equal(account.skinUrl, "https://textures.example/skin.png", "http texture URLs are upgraded for the app:// CSP");
     assert.ok(!(await readFile(join(tmp, "accounts.json"), "utf8")).includes("refresh-0"), "tokens are not in accounts.json");
 
     const before = state.tokenCalls;

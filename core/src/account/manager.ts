@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { readJsonOr, writeJsonAtomic } from "../util/fsx";
 import type { LaunchAccount } from "../mc/launch-args";
 import type { SecretStore } from "./secrets";
-import { MicrosoftAuth, type MicrosoftTokens } from "./microsoft";
+import { MicrosoftAuth, secureMinecraftTextureUrl, type MicrosoftTokens } from "./microsoft";
 import { isUuid, offlineUuid, validatePlayerName, formatUuid } from "./offline";
 import { AuthError, type AccountRecord, type LoginChallenge, type PublicAccount } from "./types";
 import { YggdrasilClient, type YggProfile } from "./yggdrasil";
@@ -60,7 +60,7 @@ export class AccountManager {
       uuid: record.uuid,
       server: record.server,
       serverName: record.serverName,
-      skinUrl: record.skinUrl,
+      skinUrl: record.type === "microsoft" ? secureMinecraftTextureUrl(record.skinUrl) : record.skinUrl,
       lastUsed: record.lastUsed,
       signedIn: key ? (await this.options.secrets.get(key)) !== undefined : true,
     };
