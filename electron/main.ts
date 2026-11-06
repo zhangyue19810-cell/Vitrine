@@ -81,7 +81,7 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
-  "connect-src 'self' blob: data:",
+  "connect-src 'self' blob: data: https://aidemo.youdao.com https://api.mymemory.translated.net",
   "media-src 'self' blob: data:",
   "worker-src 'self' blob:",
   "object-src 'none'",

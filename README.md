@@ -18,7 +18,7 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 **模组和整合包**
 
-可以从 Modrinth 和 CurseForge 搜索、下载模组、光影、资源包和整合包，也可以导入 `.mrpack`、CurseForge 压缩包和 MultiMC 实例。安装前会检查游戏版本、加载器和前置模组。本地模组可以启用、禁用和删除。
+可以从 Modrinth 和 CurseForge 搜索、下载模组、光影、资源包和整合包，也可以导入 `.mrpack`、CurseForge 压缩包和 MultiMC 实例。下载页可以按游戏版本和加载器筛选，项目简介会尝试自动翻译成中文，翻译服务不可用时显示原文。安装模组时会把必需的前置一起解析好，已经装过的前置会跳过。本地模组可以启用、禁用和删除。
 
 **下载**
 

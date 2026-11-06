@@ -658,6 +658,30 @@
   min-width: 220px;
 }
 
+.br-filters {
+  gap: 14px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.br-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.br-filter .select {
+  min-width: 132px;
+  font-size: 12px;
+}
+
+.br-check {
+  margin: 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
 .br-grid {
   flex: 1;
   min-height: 0;
