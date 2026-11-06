@@ -99,9 +99,9 @@ export interface EngineSettings {
 }
 
 export const DEFAULT_ENGINE: EngineSettings = {
-  concurrency: 32,
-  segments: 4,
-  segmentMinSize: 8 * 1024 * 1024,
+  concurrency: 64,
+  segments: 8,
+  segmentMinSize: 1 * 1024 * 1024,
   retries: 3,
   speedLimit: 0,
   requestTimeoutMs: 30_000,
@@ -134,9 +134,12 @@ function hostOf(url: string): string {
   }
 }
 
-/** Remembers hosts that keep failing so the next files try the alternative source first. */
+/** Remembers failed hosts and the measured throughput of healthy ones. */
 class HostHealth {
   private fails = new Map<string, { count: number; until: number }>();
+  private speeds = new Map<string, number>();
+  private turns = new Map<string, number>();
+
   order(urls: string[]): string[] {
     if (urls.length < 2) return urls;
     const now = Date.now();
@@ -146,11 +149,28 @@ class HostHealth {
       const entry = this.fails.get(hostOf(url));
       (entry && entry.until > now ? tripped : healthy).push(url);
     }
-    return [...healthy, ...tripped];
+    const ranked = [...healthy].sort((a, b) => (this.speeds.get(hostOf(b)) ?? 0) - (this.speeds.get(hostOf(a)) ?? 0));
+    // Keep sampling the alternative source even after the first host is measured. This lets the
+    // mirror win on a fast link and the official CDN win where the mirror is slow.
+    const key = ranked.map(hostOf).join("|");
+    const turn = this.turns.get(key) ?? 0;
+    this.turns.set(key, turn + 1);
+    if (ranked.length > 1 && turn % 6 === 5) [ranked[0], ranked[1]] = [ranked[1], ranked[0]];
+    return [...ranked, ...tripped];
   }
+
   ok(url: string) {
     this.fails.delete(hostOf(url));
   }
+
+  record(url: string, bytes: number, elapsedMs: number) {
+    if (bytes <= 0 || elapsedMs < 250) return;
+    const host = hostOf(url);
+    const speed = bytes / (elapsedMs / 1000);
+    const previous = this.speeds.get(host);
+    this.speeds.set(host, previous === undefined ? speed : previous * 0.6 + speed * 0.4);
+  }
+
   fail(url: string) {
     const host = hostOf(url);
     const entry = this.fails.get(host) ?? { count: 0, until: 0 };
@@ -379,6 +399,7 @@ export class DownloadEngine {
     for (let u = 0; u < urls.length; u++) {
       const url = urls[u];
       const tmp = `${item.dest}.vtmp`;
+      const urlStarted = Date.now();
       if (u > 0) await rm(tmp, { force: true }); // never resume across different servers
       for (let attempt = 1; attempt <= cfg.retries; attempt++) {
         throwIfAborted(ctx.signal);
@@ -393,6 +414,7 @@ export class DownloadEngine {
           await this.verifyFile(item.mode !== undefined ? tmp : tmp, item, hashes);
           await this.finalize(tmp, item);
           this.health.ok(url);
+          this.health.record(url, lane.received || counted.bytes, Date.now() - urlStarted);
           return "done";
         } catch (error) {
           ctx.addBytes(-counted.bytes);

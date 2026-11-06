@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Core } from "../src/core";
-import { DEFAULT_MS_CLIENT_ID, DEFAULT_OWNER_UUID } from "../src/settings";
+import { DEFAULT_MS_CLIENT_ID, DEFAULT_OWNER_UUID, DEFAULT_SETTINGS, normalizeSettings } from "../src/settings";
 import { startWsServer, type WsServer } from "../src/ws-server";
 import { currentOs } from "../src/util/os";
 import { startFakeMojang, type FakeWorld } from "./helpers/fake-mojang";
@@ -12,6 +12,22 @@ import { buildFakeGameJar } from "./helpers/fake-game";
 import { RpcClient } from "./helpers/ws-client";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
+
+describe("settings migration", () => {
+  it("upgrades untouched version 1 download defaults but keeps custom choices", () => {
+    const oldDefaults = normalizeSettings({ version: 1, download: { concurrency: 32, segments: 4, speedLimitKBps: 0 }, sources: { contentPolicy: "official-first" } });
+    assert.equal(oldDefaults.version, 2);
+    assert.equal(oldDefaults.download.concurrency, 64);
+    assert.equal(oldDefaults.download.segments, 8);
+    assert.equal(oldDefaults.sources.contentPolicy, "mirror-first");
+
+    const custom = normalizeSettings({ version: 2, download: { concurrency: 32, segments: 4, speedLimitKBps: 0 }, sources: { contentPolicy: "official-first" } });
+    assert.equal(custom.download.concurrency, 32);
+    assert.equal(custom.download.segments, 4);
+    assert.equal(custom.sources.contentPolicy, "official-first");
+    assert.equal(DEFAULT_SETTINGS.version, 2);
+  });
+});
 
 describe("the core over the development transport", () => {
   let tmp: string;
@@ -98,7 +114,7 @@ describe("the core over the development transport", () => {
       assert.equal(event.settings.ui.whenUnfocused, "throttle");
       const saved = JSON.parse(await readFile(core.paths.settingsFile, "utf8"));
       assert.equal(saved.ui.fps, 60);
-      await client.call("settings.update", { patch: { ui: { fps: "auto", whenUnfocused: "pause" }, download: { concurrency: 32 } } });
+      await client.call("settings.update", { patch: { ui: { fps: "auto", whenUnfocused: "pause" }, download: { concurrency: 64 } } });
     });
   });
 

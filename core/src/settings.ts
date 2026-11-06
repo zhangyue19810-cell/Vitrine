@@ -6,7 +6,7 @@ import type { JvmPreset } from "./mc/jvm";
 export type AfterLaunch = "keep" | "minimize" | "hide" | "close";
 
 export interface Settings {
-  version: 1;
+  version: 2;
   /** Folder holding versions/, libraries/ and assets/. Empty = `<data>/minecraft`. */
   gameRoot: string;
   sources: SourceSettings;
@@ -56,10 +56,10 @@ export const DEFAULT_MS_CLIENT_ID = "7d584720-c4ba-42f5-bcc7-0ec98897fb2b";
 export const DEFAULT_OWNER_UUID = "";
 
 export const DEFAULT_SETTINGS: Settings = {
-  version: 1,
+  version: 2,
   gameRoot: "",
   sources: { ...DEFAULT_SOURCES },
-  download: { concurrency: 32, segments: 4, speedLimitKBps: 0, retries: 3 },
+  download: { concurrency: 64, segments: 8, speedLimitKBps: 0, retries: 3 },
   network: { proxy: "system", proxyUrl: "" },
   java: { autoInstall: true, extraPaths: [] },
   launch: { memory: "auto", jvmPreset: "default", jvmArgs: "", gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
@@ -205,6 +205,7 @@ export function applySettings(current: Settings, patch: unknown): Settings {
 export function normalizeSettings(stored: unknown): Settings {
   let result = structuredClone(DEFAULT_SETTINGS);
   if (!isObject(stored)) return result;
+  const storedVersion = typeof stored.version === "number" && Number.isFinite(stored.version) ? stored.version : 1;
   const attempt = (patch: unknown) => {
     try {
       result = applySettings(result, patch);
@@ -217,6 +218,16 @@ export function normalizeSettings(stored: unknown): Settings {
     const value = stored[key];
     if (!isObject(value)) continue;
     for (const [field, entry] of Object.entries(value)) attempt({ [key]: { [field]: entry } });
+  }
+  // Version 1 shipped with 32 files x 4 segments and official-first content. Move untouched
+  // default installs to the faster batch settings exactly once; explicit custom settings survive.
+  if (storedVersion < 2) {
+    const legacyDownload = result.download.concurrency === 32 && result.download.segments === 4 && result.download.speedLimitKBps === 0;
+    if (legacyDownload) {
+      result.download.concurrency = DEFAULT_SETTINGS.download.concurrency;
+      result.download.segments = DEFAULT_SETTINGS.download.segments;
+      if (result.sources.contentPolicy === "official-first") result.sources.contentPolicy = DEFAULT_SETTINGS.sources.contentPolicy;
+    }
   }
   return result;
 }

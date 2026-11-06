@@ -20,7 +20,7 @@ export interface SourceSettings {
 export const DEFAULT_SOURCES: SourceSettings = {
   policy: "mirror-first",
   mirrorBase: "https://bmclapi2.bangbang93.com",
-  contentPolicy: "official-first",
+  contentPolicy: "mirror-first",
   contentMirrorBase: "https://mod.mcimirror.top",
 };
 

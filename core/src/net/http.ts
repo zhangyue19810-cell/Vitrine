@@ -79,8 +79,8 @@ export class HttpClient {
     const agentOptions = {
       keepAlive: true,
       keepAliveMsecs: 15_000,
-      maxSockets: options.maxSockets ?? 256,
-      maxFreeSockets: 64,
+      maxSockets: options.maxSockets ?? 512,
+      maxFreeSockets: options.maxSockets ?? 128,
       scheduling: "lifo" as const,
     };
     this.httpsAgent = new https.Agent(agentOptions);
@@ -99,7 +99,7 @@ export class HttpClient {
     if (!proxy) return this.httpsAgent;
     let agent = this.proxyAgents.get(proxy);
     if (!agent) {
-      agent = new HttpsProxyAgent(proxy, { keepAlive: true, maxSockets: 128 });
+      agent = new HttpsProxyAgent(proxy, { keepAlive: true, maxSockets: 512 });
       this.proxyAgents.set(proxy, agent);
     }
     return agent;

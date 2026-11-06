@@ -91,7 +91,7 @@ describe("DownloadEngine", () => {
     });
     const item: DownloadItem = { urls: [`${server.url}/r.bin`], dest: join(dir, "r.bin"), size: data.length, hash: { sha1: sha1(data) } };
     const snapshots: Progress[] = [];
-    const result = await engine().run([item], { onProgress: (p) => snapshots.push(p), progressIntervalMs: 10 });
+    const result = await engine({ segmentMinSize: 4 * 1024 * 1024 }).run([item], { onProgress: (p) => snapshots.push(p), progressIntervalMs: 10 });
     assert.equal(result.ok, true);
     assert.equal(sha1(await readFile(item.dest)), sha1(data));
     assert.equal(server.stats.requests, 2);
