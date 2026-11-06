@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { cpus, homedir } from "node:os";
 import { mkdir, readdir } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { basename, join, resolve as resolvePath } from "node:path";
 import { AccountManager } from "./account/manager";
 import { MicrosoftAuth, type MicrosoftEndpoints, MS_ENDPOINTS } from "./account/microsoft";
 import { FileSecretStore, plainCipher, type Cipher } from "./account/secrets";
@@ -18,6 +18,7 @@ import { installInstance, type InstallDeps, type LoaderChoice } from "./loaders/
 import type { InstallHooks } from "./loaders/forge-installer";
 import { completeVersion, type GameEnv } from "./mc/files";
 import { InstanceStore, ensureRootLayout, validateInstanceName, type InstanceConfig, type InstanceInfo, type IsolationMode } from "./mc/instances";
+import { moveMinecraftRoot, sameRootPath } from "./mc/game-root";
 import { VersionCatalog, versionsCacheFile } from "./mc/manifest";
 import type { ManifestEntry } from "./mc/types";
 import { DEFAULT_ENGINE, DownloadEngine, type Progress } from "./net/download";
@@ -58,6 +59,8 @@ export interface CoreOptions {
   microsoftEndpoints?: MicrosoftEndpoints;
   /** Where Minecraft lives while the settings do not say otherwise. */
   defaultRoot?: string;
+  /** Launcher-owned Minecraft folders to move to `defaultRoot` when it is a new visible location. */
+  minecraftCandidates?: string[];
 }
 
 export interface Paths {
@@ -265,7 +268,8 @@ export class Core {
     const core = new Core(options);
     for (const dir of [core.paths.dataDir, core.paths.cacheDir, core.paths.logsDir, core.paths.workDir]) await ensureDir(dir);
     await core.settings.load();
-    await core.useRoot(core.settings.peek().gameRoot || core.defaultRoot);
+    const preferredRoot = await core.prepareMinecraftRoot(options.minecraftCandidates ?? []);
+    await core.useRoot(core.settings.peek().gameRoot || preferredRoot);
     core.settings.onChange((settings, previous) => {
       core.emit({ type: "settings", settings });
       const wanted = settings.gameRoot || core.defaultRoot;
@@ -273,6 +277,40 @@ export class Core {
       if (settings.accounts.msClientId !== previous.accounts.msClientId || settings.accounts.ownerUuid !== previous.accounts.ownerUuid) core.emit({ type: "accounts" });
     });
     return core;
+  }
+
+  /**
+   * Adopt a visible game root (the desktop in packaged builds) and migrate the old, hidden
+   * launcher-owned folder there. A failed move keeps the old folder usable; a pre-existing
+   * destination is never overwritten.
+   */
+  private async prepareMinecraftRoot(extraCandidates: string[]): Promise<string> {
+    const target = resolvePath(this.defaultRoot);
+    const caseInsensitive = this.os.name === "windows";
+    const candidates = [...new Set([join(this.paths.dataDir, "minecraft"), ...extraCandidates].map((value) => resolvePath(value)))]
+      .filter((value) => !sameRootPath(value, target, caseInsensitive));
+    let selected = target;
+    for (const source of candidates) {
+      try {
+        const result = await moveMinecraftRoot(source, target);
+        if (result === "missing" || result === "not-directory") continue;
+        if (result === "moved") this.log.info(`moved Minecraft from ${source} to ${target}`);
+        else if (result === "target-exists") this.log.warn(`desktop Minecraft already exists at ${target}; using it and leaving ${source} untouched`);
+        break;
+      } catch (error) {
+        this.log.warn(`cannot move Minecraft from ${source} to ${target}: ${(error as Error).message}; keeping the old folder`);
+        selected = source;
+        break;
+      }
+    }
+
+    const current = this.settings.peek().gameRoot;
+    const oldOwnedPath = candidates.some((candidate) => sameRootPath(current, candidate, caseInsensitive))
+      || sameRootPath(current, join(this.paths.dataDir, "minecraft"), caseInsensitive);
+    if (!current || oldOwnedPath) {
+      if (!sameRootPath(current, selected, caseInsensitive)) await this.settings.update({ gameRoot: selected });
+    }
+    return selected;
   }
 
   private async useRoot(root: string) {

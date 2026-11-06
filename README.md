@@ -46,7 +46,9 @@ Windows 包没有代码签名，SmartScreen 可能会拦。遇到问题时，请
 
 下载 `Vitrine-0.1.0-win-x64.zip`，解压后运行 `Vitrine\Vitrine.exe`，不需要安装。更详细的说明在 [docs/WINDOWS-README.txt](docs/WINDOWS-README.txt)。
 
-数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。如果更新后不小心弄丢了 `portable.txt`，但 `data\` 里还有账号和设置，启动器会自动继续使用这份数据。
+启动器数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。如果更新后不小心弄丢了 `portable.txt`，但 `data\` 里还有账号和设置，启动器会自动继续使用这份数据。
+
+Minecraft 游戏目录默认使用系统桌面的 `Minecraft` 文件夹。第一次运行时，如果启动器自己的数据目录里已经有旧的 `minecraft`，会把它整体移动到桌面，并把游戏目录切过去；如果桌面已经有同名文件夹，不会覆盖里面的文件。
 
 CurseForge 需要一个免费 API 密钥。不填也能用 Modrinth 和内容镜像。
 

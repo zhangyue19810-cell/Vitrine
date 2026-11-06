@@ -517,7 +517,30 @@ void app.whenReady().then(async () => {
   registerAppProtocol();
   const proxies = new ProxyCache();
   try {
-    core = await Core.create({ dataDir: app.getPath("userData"), version: app.getVersion(), cipher: makeCipher(), host: hostBridge(proxies) });
+    const dataDir = app.getPath("userData");
+    // Packaged builds use the real desktop path (including OneDrive-redirected desktops).
+    // Migrate the old hidden launcher-owned Minecraft folder there once, then keep the
+    // visible desktop copy as the default game root.
+    const desktopRoot = app.isPackaged ? join(app.getPath("desktop"), "Minecraft") : undefined;
+    const minecraftCandidates = app.isPackaged
+      ? [
+          join(dataDir, "minecraft"),
+          join(exeDir, "minecraft"),
+          join(exeDir, ".minecraft"),
+          join(exeDir, "data", "minecraft"),
+          join(app.getPath("appData"), "Vitrine", "minecraft"),
+          join(app.getPath("appData"), "vitrine", "minecraft"),
+          join(process.cwd(), "minecraft"),
+        ]
+      : undefined;
+    core = await Core.create({
+      dataDir,
+      version: app.getVersion(),
+      cipher: makeCipher(),
+      host: hostBridge(proxies),
+      defaultRoot: desktopRoot,
+      minecraftCandidates,
+    });
   } catch (error) {
     dialog.showErrorBox("Vitrine 无法启动", `核心初始化失败：${(error as Error).message}\n\n数据目录：${app.getPath("userData")}`);
     app.exit(1);

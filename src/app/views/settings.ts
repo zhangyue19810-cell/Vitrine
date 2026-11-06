@@ -54,7 +54,7 @@ function sections(): Section[] {
       id: "general",
       label: "通用",
       rows: [
-        { name: "游戏目录", path: "gameRoot", field: { kind: "text", placeholder: "留空 = 启动器数据目录下的 minecraft", mono: true, browse: "folder" }, desc: "存放 versions / libraries / assets 的文件夹。更改后不会移动已有文件，新安装的内容会放进新目录。" },
+        { name: "游戏目录", path: "gameRoot", field: { kind: "text", placeholder: "留空 = 桌面\\Minecraft", mono: true, browse: "folder" }, desc: "默认使用桌面的 Minecraft 文件夹。启动器会把以前藏在数据目录里的 minecraft 自动移到这里；更改后不会移动已有文件，新安装的内容会放进新目录。" },
         { name: "已发现的游戏目录", custom: buildRoots, block: true, desc: "在常见位置找到的 .minecraft 文件夹（官方启动器、PCL、HMCL 等创建的都可以直接使用）。" },
         { name: "启动游戏后", path: "launch.afterLaunch", field: { kind: "select", options: [["keep", "保持启动器窗口"], ["minimize", "最小化启动器"], ["hide", "隐藏启动器"], ["close", "关闭启动器"]] }, desc: "游戏退出后窗口会自动回来（关闭除外）。" },
         { name: "版本类型标识", path: "launch.versionType", field: { kind: "text", placeholder: "Vitrine" }, desc: "写入游戏启动参数 version_type，会显示在游戏版本号旁边。" },
