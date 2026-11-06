@@ -32,6 +32,8 @@ export interface MinecraftSession {
 
 export interface MicrosoftTokens {
   refreshToken: string;
+  /** The Azure application that issued this refresh token. */
+  clientId: string;
   session: MinecraftSession;
 }
 
@@ -121,7 +123,7 @@ export class MicrosoftAuth {
           contentType: "application/x-www-form-urlencoded",
           signal,
         });
-        if (poll.status === 200 && poll.json?.access_token) return this.finish(poll.json.access_token, poll.json.refresh_token, signal);
+        if (poll.status === 200 && poll.json?.access_token) return this.finish(poll.json.access_token, poll.json.refresh_token, clientId, signal);
         const error = poll.json?.error as string | undefined;
         if (error === "authorization_pending") continue;
         if (error === "slow_down") {
@@ -138,9 +140,10 @@ export class MicrosoftAuth {
   }
 
   /** Exchange a stored refresh token for a fresh Minecraft session. */
-  async refresh(refreshToken: string, signal?: AbortSignal): Promise<MicrosoftTokens> {
+  async refresh(refreshToken: string, signal?: AbortSignal, clientIdOverride?: string): Promise<MicrosoftTokens> {
+    const clientId = clientIdOverride?.trim() || this.clientId();
     const response = await send(this.http, this.endpoints.token, {
-      body: form({ grant_type: "refresh_token", client_id: this.clientId(), refresh_token: refreshToken, scope: MS_SCOPE }),
+      body: form({ grant_type: "refresh_token", client_id: clientId, refresh_token: refreshToken, scope: MS_SCOPE }),
       contentType: "application/x-www-form-urlencoded",
       signal,
     });
@@ -148,11 +151,11 @@ export class MicrosoftAuth {
       const expired = ["invalid_grant", "interaction_required"].includes(response.json?.error);
       throw new AuthError(expired ? "微软登录已过期，请重新登录。" : `刷新微软登录失败：${response.json?.error_description ?? response.text.slice(0, 160)}`, expired ? "expired" : "unknown", response.json);
     }
-    return this.finish(response.json.access_token, response.json.refresh_token ?? refreshToken, signal);
+    return this.finish(response.json.access_token, response.json.refresh_token ?? refreshToken, clientId, signal);
   }
 
-  private async finish(msAccessToken: string, refreshToken: string, signal?: AbortSignal): Promise<MicrosoftTokens> {
-    return { refreshToken, session: await this.sessionFromMicrosoftToken(msAccessToken, signal) };
+  private async finish(msAccessToken: string, refreshToken: string, clientId: string, signal?: AbortSignal): Promise<MicrosoftTokens> {
+    return { refreshToken, clientId, session: await this.sessionFromMicrosoftToken(msAccessToken, signal) };
   }
 
   /** Microsoft access token → Xbox Live → XSTS → Minecraft services → profile. */

@@ -23,8 +23,49 @@ const APP_URL = "app://vitrine/index.html";
 
 app.setName("Vitrine");
 const exeDir = dirname(process.execPath);
-if (process.env.VITRINE_DATA) app.setPath("userData", resolve(process.env.VITRINE_DATA));
-else if (app.isPackaged && existsSync(join(exeDir, "portable.txt"))) app.setPath("userData", join(exeDir, "data"));
+
+/** Files that prove a folder is a Vitrine data directory rather than an empty/default Electron profile. */
+function hasVitrineData(dir: string): boolean {
+  return ["accounts.json", "settings.json", "secrets.json"].some((name) => existsSync(join(dir, name)));
+}
+
+/**
+ * Resolve the data folder before the core starts.
+ *
+ * The update package is a plain ZIP, so a player who previously used portable mode can replace
+ * the app folder and accidentally lose the empty portable.txt marker. If the default AppData
+ * folder has no launcher data but `data/` beside the exe does, keep using the portable data
+ * instead of silently starting with an empty account list. The same fallback catches old brand
+ * names from early builds.
+ */
+function selectDataDir(): void {
+  if (process.env.VITRINE_DATA) {
+    app.setPath("userData", resolve(process.env.VITRINE_DATA));
+    return;
+  }
+  if (!app.isPackaged) return;
+  const defaultDir = app.getPath("userData");
+  const portableDir = join(exeDir, "data");
+  if (existsSync(join(exeDir, "portable.txt"))) {
+    app.setPath("userData", portableDir);
+    return;
+  }
+  if (!hasVitrineData(defaultDir) && hasVitrineData(portableDir)) {
+    console.warn(`[vitrine] using portable data recovered from ${portableDir} (portable.txt is missing)`);
+    app.setPath("userData", portableDir);
+    return;
+  }
+  if (hasVitrineData(defaultDir)) return;
+  const appData = app.getPath("appData");
+  for (const legacyName of ["vitrine-launcher", "Vitrine Launcher", "Vitrine 琉匣"]) {
+    const legacyDir = join(appData, legacyName);
+    if (!hasVitrineData(legacyDir)) continue;
+    console.warn(`[vitrine] using legacy data directory ${legacyDir}`);
+    app.setPath("userData", legacyDir);
+    return;
+  }
+}
+selectDataDir();
 
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.commandLine.appendSwitch("ignore-gpu-blocklist");

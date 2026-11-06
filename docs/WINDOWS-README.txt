@@ -15,6 +15,7 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
         数据保护加密）、cache（缓存）、logs（日志），以及默认的游戏目录 minecraft。
   便携模式：在 Vitrine.exe 同一个文件夹里新建一个空文件，名字叫 portable.txt，
         之后所有数据都放进 Vitrine.exe 旁边的 data 文件夹，整个文件夹可以拷到别的电脑 / U 盘。
+        更新时如果忘了保留 portable.txt，但 data 文件夹里已有账号或设置，启动器会自动继续使用它。
   游戏目录：设置 → 通用 → 游戏目录 可以改到别处，例如 D:\Games\.minecraft。
         同一页的“已发现的游戏目录”会列出电脑上已有的 .minecraft，点一下就能直接使用。
 

@@ -1,7 +1,7 @@
 import { after, afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { IncomingMessage } from "node:http";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_ENGINE, DownloadEngine } from "../src/net/download";
@@ -83,6 +83,8 @@ interface MsState {
   expiresIn: number;
   refreshGeneration: number;
   refreshBad?: boolean;
+  requiredRefreshClient?: string;
+  refreshClients: string[];
 }
 
 async function startMicrosoftMock(state: MsState): Promise<{ server: MockServer; endpoints: MicrosoftEndpoints }> {
@@ -104,6 +106,8 @@ async function startMicrosoftMock(state: MsState): Promise<{ server: MockServer;
       state.tokenCalls++;
       const form = new URLSearchParams(body);
       if (form.get("grant_type") === "refresh_token") {
+        state.refreshClients.push(form.get("client_id") ?? "");
+        if (state.requiredRefreshClient && form.get("client_id") !== state.requiredRefreshClient) return json(400, { error: "invalid_grant", error_description: "different client" });
         if (state.refreshBad) return json(400, { error: "invalid_grant", error_description: "expired" });
         state.refreshGeneration++;
         return json(200, { access_token: `ms-access-${state.refreshGeneration}`, refresh_token: `refresh-${state.refreshGeneration}`, expires_in: 3600 });
@@ -148,7 +152,7 @@ async function startMicrosoftMock(state: MsState): Promise<{ server: MockServer;
   };
 }
 
-const newState = (over: Partial<MsState> = {}): MsState => ({ tokenCalls: 0, deviceCalls: 0, pendingPolls: 2, mode: "ok", expiresIn: 86400, refreshGeneration: 0, ...over });
+const newState = (over: Partial<MsState> = {}): MsState => ({ tokenCalls: 0, deviceCalls: 0, pendingPolls: 2, mode: "ok", expiresIn: 86400, refreshGeneration: 0, refreshClients: [], ...over });
 
 describe("Microsoft sign-in chain", () => {
   it("walks device code → Xbox → XSTS → Minecraft and reads the profile", async () => {
@@ -160,6 +164,7 @@ describe("Microsoft sign-in chain", () => {
     assert.equal(challenge.verificationUri, "https://microsoft.com/link");
     const tokens = await complete();
     assert.equal(tokens.refreshToken, "refresh-0");
+    assert.equal(tokens.clientId, "client-123");
     assert.equal(tokens.session.profile.name, "WindPlayer");
     assert.equal(tokens.session.profile.id, OWNER);
     assert.equal(tokens.session.profile.skinVariant, "slim");
@@ -198,11 +203,12 @@ describe("Microsoft sign-in chain", () => {
 });
 
 describe("account manager", () => {
-  function manager(endpoints: MicrosoftEndpoints, secrets = new MemorySecretStore(), now = () => Date.now()) {
+  function manager(endpoints: MicrosoftEndpoints, secrets = new MemorySecretStore(), now = () => Date.now(), microsoftClientIds?: () => Array<string | undefined>) {
     return new AccountManager({
       file: join(tmp, "accounts.json"),
       secrets,
       microsoft: new MicrosoftAuth(http, () => "client-123", endpoints),
+      microsoftClientIds,
       yggdrasil: new YggdrasilClient(http),
       ownerUuid: () => OWNER,
       now,
@@ -267,6 +273,28 @@ describe("account manager", () => {
     clock += 2 * 86400_000;
     state.refreshBad = true;
     await assert.rejects(m.prepareLaunch(account.id), (e: unknown) => e instanceof AuthError && e.reason === "expired");
+  });
+
+  it("keeps an older account's issuer and falls back when its recorded client id is stale", async () => {
+    const state = newState({ pendingPolls: 0 });
+    const { endpoints } = await startMicrosoftMock(state);
+    let clock = Date.now();
+    const secrets = new MemorySecretStore();
+    const first = manager(endpoints, secrets, () => clock);
+    const account = await (await first.beginMicrosoft()).done;
+    const file = join(tmp, "accounts.json");
+    const data = JSON.parse(await readFile(file, "utf8"));
+    assert.equal(data.accounts[0].clientId, "client-123", "sign-in records the issuing Azure application");
+    data.accounts[0].clientId = "stale-client";
+    await writeFile(file, JSON.stringify(data));
+
+    clock += 2 * 86400_000;
+    state.requiredRefreshClient = "fallback-client";
+    const reloaded = manager(endpoints, secrets, () => clock, () => ["fallback-client"]);
+    const ready = await reloaded.prepareLaunch(account.id);
+    assert.equal(ready.launch.accessToken, "mc-token-1");
+    assert.deepEqual(state.refreshClients, ["stale-client", "fallback-client"], "the old issuer is tried before configured fallbacks");
+    assert.equal(JSON.parse(await readFile(file, "utf8")).accounts[0].clientId, "fallback-client", "the working issuer replaces the stale one");
   });
 
   it("logs in to an authlib-injector server and refreshes invalid tokens", async () => {

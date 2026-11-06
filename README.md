@@ -18,11 +18,11 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 **模组和整合包**
 
-可以从 Modrinth 和 CurseForge 搜索、下载模组、光影、资源包和整合包，也可以导入 `.mrpack`、CurseForge 压缩包和 MultiMC 实例。下载页可以按游戏版本和加载器筛选，项目简介会尝试自动翻译成中文，翻译服务不可用时显示原文。安装模组时会把必需的前置一起解析好，已经装过的前置会跳过。本地模组可以启用、禁用和删除。
+可以从 Modrinth 和 CurseForge 搜索、下载模组、光影、资源包和整合包，也可以导入 `.mrpack`、CurseForge 压缩包和 MultiMC 实例。搜索支持中文关键词、拼写容错和关键词拆分，结果太少时会自动换成相关词，不会因为少打一个字就什么都搜不到。下载页可以按游戏版本和加载器筛选，项目简介会尝试自动翻译成中文，翻译服务不可用时显示原文。安装模组时会把必需的前置一起解析好，已经装过的前置会跳过。已安装的模组列表也支持模糊搜索，并按相关度排序。
 
 **下载**
 
-下载器默认同时下载 64 个文件、每个大文件 8 段并行，支持断点续传、失败换源、哈希校验、限速和重试。游戏文件默认使用 BMCLAPI 镜像，模组默认使用官方源，失败后再走 MCIM。
+下载器默认同时下载 64 个文件、每个大文件 8 段并行，支持断点续传、失败换源、哈希校验、限速和重试。游戏文件和模组内容默认优先使用镜像，失败后再回退官方源。
 
 **其他**
 
@@ -46,7 +46,7 @@ Windows 包没有代码签名，SmartScreen 可能会拦。遇到问题时，请
 
 下载 `Vitrine-0.1.0-win-x64.zip`，解压后运行 `Vitrine\Vitrine.exe`，不需要安装。更详细的说明在 [docs/WINDOWS-README.txt](docs/WINDOWS-README.txt)。
 
-数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。
+数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。如果更新后不小心弄丢了 `portable.txt`，但 `data\` 里还有账号和设置，启动器会自动继续使用这份数据。
 
 CurseForge 需要一个免费 API 密钥。不填也能用 Modrinth 和内容镜像。
 
@@ -74,7 +74,7 @@ npm run dist:win      # 生成 release/Vitrine-<版本>-win-x64.zip
 
 ## 下载源
 
-游戏文件、加载器和资源默认走 BMCLAPI 镜像，也可以改用官方源。Modrinth 和 CurseForge 的内容默认走官方源，失败后尝试 MCIM。
+游戏文件、加载器和资源默认走 BMCLAPI 镜像，也可以改用官方源。Modrinth 和 CurseForge 的内容默认走 MCIM 镜像，失败后回退官方源。
 
 设置 → 下载 里可以选择官方优先、镜像优先、只用官方或只用镜像，也可以修改镜像地址。请遵守这些服务的使用条款，不要把线程数开得太高。
 

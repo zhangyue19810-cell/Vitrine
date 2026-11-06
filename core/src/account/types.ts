@@ -9,7 +9,8 @@ export interface AccountRecord {
   uuid: string;
   createdAt: number;
   lastUsed?: number;
-  /** microsoft */
+  /** microsoft: Azure client ID that issued the refresh token. Kept per account so changing the launcher's default cannot break an existing sign-in. */
+  clientId?: string;
   xuid?: string;
   skinUrl?: string;
   skinVariant?: "classic" | "slim";

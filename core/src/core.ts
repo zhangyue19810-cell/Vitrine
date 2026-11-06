@@ -27,7 +27,7 @@ import { exportMrpack, type ExportResult } from "./pack/export";
 import { adoptManualFiles, installPack, previewPack, readPackState, repairPack, type PackDeps, type PackHooks, type PackInstallResult } from "./pack/install";
 import { installOnlinePack, type OnlineDeps } from "./pack/online";
 import { GameManager, startLaunch, type LaunchOptions } from "./launch";
-import { SettingsStore, type Settings } from "./settings";
+import { DEFAULT_MS_CLIENT_ID, SettingsStore, type Settings } from "./settings";
 import { TaskManager, type TaskContext } from "./tasks";
 import { isAbort } from "./util/async";
 import { ensureDir, exists, removeRecursive } from "./util/fsx";
@@ -250,6 +250,7 @@ export class Core {
       file: this.paths.accountsFile,
       secrets: this.secrets,
       microsoft: new MicrosoftAuth(this.http, () => this.settings.peek().accounts.msClientId, options.microsoftEndpoints ?? MS_ENDPOINTS),
+      microsoftClientIds: () => [this.settings.peek().accounts.msClientId, DEFAULT_MS_CLIENT_ID],
       yggdrasil: new YggdrasilClient(this.http),
       ownerUuid: () => this.settings.peek().accounts.ownerUuid || undefined,
     });

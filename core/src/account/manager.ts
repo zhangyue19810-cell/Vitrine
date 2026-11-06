@@ -24,6 +24,8 @@ export interface AccountManagerOptions {
   file: string;
   secrets: SecretStore;
   microsoft: MicrosoftAuth;
+  /** Configured Azure client IDs to try for older records that did not store their issuer. */
+  microsoftClientIds?: () => Array<string | undefined>;
   yggdrasil: YggdrasilClient;
   /** The user's own ID, offered as the default UUID for offline accounts. */
   ownerUuid?: () => string | undefined;
@@ -138,6 +140,7 @@ export class AccountManager {
         type: "microsoft",
         name: profile.name,
         uuid: profile.id,
+        clientId: tokens.clientId,
         skinUrl: profile.skinUrl,
         skinVariant: profile.skinVariant,
         capeUrl: profile.capeUrl,
@@ -205,6 +208,29 @@ export class AccountManager {
     for (const key of [`ms:${id}:refresh`, `ms:${id}:access`, `authlib:${id}:access`, `authlib:${id}:client`]) await this.options.secrets.delete(key);
   }
 
+  /**
+   * Refresh tokens are bound to the Azure client ID that issued them. Older Vitrine versions did not
+   * record that ID on the account, so if a default changed during an update, a token could look expired
+   * even though it was still valid. Try the recorded ID first, then configured fallbacks.
+   */
+  private async refreshMicrosoft(record: AccountRecord, refresh: string, signal?: AbortSignal): Promise<MicrosoftTokens> {
+    const candidates = [...new Set([record.clientId, ...(this.options.microsoftClientIds?.() ?? [])].map((value) => value?.trim()).filter((value): value is string => Boolean(value)))];
+    if (!candidates.length) return this.options.microsoft.refresh(refresh, signal);
+    let expired: AuthError | undefined;
+    for (const clientId of candidates) {
+      try {
+        return await this.options.microsoft.refresh(refresh, signal, clientId);
+      } catch (error) {
+        if (error instanceof AuthError && error.reason === "expired") {
+          expired = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw expired ?? new AuthError("微软登录已过期，请重新登录。", "expired");
+  }
+
   /** Make an account ready for a launch, refreshing tokens when needed. Concurrent calls share one refresh. */
   async prepareLaunch(id?: string, signal?: AbortSignal): Promise<PreparedAccount> {
     const target = id ?? (await this.selectedId());
@@ -234,7 +260,7 @@ export class AccountManager {
       if (!access || !record.expiresAt || record.expiresAt <= this.now() + 120_000) {
         const refresh = await this.options.secrets.get(`ms:${id}:refresh`);
         if (!refresh) throw new AuthError("这个微软账户需要重新登录。", "expired");
-        const tokens = await this.options.microsoft.refresh(refresh, signal);
+        const tokens = await this.refreshMicrosoft(record, refresh, signal);
         record = await this.storeMicrosoft(tokens, id);
         access = tokens.session.accessToken;
       }
