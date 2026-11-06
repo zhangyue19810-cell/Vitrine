@@ -129,6 +129,9 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
     source: memory.source,
     sort: memory.sort,
     query: options.query ?? "",
+    /** The query used for backend paging after a fuzzy/Chinese search was relaxed. */
+    searchQuery: options.query ?? "",
+    relaxedQuery: "",
     page: 0,
     total: 0,
     projects: [] as ContentProject[],
@@ -147,7 +150,7 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
   sheet.body.innerHTML = `
     <div class="br-bar">
       <div class="seg" data-f="kinds"></div>
-      <div class="search-input"><input class="input" data-f="query" placeholder="搜索名称、作者或关键词" autocomplete="off" /></div>
+      <div class="search-input"><input class="input" data-f="query" placeholder="搜索名称、作者或关键词（支持中文和模糊匹配）" autocomplete="off" /></div>
       <div class="seg" data-f="sources"></div>
       <select class="select" data-f="sort" style="width:auto"></select>
     </div>
@@ -249,9 +252,14 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
 
   const renderNotice = () => {
     const host = f("notice");
+    const messages: ReturnType<typeof html>[] = [];
     if (state.source === "curseforge" && !state.curseforge) {
-      setHtml(host, html`<div class="notice warn" style="margin-bottom:12px"><div>CurseForge 需要 API 密钥才能搜索。请在 <a class="link" data-act="open-settings-accounts">设置 → 账号与密钥</a> 填写，或切换到 Modrinth。</div></div>`);
-    } else setHtml(host, html``);
+      messages.push(html`<div class="notice warn" style="margin-bottom:12px"><div>CurseForge 需要 API 密钥才能搜索。请在 <a class="link" data-act="open-settings-accounts">设置 → 账号与密钥</a> 填写，或切换到 Modrinth。</div></div>`);
+    }
+    if (state.relaxedQuery) {
+      messages.push(html`<div class="notice" style="margin-bottom:12px"><div>没有找到足够精确的结果，已按相关关键词 <b>${state.relaxedQuery}</b> 搜索。</div></div>`);
+    }
+    setHtml(host, messages.length ? html`${messages}` : html``);
   };
 
   const renderGrid = () => {
@@ -261,7 +269,7 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
       return;
     }
     if (state.error) return setHtml(grid, html`<div class="empty" style="grid-column:1/-1"><b>搜索失败</b>${state.error}<br /><button class="btn sm soft" data-retry>重试</button></div>`);
-    if (!state.projects.length) return setHtml(grid, html`<div class="empty" style="grid-column:1/-1"><b>没有找到结果</b>换个关键词，或者取消版本过滤试试。</div>`);
+    if (!state.projects.length) return setHtml(grid, html`<div class="empty" style="grid-column:1/-1"><b>没有找到结果</b>试试更短的关键词，或者取消版本和加载器过滤。搜索会自动尝试相关词。</div>`);
     setHtml(
       grid,
       html`${state.projects.map((p, index) => {
@@ -322,11 +330,18 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
     state.loading = true;
     state.error = "";
     renderGrid();
+    // Page 0 may let the backend choose a broader keyword. Later pages reuse that
+    // effective keyword so the result set stays consistent from one page to the next.
+    const requestedQuery = state.page === 0 ? state.query : state.searchQuery || state.query;
     try {
-      const result = await rpc("content.search", { source: state.source, kind: state.kind, query: state.query || undefined, sort: state.sort as never, page: state.page, pageSize: PAGE_SIZE, ...filters() });
+      const result = await rpc("content.search", { source: state.source, kind: state.kind, query: requestedQuery || undefined, sort: state.sort as never, page: state.page, pageSize: PAGE_SIZE, ...filters() });
       if (!token.isCurrent(mine)) return;
       state.projects = result.projects;
       state.total = result.total;
+      if (state.page === 0) {
+        state.searchQuery = result.effectiveQuery ?? state.query;
+        state.relaxedQuery = result.relaxed ? state.searchQuery : "";
+      }
     } catch (error) {
       if (!token.isCurrent(mine)) return;
       state.projects = [];
@@ -334,28 +349,30 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
       state.error = (error as Error).message;
     }
     state.loading = false;
+    renderNotice();
     renderGrid();
     renderPager();
     f("grid").scrollTop = 0;
     void translateCards(mine);
   };
 
-  const debounced = debounce(() => {
+  const freshSearch = () => {
     state.page = 0;
+    state.searchQuery = state.query;
+    state.relaxedQuery = "";
     void search();
-  }, 350);
+  };
+  const debounced = debounce(freshSearch, 350);
 
   onAll(sheet.body, "click", "[data-kind]", (element) => {
     state.kind = element.dataset.kind as ContentKind;
-    state.page = 0;
     renderChrome();
-    void search();
+    freshSearch();
   });
   onAll(sheet.body, "click", "[data-source]", (element) => {
     state.source = element.dataset.source as ContentSource;
-    state.page = 0;
     renderChrome();
-    void search();
+    freshSearch();
   });
   onAll(sheet.body, "click", "[data-pg]", (element) => {
     state.page = Math.max(0, state.page + Number(element.dataset.pg));
@@ -366,6 +383,9 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
   sheet.body.addEventListener("input", (event) => {
     if ((event.target as HTMLElement).matches("[data-f='query']")) {
       state.query = (event.target as HTMLInputElement).value;
+      state.searchQuery = state.query;
+      state.relaxedQuery = "";
+      renderNotice();
       debounced();
     }
   });
@@ -373,23 +393,19 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
     const target = event.target as HTMLElement;
     if (target.matches("[data-f='sort']")) {
       state.sort = (target as HTMLSelectElement).value;
-      state.page = 0;
-      void search();
+      freshSearch();
     } else if (target.matches("[data-f='target']")) {
       state.instanceId = (target as HTMLSelectElement).value;
-      state.page = 0;
       renderChrome();
-      void search();
+      freshSearch();
     } else if (target.matches("[data-f='game-version']")) {
       state.gameVersion = (target as HTMLSelectElement).value;
-      state.page = 0;
       renderChrome();
-      void search();
+      freshSearch();
     } else if (target.matches("[data-f='loader']")) {
       state.loader = (target as HTMLSelectElement).value;
-      state.page = 0;
       renderChrome();
-      void search();
+      freshSearch();
     } else if (target.matches("[data-f='deps']")) {
       state.autoDependencies = (target as HTMLInputElement).checked;
     }

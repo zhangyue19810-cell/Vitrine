@@ -13,11 +13,109 @@ type Filter = "all" | "enabled" | "disabled" | "problem";
 
 const KIND_LABEL: Record<ModProblem["kind"], string> = { duplicate: "重复", "missing-dependency": "缺少前置", incompatible: "不兼容" };
 
+/** A compact Chinese → English aid for the installed-mod filter. */
+const MOD_SEARCH_ALIASES: Record<string, string[]> = {
+  "优化": ["optimization", "performance"],
+  "性能": ["performance", "optimization"],
+  "光影": ["shader", "shaders"],
+  "资源包": ["resourcepack", "resource pack"],
+  "数据包": ["datapack", "data pack"],
+  "科技": ["technology", "tech"],
+  "工业": ["industrial", "technology"],
+  "机械": ["machinery", "technology"],
+  "魔法": ["magic"],
+  "冒险": ["adventure"],
+  "农业": ["farming"],
+  "存储": ["storage"],
+  "背包": ["backpack", "inventory"],
+  "装饰": ["decoration"],
+  "建筑": ["building"],
+  "家具": ["furniture"],
+  "照明": ["lighting"],
+  "红石": ["redstone"],
+  "能源": ["energy"],
+  "地图": ["map"],
+  "小地图": ["minimap"],
+  "传送": ["teleport"],
+  "结构": ["structures"],
+  "生物": ["mobs"],
+  "怪物": ["mobs"],
+  "战斗": ["combat"],
+  "武器": ["weapons"],
+  "装备": ["equipment"],
+  "工具": ["tools"],
+  "任务": ["quests"],
+  "经济": ["economy"],
+  "服务器": ["server"],
+  "界面": ["gui", "interface"],
+  "字体": ["font"],
+  "汉化": ["translation", "chinese"],
+  "中文": ["chinese"],
+  "音乐": ["music"],
+  "声音": ["sound", "audio"],
+  "天气": ["weather"],
+  "季节": ["seasons"],
+  "渲染": ["rendering"],
+  "启动": ["startup"],
+  "内存": ["memory"],
+  "实用": ["utility"],
+  "辅助": ["utility"],
+  "前置": ["library", "api"],
+};
+
+const MOD_SEARCH_STOPWORDS = new Set(["a", "an", "the", "and", "or", "for", "of", "to", "in", "with", "on", "mod", "mods", "minecraft", "mc", "我的世界", "模组"]);
+
+const normalizeSearch = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}._+-]+/gu, " ").trim();
+const isCjk = (value: string) => /[\u3400-\u9fff]/.test(value);
+
+function editDistanceAtMost(left: string, right: string, limit: number): boolean {
+  if (Math.abs(left.length - right.length) > limit) return false;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i++) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= right.length; j++) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      const next = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+      current.push(next);
+      rowMin = Math.min(rowMin, next);
+    }
+    if (rowMin > limit) return false;
+    previous = current;
+  }
+  return previous[right.length] <= limit;
+}
+
+function expandModSearchTerms(query: string): string[] {
+  let text = normalizeSearch(query);
+  const aliases: string[] = [];
+  for (const [term, words] of Object.entries(MOD_SEARCH_ALIASES).sort((a, b) => b[0].length - a[0].length)) {
+    if (!text.includes(term)) continue;
+    aliases.push(...words);
+    text = text.split(term).join(" ");
+  }
+  const tokens = normalizeSearch(text).split(/\s+/).filter((token) => token.length > 1 || isCjk(token));
+  return [...new Set([...tokens, ...aliases])].filter((token) => !MOD_SEARCH_STOPWORDS.has(token));
+}
+
+function fuzzyFieldScore(text: string, words: string[], term: string): number {
+  if (text.includes(term)) return 10;
+  const compact = term.replace(/\s+/g, "");
+  if (compact.length >= 3 && text.replace(/\s+/g, "").includes(compact)) return 8;
+  if (term.length < 4 || isCjk(term)) return 0;
+  const limit = term.length >= 8 ? 2 : 1;
+  for (const word of words) {
+    if (word.length >= 3 && word.startsWith(term)) return 6;
+    if (editDistanceAtMost(term, word, limit)) return 4;
+  }
+  return 0;
+}
+
 export function mount(ctx: TabContext): TabHandle {
   const { body, signal } = ctx;
   body.innerHTML = `<div class="stack" style="gap:14px">
     <div class="toolbar">
-      <div class="search-input grow"><input class="input" data-q placeholder="搜索模组名称、ID、作者…" autocomplete="off" /></div>
+      <div class="search-input grow"><input class="input" data-q placeholder="搜索模组名称、ID、作者…（支持模糊和中文关键词）" autocomplete="off" /></div>
       <div class="seg" data-filter><button data-v="all" aria-pressed="true">全部</button><button data-v="enabled" aria-pressed="false">已启用</button><button data-v="disabled" aria-pressed="false">已禁用</button><button data-v="problem" aria-pressed="false">有问题</button></div>
     </div>
     <div class="toolbar"><button class="btn sm accent" data-act="mods-install">＋ 安装模组</button><button class="btn sm" data-act="mods-check">检查更新</button><button class="btn sm soft" data-act="mods-folder">打开 mods 文件夹</button><span class="muted grow" data-f="summary" style="font-size:12px;text-align:right"></span></div>
@@ -66,14 +164,34 @@ export function mount(ctx: TabContext): TabHandle {
     reloadTimer = setTimeout(() => void load(true), 250);
   };
 
-  function matches(mod: LocalMod, bad: Set<string>): boolean {
-    if (filter === "enabled" && mod.disabled) return false;
-    if (filter === "disabled" && !mod.disabled) return false;
-    if (filter === "problem" && !(bad.has(mod.file) || bad.has(mod.path))) return false;
-    if (!query) return true;
+  function matchScore(mod: LocalMod, bad: Set<string>): { visible: boolean; score: number } {
+    if (filter === "enabled" && mod.disabled) return { visible: false, score: 0 };
+    if (filter === "disabled" && !mod.disabled) return { visible: false, score: 0 };
+    if (filter === "problem" && !(bad.has(mod.file) || bad.has(mod.path))) return { visible: false, score: 0 };
+    if (!query) return { visible: true, score: 0 };
+
     const meta = mod.meta;
-    const haystack = `${meta?.name ?? ""} ${meta?.id ?? ""} ${mod.file} ${(meta?.authors ?? []).join(" ")}`.toLowerCase();
-    return haystack.includes(query);
+    const terms = expandModSearchTerms(query);
+    if (!terms.length) return { visible: false, score: 0 };
+    const strong = normalizeSearch(`${meta?.name ?? ""} ${meta?.id ?? ""} ${mod.file}`);
+    const weak = normalizeSearch(
+      `${meta?.description ?? ""} ${(meta?.authors ?? []).join(" ")} ${meta?.version ?? ""} ${(meta?.provides ?? []).join(" ")} ${(meta?.extra ?? []).flatMap((entry) => [entry.id, entry.name ?? ""]).join(" ")}`,
+    );
+    const strongWords = strong.split(/\s+/).filter(Boolean);
+    const weakWords = weak.split(/\s+/).filter(Boolean);
+    let score = 0;
+    let matched = 0;
+    for (const term of terms) {
+      const hit = Math.max(fuzzyFieldScore(strong, strongWords, term), fuzzyFieldScore(weak, weakWords, term) * 0.6);
+      if (!hit) continue;
+      matched++;
+      score += hit;
+    }
+    if (`${strong} ${weak}`.includes(normalizeSearch(query))) score += 12;
+    // A phrase with two or more words is a hint, not a requirement: show anything that strongly
+    // matches at least one part and rank the closest matches first.
+    const visible = matched === terms.length || (terms.length > 1 && matched > 0);
+    return { visible, score };
   }
 
   function row(mod: LocalMod, index: number, bad: Set<string>) {
@@ -82,7 +200,7 @@ export function mount(ctx: TabContext): TabHandle {
     const loaders = (meta?.loaders ?? []).map((kind) => loaderLabel(kind === "legacy-forge" ? "forge" : kind));
     const sub = [meta?.version, loaders[0], meta?.authors?.[0], formatBytes(mod.size)].filter(Boolean).join(" · ");
     const flagged = bad.has(mod.file) || bad.has(mod.path);
-    return html`<div class="mod-row" data-i="${index}" data-disabled="${mod.disabled}" ${matches(mod, bad) ? "" : "hidden"}>
+    return html`<div class="mod-row" data-i="${index}" data-disabled="${mod.disabled}" ${matchScore(mod, bad).visible ? "" : "hidden"}>
       <button class="toggle" role="switch" aria-checked="${!mod.disabled}" data-toggle title="${mod.disabled ? "启用" : "禁用"}"></button>
       <span class="thumb" data-icon="${mod.path}">${name.slice(0, 1).toUpperCase()}</span>
       <div class="info" style="min-width:0"><div class="name" title="${mod.file}">${name}</div><div class="sub" title="${mod.error ?? mod.file}">${mod.error ? `无法读取信息：${mod.error}` : sub}</div></div>
@@ -100,28 +218,35 @@ export function mount(ctx: TabContext): TabHandle {
     }
     observer?.disconnect();
     queue.length = 0;
-    setHtml(list, html`${mods.map((mod, index) => row(mod, index, bad))}<div class="empty" data-none hidden><b>没有符合条件的模组</b></div>`);
+    setHtml(list, html`${mods.map((mod, index) => row(mod, index, bad))}<div class="empty" data-none hidden><b>没有找到相近的模组</b><div>少输几个字，或者只搜索模组名称里的一个关键词。</div></div>`);
     applyFilter();
     observeIcons();
   }
 
   function applyFilter() {
     const bad = problemFiles();
-    let shown = 0;
-    for (const element of $$(".mod-row", f("list"))) {
+    const list = f("list");
+    const ranked: { element: HTMLElement; index: number; score: number }[] = [];
+    for (const element of $$(".mod-row", list)) {
       const mod = mods[Number(element.dataset.i)];
-      const visible = mod ? matches(mod, bad) : false;
-      if (element.hidden === visible) element.hidden = !visible;
-      if (visible) shown++;
+      const result = mod ? matchScore(mod, bad) : { visible: false, score: 0 };
+      if (element.hidden === result.visible) element.hidden = !result.visible;
+      if (result.visible) ranked.push({ element, index: Number(element.dataset.i), score: result.score });
     }
-    const none = f("list").querySelector<HTMLElement>("[data-none]");
-    if (none) none.hidden = shown > 0 || !mods.length;
-    updateSummary(shown);
+    ranked.sort((a, b) => (query ? b.score - a.score || a.index - b.index : a.index - b.index));
+    for (const entry of ranked) list.append(entry.element);
+    const none = list.querySelector<HTMLElement>("[data-none]");
+    if (none) {
+      none.hidden = ranked.length > 0 || !mods.length;
+      list.append(none);
+    }
+    updateSummary(ranked.length);
   }
 
   function updateSummary(shown = mods.length) {
     const disabled = mods.filter((mod) => mod.disabled).length;
-    f("summary").textContent = mods.length ? `共 ${mods.length} 个${disabled ? `（${disabled} 个已禁用）` : ""}${shown !== mods.length ? ` · 显示 ${shown}` : ""}` : "";
+    const suffix = shown !== mods.length ? ` · 显示 ${shown}` : "";
+    f("summary").textContent = mods.length ? `共 ${mods.length} 个${disabled ? `（${disabled} 个已禁用）` : ""}${suffix}${query && shown ? " · 按相关度排序" : ""}` : "";
   }
 
   // ------------------------------------------------------------------------------------------ icons (only for rows that scroll into view)

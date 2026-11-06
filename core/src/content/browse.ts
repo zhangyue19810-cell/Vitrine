@@ -89,11 +89,200 @@ export interface ContentSearchResult {
   total: number;
   page: number;
   pageSize: number;
+  /** Set when the original words were too narrow and the backend searched a broader related term. */
+  effectiveQuery?: string;
+  /** True when `effectiveQuery` differs from the query the user typed. */
+  relaxed?: boolean;
 }
 
 const MR_TYPE: Record<ContentKind, ModrinthProjectType> = { mod: "mod", modpack: "modpack", resourcepack: "resourcepack", shader: "shader", datapack: "datapack" };
 const CF_KIND: Record<ContentKind, number> = { mod: CF_CLASS.mod, modpack: CF_CLASS.modpack, resourcepack: CF_CLASS.resourcepack, shader: CF_CLASS.shader, datapack: CF_CLASS.datapack };
 const LOADER_AWARE = new Set<ContentKind>(["mod", "modpack"]);
+
+/** Below this many matches, try a related keyword instead of requiring the exact phrase. */
+const RELAX_SEARCH_BELOW = 8;
+
+/**
+ * Minecraft content is mostly described in English even when the player searches in Chinese.
+ * These aliases are deliberately small and category-oriented: they are a search aid, not a translator.
+ */
+const SEARCH_ALIASES: Record<string, string[]> = {
+  "优化": ["optimization", "performance"],
+  "性能": ["performance", "optimization"],
+  "卡顿": ["performance", "optimization"],
+  "帧数": ["fps", "performance"],
+  "光影": ["shader", "shaders"],
+  "着色器": ["shader", "shaders"],
+  "资源包": ["resourcepack", "resource pack"],
+  "材质包": ["resourcepack", "resource pack"],
+  "数据包": ["datapack", "data pack"],
+  "模组": ["mod"],
+  "整合包": ["modpack"],
+  "科技": ["technology", "tech"],
+  "工业": ["industrial", "technology"],
+  "机械": ["machinery", "technology"],
+  "魔法": ["magic"],
+  "冒险": ["adventure"],
+  "农业": ["farming"],
+  "食物": ["food"],
+  "烹饪": ["cooking"],
+  "存储": ["storage"],
+  "背包": ["backpack", "inventory"],
+  "物品": ["items"],
+  "方块": ["blocks"],
+  "装饰": ["decoration"],
+  "建筑": ["building"],
+  "家具": ["furniture"],
+  "照明": ["lighting"],
+  "红石": ["redstone"],
+  "能源": ["energy"],
+  "物流": ["logistics"],
+  "管道": ["pipes"],
+  "地图": ["map"],
+  "小地图": ["minimap"],
+  "传送": ["teleport"],
+  "结构": ["structures"],
+  "世界生成": ["worldgen", "world generation"],
+  "生物群系": ["biomes"],
+  "维度": ["dimensions"],
+  "下界": ["nether"],
+  "末地": ["end"],
+  "怪物": ["mobs"],
+  "生物": ["mobs"],
+  "战斗": ["combat"],
+  "武器": ["weapons"],
+  "装备": ["equipment"],
+  "工具": ["tools"],
+  "附魔": ["enchantment"],
+  "任务": ["quests"],
+  "成就": ["advancements"],
+  "经济": ["economy"],
+  "商店": ["shop"],
+  "交易": ["trading"],
+  "服务器": ["server"],
+  "插件": ["plugin"],
+  "界面": ["gui", "interface"],
+  "字体": ["font"],
+  "汉化": ["translation", "chinese"],
+  "中文": ["chinese"],
+  "音乐": ["music"],
+  "声音": ["sound", "audio"],
+  "天气": ["weather"],
+  "季节": ["seasons"],
+  "物理": ["physics"],
+  "渲染": ["rendering"],
+  "区块": ["chunks"],
+  "粒子": ["particles"],
+  "启动": ["startup"],
+  "内存": ["memory"],
+  "实用": ["utility"],
+  "辅助": ["utility"],
+  "前置": ["library", "api"],
+};
+
+const SEARCH_STOPWORDS = new Set([
+  "a", "an", "the", "and", "or", "for", "of", "to", "in", "with", "on", "my",
+  "mod", "mods", "minecraft", "mc", "java", "edition", "addon", "addons",
+  "我的世界", "模组", "版本", "一个", "一些",
+]);
+
+/** Common project/category names used only to recover from a small typo when the first search finds nothing. */
+const SEARCH_CORRECTIONS = [
+  "sodium", "lithium", "iris", "optifine", "embeddium", "rubidium", "indium",
+  "create", "jei", "rei", "emi", "journeymap", "minimap", "xaeros", "worldedit",
+  "worldguard", "luckperms", "fabric", "forge", "neoforge", "quilt", "architectury",
+  "cloth-config", "modmenu", "appleskin", "jade", "wthit", "farmers-delight",
+  "terraforged", "biomesoplenty", "twilightforest", "botania", "thermal", "mekanism",
+  "immersiveengineering", "appliedenergistics2", "ae2", "refinedstorage",
+  "storagedrawers", "sophisticatedbackpacks", "curios", "patchouli", "geckolib",
+  "citadel", "ftb", "quests", "createaddition", "crafttweaker", "kubejs", "citadel",
+  "performance", "optimization", "technology", "adventure", "magic", "farming",
+  "storage", "decoration", "building", "utility", "library", "resourcepack",
+  "shader", "shaders", "datapack", "modpack", "server", "client", "worldgen",
+];
+
+const hasCjk = (value: string) => /[\u3400-\u9fff]/.test(value);
+
+function cleanSearchText(value: string): string {
+  return value.normalize("NFKC").replace(/[\u0000-\u001f]/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function searchTokens(value: string): string[] {
+  return cleanSearchText(value).toLowerCase().match(/[a-z0-9][a-z0-9._+-]*|[\u3400-\u9fff]+/g) ?? [];
+}
+
+function translatedSearch(value: string): { text: string; aliases: string[] } {
+  let text = cleanSearchText(value);
+  const aliases: string[] = [];
+  for (const [term, translated] of Object.entries(SEARCH_ALIASES).sort((a, b) => b[0].length - a[0].length)) {
+    if (!text.includes(term)) continue;
+    aliases.push(...translated);
+    text = text.split(term).join(" ");
+  }
+  return { text: cleanSearchText(text), aliases: [...new Set(aliases)] };
+}
+
+/** Bounded Levenshtein distance; enough for small spelling errors without pulling in a search dependency. */
+function editDistanceAtMost(left: string, right: string, limit: number): number | undefined {
+  if (Math.abs(left.length - right.length) > limit) return undefined;
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let i = 1; i <= left.length; i++) {
+    const current = [i];
+    let rowMin = i;
+    for (let j = 1; j <= right.length; j++) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      const value = Math.min(current[j - 1] + 1, previous[j] + 1, previous[j - 1] + cost);
+      current.push(value);
+      rowMin = Math.min(rowMin, value);
+    }
+    if (rowMin > limit) return undefined;
+    previous = current;
+  }
+  return previous[right.length] <= limit ? previous[right.length] : undefined;
+}
+
+function correctedToken(token: string): string | undefined {
+  if (token.length < 4 || hasCjk(token)) return undefined;
+  const limit = token.length >= 8 ? 2 : 1;
+  let best: { word: string; distance: number } | undefined;
+  for (const word of SEARCH_CORRECTIONS) {
+    if (word === token) continue;
+    const distance = editDistanceAtMost(token, word, limit);
+    if (distance === undefined) continue;
+    if (!best || distance < best.distance || (distance === best.distance && word.length < best.word.length)) best = { word, distance };
+  }
+  return best?.word;
+}
+
+/** Broad interpretations of a query, ordered from most literal to most relaxed. */
+export function relaxedSearchQueries(input: string): string[] {
+  const raw = cleanSearchText(input);
+  if (!raw) return [];
+  const { text, aliases } = translatedSearch(raw);
+  const tokens = searchTokens(text);
+  const meaningful = tokens.filter((token) => !SEARCH_STOPWORDS.has(token) && (token.length > 1 || hasCjk(token)));
+  const variants: string[] = [];
+  // A translated category is usually the most useful fallback for a Chinese query.
+  variants.push(...aliases);
+  if (text && text.toLowerCase() !== raw.toLowerCase()) variants.push(text);
+  if (meaningful.length > 1) {
+    for (const token of [...meaningful].sort((a, b) => b.length - a.length)) variants.push(token);
+  }
+  for (const token of meaningful) {
+    const corrected = correctedToken(token);
+    if (corrected) variants.push(corrected);
+  }
+  const seen = new Set([raw.toLowerCase()]);
+  return variants
+    .map(cleanSearchText)
+    .filter((variant) => {
+      const key = variant.toLowerCase();
+      if (!variant || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    })
+    .slice(0, 8);
+}
 
 export const FOLDER_FOR_KIND: Record<Exclude<ContentKind, "modpack">, string> = { mod: "mods", resourcepack: "resourcepacks", shader: "shaderpacks", datapack: "datapacks" };
 
@@ -167,9 +356,7 @@ function fromCurseForge(mod: CfMod, kind: ContentKind): ContentProject {
   };
 }
 
-export async function searchContent(deps: ContentDeps, query: ContentSearchQuery): Promise<ContentSearchResult> {
-  const pageSize = Math.max(1, Math.min(query.pageSize ?? 20, 50));
-  const page = Math.max(0, query.page ?? 0);
+async function searchContentOnce(deps: ContentDeps, query: ContentSearchQuery, page: number, pageSize: number): Promise<ContentSearchResult> {
   const useLoader = LOADER_AWARE.has(query.kind);
   if (query.source === "modrinth") {
     const index = query.sort === "downloads" ? "downloads" : query.sort === "updated" ? "updated" : query.sort === "newest" ? "newest" : undefined;
@@ -198,6 +385,38 @@ export async function searchContent(deps: ContentDeps, query: ContentSearchQuery
     signal: query.signal,
   });
   return { projects: result.data.map((mod) => fromCurseForge(mod, query.kind)), total: result.pagination.totalCount, page, pageSize };
+}
+
+export async function searchContent(deps: ContentDeps, query: ContentSearchQuery): Promise<ContentSearchResult> {
+  const pageSize = Math.max(1, Math.min(query.pageSize ?? 20, 50));
+  const page = Math.max(0, query.page ?? 0);
+  const rawQuery = query.query?.trim();
+  const first = await searchContentOnce(deps, { ...query, query: rawQuery || undefined }, page, pageSize);
+
+  // Exact full-text search is useful, but players often type a category in Chinese, a short phrase,
+  // or one misspelled word. If the first page is thin, try related keywords and use the broader result
+  // for the whole result set. Paging then stays consistent because the UI reuses effectiveQuery.
+  if (!rawQuery || page !== 0 || first.total >= RELAX_SEARCH_BELOW || first.projects.length >= RELAX_SEARCH_BELOW) return first;
+  const alternatives = relaxedSearchQueries(rawQuery);
+  if (!alternatives.length) return first;
+
+  let best = first;
+  let effectiveQuery: string | undefined;
+  for (const alternative of alternatives) {
+    let candidate: ContentSearchResult;
+    try {
+      candidate = await searchContentOnce(deps, { ...query, query: alternative, page: 0 }, 0, pageSize);
+    } catch {
+      // A failed optional lookup must not hide the primary search that already succeeded.
+      continue;
+    }
+    if (candidate.total > best.total || (candidate.total === best.total && candidate.projects.length > best.projects.length)) {
+      best = candidate;
+      effectiveQuery = alternative;
+    }
+    if (best.total >= RELAX_SEARCH_BELOW) break;
+  }
+  return effectiveQuery ? { ...best, effectiveQuery, relaxed: true } : first;
 }
 
 export async function getProject(deps: ContentDeps, source: ContentSource, id: string, signal?: AbortSignal): Promise<ContentProject & { body?: string }> {

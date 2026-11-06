@@ -92,6 +92,31 @@ describe("searching", () => {
     assert.equal(queries[1].get("index"), "downloads", "browsing without a query sorts by downloads");
   });
 
+  it("relaxes narrow Chinese searches and recovers from a small typo", async () => {
+    content = await startContent();
+    const queries: string[] = [];
+    content.routes.set("GET /modrinth/v2/search", (_req, res, url) => {
+      const query = url.searchParams.get("query") ?? "";
+      queries.push(query);
+      const hits = query === "optimization" || query === "sodium"
+        ? [{ project_id: query === "sodium" ? "SODIUM" : "OPT", slug: query, title: query === "sodium" ? "Sodium" : "Optimization Pack", description: "related result", author: "tester", downloads: 12, categories: [query], versions: ["1.20.1"], project_type: "mod", date_modified: "2024-02-02T00:00:00Z" }]
+        : [];
+      json(res, { hits, offset: 0, limit: 20, total_hits: hits.length });
+    });
+    const d = deps(content);
+    const chinese = await searchContent(d, { source: "modrinth", kind: "mod", query: "优化", gameVersion: "1.20.1", loader: "fabric" });
+    assert.equal(chinese.relaxed, true);
+    assert.equal(chinese.effectiveQuery, "optimization");
+    assert.equal(chinese.projects[0]?.title, "Optimization Pack");
+    assert.equal(queries[0], "优化", "the literal query is tried first");
+    assert.equal(queries[1], "optimization", "the related keyword is tried when results are thin");
+
+    const typo = await searchContent(d, { source: "modrinth", kind: "mod", query: "sodim", gameVersion: "1.20.1", loader: "fabric" });
+    assert.equal(typo.relaxed, true);
+    assert.equal(typo.effectiveQuery, "sodium");
+    assert.equal(typo.projects[0]?.title, "Sodium");
+  });
+
   it("queries CurseForge through the mirror without leaking a key", async () => {
     content = await startContent();
     const queries: URLSearchParams[] = [];
