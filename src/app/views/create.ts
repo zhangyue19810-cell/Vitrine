@@ -22,7 +22,7 @@ const LOADERS: { kind: string; blurb: string }[] = [
 
 let open: ModalHandle | undefined;
 
-export function openCreate(initial?: { mcVersion?: string }) {
+export function openCreate(initial?: { mcVersion?: string; loaderKind?: string }) {
   if (open) return;
   const sheet = openSheet({ eyebrow: "NEW INSTANCE", title: "新建实例", onClose: () => (open = undefined) });
   open = sheet;
@@ -38,10 +38,10 @@ export function openCreate(initial?: { mcVersion?: string }) {
     loaderVersion: "",
     name: "",
     nameTouched: false,
-    isolation: "auto" as "auto" | "on" | "off",
   };
   const versionToken = new Latest();
   const loaderToken = new Latest();
+  let pendingLoader = initial?.loaderKind;
 
   sheet.body.innerHTML = `<div class="wiz">
     <div class="wiz-col">
@@ -56,7 +56,6 @@ export function openCreate(initial?: { mcVersion?: string }) {
       <div class="field" data-f="loader-version-field" hidden><label>加载器版本</label><select class="select" data-f="loader-version"></select><div class="hint-text" data-f="loader-hint"></div></div>
       <div class="micro" style="margin-top:8px">3 · 名称与目录</div>
       <div class="field"><label>实例名称</label><input class="input" data-f="name" autocomplete="off" /><div class="hint-text" data-f="name-hint"></div></div>
-      <div class="field"><label>版本隔离</label><select class="select" data-f="isolation"><option value="auto">自动（装了模组加载器的版本独立文件夹）</option><option value="on">总是隔离（模组、存档、设置各用各的）</option><option value="off">不隔离（共用 .minecraft）</option></select></div>
     </div>
   </div>
   <div class="wiz-foot"><div class="wiz-summary" data-f="summary"></div><button class="btn accent lg" data-f="install" disabled>开始安装<span class="arrow">→</span></button></div>`;
@@ -158,6 +157,11 @@ export function openCreate(initial?: { mcVersion?: string }) {
       toast(`获取加载器列表失败：${(error as Error).message}`, "error");
     }
     renderLoaders();
+    if (pendingLoader) {
+      const kind = pendingLoader;
+      pendingLoader = undefined;
+      await pickLoader(kind);
+    }
   };
 
   const pickLoader = async (kind: string) => {
@@ -201,7 +205,6 @@ export function openCreate(initial?: { mcVersion?: string }) {
     state.loaderVersion = field<HTMLSelectElement>("loader-version").value;
     renderSummary();
   });
-  field("isolation").addEventListener("change", () => (state.isolation = field<HTMLSelectElement>("isolation").value as "auto" | "on" | "off"));
   field("install").addEventListener("click", async (event) => {
     if (!state.mc) return;
     state.nameTouched = true;
@@ -209,7 +212,7 @@ export function openCreate(initial?: { mcVersion?: string }) {
     if (problem) return renderSummary();
     const picked = state.loaderVersions.find((v) => v.version === state.loaderVersion);
     const loader = state.loaderKind === "none" || !picked ? undefined : { kind: picked.loader, version: picked.version, raw: picked.raw, meta: picked.meta };
-    const started = await withBusy(event.currentTarget as HTMLElement, () => guard(() => rpc("instances.create", { name: state.name.trim(), mcVersion: state.mc!, loader, isolation: state.isolation })));
+    const started = await withBusy(event.currentTarget as HTMLElement, () => guard(() => rpc("instances.create", { name: state.name.trim(), mcVersion: state.mc!, loader })));
     if (!started) return;
     toast(`开始安装 ${state.name.trim()}`, "ok");
     sheet.close();
@@ -224,7 +227,8 @@ export function openCreate(initial?: { mcVersion?: string }) {
     state.versions = list;
     // The manifest's "latest" can be missing or point at something that is not listed; fall back to the newest release.
     const newest = list.versions.find((v) => v.id === list.latest.release && v.type === "release") ?? list.versions.find((v) => v.type === "release") ?? list.versions[0];
-    if (!state.mc && newest) await pickMc(newest.id);
+    const target = (state.mc && list.versions.find((v) => v.id === state.mc)) || (!state.mc ? newest : undefined);
+    if (target) await pickMc(target.id);
     renderVersions();
   })();
 }

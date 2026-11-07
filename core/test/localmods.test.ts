@@ -266,4 +266,35 @@ describe("checking a mod set", () => {
     assert.match(problems.find((problem) => problem.kind === "missing-dependency")!.message, /Needy.*geckolib.*>=4/);
     assert.deepEqual(problems.find((problem) => problem.kind === "duplicate")!.files.sort(), ["dup-1.jar", "dup-2.jar"]);
   });
+
+  it("reports a disabled dependency with an enable action and surfaces unreadable jars", async () => {
+    const game = join(tmp, "disabled-checks");
+    const modsDir = join(game, "mods");
+    await jar("api.jar.disabled", { "fabric.mod.json": JSON.stringify({ id: "api", name: "API", version: "1" }) }, modsDir);
+    await jar("user.jar", { "fabric.mod.json": JSON.stringify({ id: "user", name: "User", depends: { api: "*" } }) }, modsDir);
+    await writeFile(join(modsDir, "broken.jar"), "not a zip");
+    const problems = analyzeMods(await scanMods(game), { loaders: ["fabric"] });
+    const disabled = problems.find((problem) => problem.kind === "disabled-dependency");
+    assert.ok(disabled);
+    assert.equal(disabled.id, "api");
+    assert.deepEqual(disabled.fix, { kind: "enable-mod", files: ["api.jar.disabled"] });
+    assert.match(disabled.message, /已经装了.*被禁用/);
+    const unreadable = problems.find((problem) => problem.kind === "unreadable");
+    assert.ok(unreadable);
+    assert.deepEqual(unreadable.files, ["broken.jar"]);
+    assert.match(unreadable.message, /无法读取模组信息/);
+  });
+
+  it("groups wrong-loader mods and suggests the loader they actually need", async () => {
+    const game = join(tmp, "loader-checks");
+    const modsDir = join(game, "mods");
+    await jar("one.jar", { "fabric.mod.json": JSON.stringify({ id: "one", name: "One" }) }, modsDir);
+    await jar("two.jar", { "fabric.mod.json": JSON.stringify({ id: "two", name: "Two" }) }, modsDir);
+    const problems = analyzeMods(await scanMods(game), { loaders: ["forge"] });
+    const wrong = problems.filter((problem) => problem.kind === "wrong-loader");
+    assert.equal(wrong.length, 1, "one grouped problem per required loader");
+    assert.deepEqual(wrong[0].fix, { kind: "switch-loader", loader: "fabric" });
+    assert.deepEqual(wrong[0].files.sort(), ["one.jar", "two.jar"]);
+    assert.match(wrong[0].message, /当前实例是 forge/);
+  });
 });

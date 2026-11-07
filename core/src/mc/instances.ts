@@ -61,7 +61,7 @@ export interface InstanceConfig {
   installed?: { mcVersion: string; loader?: { kind: LoaderKind; version: string } };
 }
 
-export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = { isolation: "auto" };
+export const DEFAULT_INSTANCE_CONFIG: InstanceConfig = { isolation: "on" };
 
 export type ReleaseKind = "release" | "snapshot" | "old_beta" | "old_alpha" | "unknown";
 
@@ -128,6 +128,7 @@ function kindOf(type: string | undefined, id: string, mcVersion: string | undefi
 
 export class InstanceStore {
   private cache = new Map<string, CacheEntry>();
+  private migration = new Map<string, Promise<void>>();
 
   constructor(readonly root: string) {}
 
@@ -147,10 +148,26 @@ export class InstanceStore {
     return next;
   }
 
-  /** Where the game runs: the version folder itself when isolated, otherwise the shared root. */
-  gameDirFor(id: string, config: InstanceConfig, loaders: LoaderInfo[], kind: ReleaseKind): { gameDir: string; isolated: boolean } {
-    const isolated = config.isolation === "on" || (config.isolation === "auto" && (loaders.length > 0 || kind !== "release"));
-    return { gameDir: isolated ? versionDir(this.root, id) : this.root, isolated };
+  /**
+   * All instances now run from their own version folder. Sharing the root made it too easy for two
+   * instances to see the same saves/options, so isolation is no longer configurable.
+   */
+  gameDirFor(id: string, _config: InstanceConfig, _loaders: LoaderInfo[], _kind: ReleaseKind): { gameDir: string; isolated: boolean } {
+    return { gameDir: versionDir(this.root, id), isolated: true };
+  }
+
+  /** Copy saves from the old shared root once, before an instance switches to its own folder. */
+  private migrateSharedSaves(id: string): Promise<void> {
+    const running = this.migration.get(id);
+    if (running) return running;
+    const task = (async () => {
+      const from = join(this.root, "saves");
+      const to = join(versionDir(this.root, id), "saves");
+      if (!(await exists(from)) || (await exists(to))) return;
+      await copyDir(from, to);
+    })().finally(() => this.migration.delete(id));
+    this.migration.set(id, task);
+    return task;
   }
 
   /** Folder names only (cheap; no analysis of the version JSONs). */
@@ -192,6 +209,10 @@ export class InstanceStore {
       this.cache.set(id, cached);
     }
     const config = await this.loadConfig(id);
+    const stored = await readJsonOr<Partial<InstanceConfig>>(this.configPath(id), {});
+    const legacyIsolation = stored.isolation ?? "auto";
+    const wasShared = legacyIsolation === "off" || (legacyIsolation === "auto" && cached.info.loaders.length === 0 && cached.info.kind === "release");
+    if (wasShared) await this.migrateSharedSaves(id).catch(() => {});
     const { gameDir, isolated } = this.gameDirFor(id, config, cached.info.loaders, cached.info.kind);
     const info = { ...cached.info, config, gameDir, isolated, name: config.displayName || cached.info.name };
     // A vanilla copy installed under a custom name carries no trace of its version inside the JSON; the install recorded it.

@@ -306,7 +306,7 @@ export async function readModFile(path: string, prefer?: ModLoaderType): Promise
     if (!tomlName && zip.has("mcmod.info")) await attempt("mcmod.info", async () => parseMcmodInfo(await zip.readText("mcmod.info")));
     if (zip.has("litemod.json")) await attempt("litemod.json", async () => [parseLiteMod(await zip.readJson("litemod.json"))]);
 
-    if (!found.length) throw new Error(errors[0] ?? "没有找到模组描述文件");
+    if (!found.length) throw new Error(errors.length ? errors.slice(0, 2).join("；") : "没有找到模组描述文件");
     const primary = (prefer && found.find((meta) => meta.loaders.includes(prefer))) || found[0];
     const rest = found.filter((meta) => meta !== primary);
     const loaders = [...new Set(found.flatMap((meta) => meta.loaders))];
@@ -493,30 +493,58 @@ export async function removeModFile(gameDir: string, relativePath: string): Prom
 
 // ---------------------------------------------------------------------------------------------- checks
 
+export type ModProblemFix =
+  | { kind: "enable-mod"; files: string[] }
+  | { kind: "install-dependency"; id: string }
+  | { kind: "switch-loader"; loader: "fabric" | "quilt" | "forge" | "neoforge" | "liteloader" };
+
 export interface ModProblem {
-  kind: "duplicate" | "missing-dependency" | "incompatible";
+  kind: "duplicate" | "missing-dependency" | "disabled-dependency" | "incompatible" | "wrong-loader" | "unreadable";
   /** Files involved. */
   files: string[];
   id: string;
   message: string;
+  /** A safe action the interface can offer; all actions are confirmed by the user. */
+  fix?: ModProblemFix;
 }
 
-/** Cheap structural checks across enabled mods: duplicates, missing required dependencies, declared conflicts. */
-export function analyzeMods(mods: LocalMod[]): ModProblem[] {
-  const enabled = mods.filter((mod) => !mod.disabled && mod.meta);
-  const providers = new Map<string, LocalMod[]>();
-  const add = (id: string | undefined, mod: LocalMod) => {
-    if (!id) return;
-    const list = providers.get(id) ?? [];
-    if (!list.includes(mod)) list.push(mod);
-    providers.set(id, list);
+export interface ModAnalysisContext {
+  /** Loader kinds currently provided by the instance (fabric/forge/neoforge/quilt/…). */
+  loaders?: string[];
+}
+
+const normalizeLoaderKind = (kind: string): string => (kind === "legacy-forge" ? "forge" : kind);
+const loaderGroup = (kind: string): string => {
+  const normalized = normalizeLoaderKind(kind);
+  if (normalized === "fabric" || normalized === "quilt") return "fabric";
+  if (normalized === "forge" || normalized === "neoforge") return "forge";
+  return normalized;
+};
+
+/** Cheap structural checks across mods: duplicates, missing/disabled dependencies, conflicts, wrong loader and unreadable jars. */
+export function analyzeMods(mods: LocalMod[], context: ModAnalysisContext = {}): ModProblem[] {
+  const known = mods.filter((mod) => mod.meta);
+  const enabled = known.filter((mod) => !mod.disabled);
+  const disabled = known.filter((mod) => mod.disabled);
+  const instanceLoaders = [...new Set((context.loaders ?? []).map(normalizeLoaderKind))].filter((kind) => kind !== "none" && kind !== "optifine");
+  const addProviders = (target: Map<string, LocalMod[]>, mod: LocalMod) => {
+    const add = (id: string | undefined) => {
+      if (!id) return;
+      const list = target.get(id) ?? [];
+      if (!list.includes(mod)) list.push(mod);
+      target.set(id, list);
+    };
+    add(mod.meta!.id);
+    for (const extra of mod.meta!.extra) add(extra.id);
+    for (const id of mod.meta!.provides) add(id);
   };
-  for (const mod of enabled) {
-    add(mod.meta!.id, mod);
-    for (const extra of mod.meta!.extra) add(extra.id, mod);
-    for (const id of mod.meta!.provides) add(id, mod);
-  }
+  const enabledProviders = new Map<string, LocalMod[]>();
+  const disabledProviders = new Map<string, LocalMod[]>();
+  for (const mod of enabled) addProviders(enabledProviders, mod);
+  for (const mod of disabled) addProviders(disabledProviders, mod);
+
   const problems: ModProblem[] = [];
+  const wrongLoader = new Map<"fabric" | "quilt" | "forge" | "neoforge" | "liteloader", { files: string[]; names: string[] }>();
   // Two files with the same primary id, which Fabric / Forge refuse to load.
   const primary = new Map<string, LocalMod[]>();
   for (const mod of enabled) {
@@ -527,16 +555,67 @@ export function analyzeMods(mods: LocalMod[]): ModProblem[] {
   for (const [id, list] of primary) {
     if (list.length > 1) problems.push({ kind: "duplicate", id, files: list.map((mod) => mod.file), message: `模组 “${list[0].meta!.name ?? id}” 装了 ${list.length} 个文件：${list.map((mod) => mod.file).join("、")}。请只保留一个。` });
   }
+
   for (const mod of enabled) {
-    for (const dep of mod.meta!.dependencies) {
-      if (FABRIC_BUILTIN.has(dep.id)) continue;
-      if (dep.kind === "required" && !providers.has(dep.id)) {
-        problems.push({ kind: "missing-dependency", id: dep.id, files: [mod.file], message: `“${mod.meta!.name ?? mod.file}” 需要前置模组 ${dep.id}${dep.version && dep.version !== "*" ? `（${dep.version}）` : ""}，但没有找到。` });
-      } else if (dep.kind === "incompatible" && providers.has(dep.id)) {
-        const other = providers.get(dep.id)!.filter((candidate) => candidate !== mod);
-        if (other.length) problems.push({ kind: "incompatible", id: dep.id, files: [mod.file, ...other.map((candidate) => candidate.file)], message: `“${mod.meta!.name ?? mod.file}” 声明与 ${other[0].meta!.name ?? dep.id} 不兼容。` });
+    const meta = mod.meta!;
+    if (context.loaders !== undefined) {
+      const needed = [...new Set(meta.loaders.map(normalizeLoaderKind))];
+      const groups = new Set(instanceLoaders.map(loaderGroup));
+      const compatible = needed.some((kind) => instanceLoaders.includes(kind) || groups.has(loaderGroup(kind)));
+      if (needed.length && !compatible) {
+        const suggested = (needed.find((kind) => kind === "fabric") ?? needed.find((kind) => kind === "quilt") ?? needed.find((kind) => kind === "neoforge") ?? needed.find((kind) => kind === "forge") ?? needed[0]) as "fabric" | "quilt" | "forge" | "neoforge" | "liteloader";
+        if (suggested) {
+          const entry = wrongLoader.get(suggested) ?? { files: [], names: [] };
+          if (!entry.files.includes(mod.file)) entry.files.push(mod.file);
+          if (entry.names.length < 6) entry.names.push(meta.name ?? mod.file);
+          wrongLoader.set(suggested, entry);
+        }
       }
     }
+    for (const dep of meta.dependencies) {
+      if (FABRIC_BUILTIN.has(dep.id)) continue;
+      if (dep.kind === "required" && !enabledProviders.has(dep.id)) {
+        const off = disabledProviders.get(dep.id) ?? [];
+        if (off.length) {
+          problems.push({
+            kind: "disabled-dependency",
+            id: dep.id,
+            files: [mod.file, ...off.map((candidate) => candidate.file)],
+            message: `“${meta.name ?? mod.file}”需要前置模组 ${dep.id}${dep.version && dep.version !== "*" ? `（${dep.version}）` : ""}。文件已经装了，但现在被禁用：${off.map((candidate) => candidate.file).join("、")}。`,
+            fix: { kind: "enable-mod", files: off.map((candidate) => candidate.file) },
+          });
+        } else {
+          problems.push({
+            kind: "missing-dependency",
+            id: dep.id,
+            files: [mod.file],
+            message: `“${meta.name ?? mod.file}”需要前置模组 ${dep.id}${dep.version && dep.version !== "*" ? `（${dep.version}）` : ""}，但没有找到。`,
+            fix: { kind: "install-dependency", id: dep.id },
+          });
+        }
+      } else if (dep.kind === "incompatible" && enabledProviders.has(dep.id)) {
+        const other = enabledProviders.get(dep.id)!.filter((candidate) => candidate !== mod);
+        if (other.length) problems.push({ kind: "incompatible", id: dep.id, files: [mod.file, ...other.map((candidate) => candidate.file)], message: `“${meta.name ?? mod.file}”声明与 ${other[0].meta!.name ?? dep.id} 不兼容。` });
+      }
+    }
+  }
+  for (const [loader, entry] of wrongLoader) {
+    problems.push({
+      kind: "wrong-loader",
+      id: `loader:${loader}`,
+      files: entry.files,
+      message: `${entry.files.length} 个模组需要 ${loader} 加载器，但当前实例是 ${instanceLoaders.length ? instanceLoaders.join(" / ") : "原版"}：${entry.names.join("、")}${entry.files.length > entry.names.length ? " 等" : ""}。这些文件不会被正确加载。`,
+      fix: { kind: "switch-loader", loader },
+    });
+  }
+  for (const mod of mods) {
+    if (mod.disabled || !mod.error) continue;
+    problems.push({
+      kind: "unreadable",
+      id: mod.file,
+      files: [mod.file],
+      message: `无法读取模组信息：${mod.error}`,
+    });
   }
   return problems;
 }

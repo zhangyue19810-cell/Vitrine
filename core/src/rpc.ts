@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { statSync } from "node:fs";
-import { analyzeMods, readModIcon, removeModFile, scanMods, setModEnabled } from "./content/local-mods";
+import { analyzeMods, readModIcon, removeModFile, scanMods, setModEnabled, type ModLoaderType } from "./content/local-mods";
 import { getProject, listContentVersions, searchContent, type ContentFilter, type ContentKind, type ContentSource, type ModUpdate } from "./content/browse";
 import type { McmodFilter } from "./content/mcmod";
 import { listResourcePacks, listScreenshots, listShaderPacks, readScreenshot, removePackFile, renamePackFile, type PackFolder } from "./content/packs-local";
@@ -263,10 +263,12 @@ export function buildRpc(core: Core): RpcTable {
 
   // ---------------- local mods and packs
   def("mods.list", async (params, { signal }) => {
-    const dir = await gameDir(params);
-    const mods = await scanMods(dir, { signal });
-    return { mods, problems: analyzeMods(mods) };
+    const instance = await core.requireInstance(str(params, "instanceId", 200));
+    const prefer = instance.loaders.find((entry) => ["fabric", "quilt", "forge", "neoforge", "legacy-forge", "liteloader"].includes(entry.kind))?.kind as ModLoaderType | undefined;
+    const mods = await scanMods(instance.gameDir, { signal, prefer });
+    return { mods, problems: analyzeMods(mods, { loaders: instance.loaders.map((entry) => entry.kind) }) };
   });
+  def("mods.installDependency", (params) => core.installMissingDependency(str(params, "instanceId", 200), str(params, "dependencyId", 120)));
   def("mods.icon", async (params) => readModIcon(join(await gameDir(params), insideFolder(str(params, "path", 600), "mods"))).catch(() => undefined));
   def("mods.setEnabled", async (params) => ({ path: await setModEnabled(await gameDir(params), insideFolder(str(params, "path", 600), "mods"), Boolean(params.enabled)) }));
   def("mods.remove", async (params) => void (await removeModFile(await gameDir(params), insideFolder(str(params, "path", 600), "mods"))));

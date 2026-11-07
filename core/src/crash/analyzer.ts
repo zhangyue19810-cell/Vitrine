@@ -21,7 +21,8 @@ export type CrashFix =
   | { kind: "reset-jvm-args" }
   | { kind: "check-config"; file?: string }
   | { kind: "free-disk-space" }
-  | { kind: "change-game-version"; wanted: string; actual?: string };
+  | { kind: "change-game-version"; wanted: string; actual?: string }
+  | { kind: "switch-loader"; loader: "fabric" | "quilt" | "forge" | "neoforge" | "liteloader" };
 
 export interface CrashFinding {
   id: string;
@@ -45,7 +46,7 @@ export interface CrashInput {
   mcVersion?: string;
   loader?: string;
   maxMemoryMb?: number;
-  installedMods?: { id?: string; name?: string; fileName: string }[];
+  installedMods?: { id?: string; name?: string; fileName: string; loaders?: string[] }[];
 }
 
 export interface CrashAnalysis {
@@ -63,6 +64,14 @@ const MAX_TEXT = 2 * 1024 * 1024;
 const JAVA_BY_CLASS_VERSION = (version: number) => version - 44;
 
 const clip = (line: string, max = 220) => (line.length > max ? `${line.slice(0, max)}…` : line).trim();
+
+const normalizeLoader = (kind: string) => (kind === "legacy-forge" ? "forge" : kind);
+const loaderGroup = (kind: string) => {
+  const normalized = normalizeLoader(kind);
+  if (normalized === "fabric" || normalized === "quilt") return "fabric";
+  if (normalized === "forge" || normalized === "neoforge") return "forge";
+  return normalized;
+};
 
 function firstLine(text: string, pattern: RegExp): string | undefined {
   for (const line of text.split(/\r?\n/)) if (pattern.test(line)) return clip(line);
@@ -623,6 +632,34 @@ export function analyzeCrash(input: CrashInput): CrashAnalysis {
       if (result) findings.push(...(Array.isArray(result) ? result : [result]));
     } catch {
       /* a broken rule must never hide the other findings */
+    }
+  }
+
+  const currentLoader = input.loader && input.loader !== "none" ? normalizeLoader(input.loader) : undefined;
+  if (currentLoader && mods.some((mod) => mod.loaders?.length)) {
+    const currentGroup = loaderGroup(currentLoader);
+    const mismatched = new Map<"fabric" | "quilt" | "forge" | "neoforge" | "liteloader", { names: string[]; ids: string[] }>();
+    for (const mod of mods) {
+      const loaders = [...new Set(mod.loaders ?? [])].map(normalizeLoader);
+      if (!loaders.length || loaders.some((loader) => loaderGroup(loader) === currentGroup)) continue;
+      const suggested = (loaders.find((loader) => loader === "fabric") ?? loaders.find((loader) => loader === "quilt") ?? loaders.find((loader) => loader === "neoforge") ?? loaders.find((loader) => loader === "forge") ?? loaders[0]) as "fabric" | "quilt" | "forge" | "neoforge" | "liteloader";
+      if (!suggested) continue;
+      const entry = mismatched.get(suggested) ?? { names: [], ids: [] };
+      entry.names.push(mod.name ?? mod.id ?? mod.fileName);
+      if (mod.id) entry.ids.push(mod.id);
+      mismatched.set(suggested, entry);
+    }
+    const hasErrors = findings.some((finding) => finding.severity === "error");
+    for (const [loader, entry] of mismatched) {
+      findings.push({
+        id: `wrong-installed-loader-${loader}`,
+        severity: hasErrors ? "warn" : "error",
+        title: `有 ${entry.names.length} 个模组不是当前 ${currentLoader} 加载器的格式`,
+        detail: `当前实例使用 ${currentLoader}，但这些模组需要 ${loader}：${entry.names.slice(0, 6).join("、")}${entry.names.length > 6 ? " 等" : ""}。它们可能被当前加载器忽略，也可能导致启动失败。`,
+        advice: [`新建一个使用 ${loader} 的实例，再把对应模组移过去。`, "不要同时把 Fabric、Forge 和 NeoForge 的模组放进同一个 mods 文件夹。"],
+        mods: entry.ids.length ? entry.ids : undefined,
+        fix: { kind: "switch-loader", loader },
+      });
     }
   }
 

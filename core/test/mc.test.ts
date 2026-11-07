@@ -657,7 +657,8 @@ describe("instance store", () => {
     const list = await store.list();
     const byId = Object.fromEntries(list.map((i) => [i.id, i]));
     assert.equal(byId["1.21.1"].valid, true);
-    assert.equal(byId["1.21.1"].isolated, false, "plain release shares the root");
+    assert.equal(byId["1.21.1"].isolated, true, "every instance gets its own game folder");
+    assert.equal(byId["1.21.1"].gameDir, versionDir(root, "1.21.1"));
     assert.equal(byId["1.21.1"].mcVersion, "1.21.1");
     assert.equal(byId["Create Pack"].isolated, true, "modded instances are isolated by default");
     assert.deepEqual(byId["Create Pack"].loaders, [{ kind: "neoforge", version: "21.1.77" }]);
@@ -672,6 +673,18 @@ describe("instance store", () => {
     assert.equal(updated?.name, "原版 1.21.1");
     assert.equal(updated?.config.memory, 4096);
     assert.equal(updated?.gameDir, versionDir(root, "1.21.1"));
+  });
+
+  it("copies old shared saves into the instance when switching to full isolation", async () => {
+    const root = join(tmp, "mc");
+    await seed(root, "1.21.1", { type: "release", mainClass: "m", javaVersion: { component: "c", majorVersion: 21 } });
+    await mkdir(join(root, "saves", "Shared World"), { recursive: true });
+    await writeFile(join(root, "saves", "Shared World", "level.dat"), "world-data");
+    const store = new InstanceStore(root);
+    const info = await store.get("1.21.1");
+    assert.equal(info?.isolated, true);
+    assert.equal(info?.gameDir, versionDir(root, "1.21.1"));
+    assert.equal(await readFile(join(versionDir(root, "1.21.1"), "saves", "Shared World", "level.dat"), "utf8"), "world-data");
   });
 
   it("renames, duplicates and removes", async () => {

@@ -130,6 +130,7 @@ export interface RpcMap {
   "content.applyUpdates": [{ instanceId: string; updates: ModUpdate[] }, { taskId: string }];
   "mods.list": [{ instanceId: string }, { mods: LocalMod[]; problems: ModProblem[] }];
   "mods.icon": [{ instanceId: string; path: string }, string | undefined];
+  "mods.installDependency": [{ instanceId: string; dependencyId: string }, { taskId: string; title: string; source: "modrinth" | "curseforge" }];
   "mods.setEnabled": [{ instanceId: string; path: string; enabled: boolean }, { path: string }];
   "mods.remove": [{ instanceId: string; path: string }, null];
   "resourcepacks.list": [{ instanceId: string; icons?: boolean }, ResourcePackInfo[]];

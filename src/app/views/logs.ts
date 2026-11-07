@@ -216,7 +216,7 @@ function fixLabel(fix: CrashFix): string | undefined {
     case "switch-java":
       return `改用 Java ${fix.major}`;
     case "install-mods":
-      return "去安装缺少的模组";
+      return "一键补齐前置";
     case "disable-mods":
       return "禁用有问题的模组";
     case "remove-duplicates":
@@ -231,6 +231,8 @@ function fixLabel(fix: CrashFix): string | undefined {
       return "打开配置文件夹";
     case "change-game-version":
       return `新建 ${fix.wanted} 的实例`;
+    case "switch-loader":
+      return `新建 ${fix.loader} 加载器实例`;
     case "free-disk-space":
       return undefined;
   }
@@ -328,6 +330,20 @@ async function applyFix(fix: CrashFix, instance: InstanceSummary, options: { onF
       return;
     }
     case "install-mods": {
+      const started: { taskId: string; title: string }[] = [];
+      for (const dependencyId of fix.modIds.slice(0, 8)) {
+        try {
+          started.push(await rpc("mods.installDependency", { instanceId: id, dependencyId }));
+        } catch {
+          /* try the next dependency; a manual fallback is offered below when none can be resolved */
+        }
+      }
+      if (started.length) {
+        toast(`开始安装 ${started.length} 个前置：${started.map((entry) => entry.title).join("、")}`, "ok");
+        (await import("./downloads")).openDownloads(started[0].taskId);
+        return options.onFixed?.();
+      }
+      toast("没有自动找到完全匹配的前置，已打开搜索", "info");
       const { openBrowse } = await import("./browse");
       return openBrowse({ kind: "mod", instanceId: id, query: fix.modIds[0] });
     }
@@ -369,6 +385,10 @@ async function applyFix(fix: CrashFix, instance: InstanceSummary, options: { onF
     case "change-game-version": {
       const { openCreate } = await import("./create");
       return openCreate({ mcVersion: fix.wanted });
+    }
+    case "switch-loader": {
+      const { openCreate } = await import("./create");
+      return openCreate({ mcVersion: instance.mcVersion, loaderKind: fix.loader });
     }
     case "free-disk-space":
       return;

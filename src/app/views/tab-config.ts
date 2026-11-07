@@ -57,7 +57,6 @@ function sections(javaMajor: number | undefined): Section[] {
           desc: "大型整合包建议用“大型整合包”预设。你自己写了 GC 参数时，预设会自动让位。",
         },
         { key: "jvmArgs", name: "额外 JVM 参数", kind: "area", rows: 2, block: true, mono: true, placeholder: "-Dfile.encoding=UTF-8 -XX:+UseG1GC …", desc: "用空格分隔。内存请用上面的“最大内存”设置，不要写 -Xmx。" },
-        { key: "isolation", name: "存档与模组存放位置", kind: "select", options: [["auto", "自动（带加载器或快照的实例独立存放）"], ["on", "总是独立（放在实例自己的文件夹里）"], ["off", "共用游戏目录"]], desc: "已有文件不会被移动：改变这一项后，游戏会换一个文件夹运行。" },
       ],
     },
     {

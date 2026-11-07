@@ -107,6 +107,23 @@ describe("crash analysis rules", () => {
     assert.deepEqual(b.mods, ["iris", "sodium"]);
   });
 
+  it("detects installed mods built for a different loader and offers a switch", () => {
+    const analysis = analyzeCrash({
+      log: "Minecraft crashed while starting",
+      loader: "fabric",
+      installedMods: [
+        { id: "create", name: "Create", fileName: "create-forge.jar", loaders: ["forge"] },
+        { id: "sodium", name: "Sodium", fileName: "sodium-fabric.jar", loaders: ["fabric"] },
+      ],
+    });
+    const finding = find(analysis, "wrong-installed-loader");
+    assert.ok(finding);
+    assert.match(finding.title, /不是当前 fabric 加载器/);
+    assert.deepEqual(finding.mods, ["create"]);
+    assert.deepEqual(finding.fix, { kind: "switch-loader", loader: "forge" });
+    assert.equal(find(analyzeCrash({ log: "", loader: "quilt", installedMods: [{ id: "sodium", name: "Sodium", fileName: "sodium.jar", loaders: ["fabric"] }] }), "wrong-installed-loader"), undefined, "Quilt accepts Fabric mods");
+  });
+
   it("finds duplicate mods", () => {
     const log = "Found duplicate mods:\n\tMod ID: 'jei' from mod files: jei-1.20.1-15.2.jar, jei-1.20.1-15.3.jar";
     const finding = find(analyzeCrash({ log }), "duplicate-mods");

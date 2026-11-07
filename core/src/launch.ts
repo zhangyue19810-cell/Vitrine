@@ -376,7 +376,7 @@ export class GameManager {
           mcVersion: plan.info.mcVersion,
           loader: plan.info.loaders[0]?.kind,
           maxMemoryMb: plan.maxMemoryMB,
-          installedMods: mods.map((mod) => ({ id: mod.meta?.id, name: mod.meta?.name, fileName: mod.file })),
+          installedMods: mods.map((mod) => ({ id: mod.meta?.id, name: mod.meta?.name, fileName: mod.file, loaders: mod.meta?.loaders })),
         });
         snapshot.crash = { analysis, reportPath: found.crashReportPath ?? found.hsErrPath };
       })();
@@ -411,7 +411,7 @@ export class GameManager {
       hsErr: found.hsErr,
       mcVersion: info.mcVersion,
       loader: info.loaders[0]?.kind,
-      installedMods: mods.map((mod) => ({ id: mod.meta?.id, name: mod.meta?.name, fileName: mod.file })),
+      installedMods: mods.map((mod) => ({ id: mod.meta?.id, name: mod.meta?.name, fileName: mod.file, loaders: mod.meta?.loaders })),
     });
     return { analysis, reportPath: found.crashReportPath ?? found.hsErrPath };
   }

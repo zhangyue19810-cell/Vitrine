@@ -11,7 +11,7 @@ import { openDownloads } from "./downloads";
 
 type Filter = "all" | "enabled" | "disabled" | "problem";
 
-const KIND_LABEL: Record<ModProblem["kind"], string> = { duplicate: "重复", "missing-dependency": "缺少前置", incompatible: "不兼容" };
+const KIND_LABEL: Record<ModProblem["kind"], string> = { duplicate: "重复", "missing-dependency": "缺少前置", "disabled-dependency": "前置被禁用", incompatible: "不兼容", "wrong-loader": "加载器不对", unreadable: "无法读取" };
 
 /** A compact Chinese → English aid for the installed-mod filter. */
 const MOD_SEARCH_ALIASES: Record<string, string[]> = {
@@ -306,17 +306,49 @@ export function mount(ctx: TabContext): TabHandle {
     if (!problems.length) return setHtml(host, html``);
     setHtml(
       host,
-      html`<div><div class="section-title">需要注意（${problems.length}）</div>${problems.map(
-        (problem, index) => html`<div class="problem"><span class="chip warn" style="flex:none">${KIND_LABEL[problem.kind]}</span><div style="flex:1;min-width:0"><div>${problem.message}</div><div class="muted" style="font-size:11.5px;margin-top:3px;overflow-wrap:anywhere">${problem.files.join("、")}</div></div>${problem.kind === "missing-dependency" ? html`<button class="btn sm" data-problem="${index}" data-fix="search">搜索 ${problem.id}</button>` : problem.kind === "duplicate" ? html`<button class="btn sm" data-problem="${index}" data-fix="dedupe">只留最新的</button>` : ""}</div>`,
-      )}</div>`,
+      html`<div><div class="section-title">需要注意（${problems.length}）</div>${problems.map((problem, index) => {
+        const action = problem.kind === "duplicate"
+          ? { how: "dedupe", label: "只留最新的" }
+          : problem.fix?.kind === "install-dependency"
+            ? { how: "dependency", label: "一键补齐" }
+            : problem.fix?.kind === "enable-mod"
+              ? { how: "enable", label: "启用前置" }
+              : problem.fix?.kind === "switch-loader"
+                ? { how: "loader", label: "更换加载器" }
+                : undefined;
+        return html`<div class="problem"><span class="chip warn" style="flex:none">${KIND_LABEL[problem.kind]}</span><div style="flex:1;min-width:0"><div>${problem.message}</div><div class="muted" style="font-size:11.5px;margin-top:3px;overflow-wrap:anywhere">${problem.files.join("、")}</div></div>${action ? html`<button class="btn sm" data-problem="${index}" data-fix="${action.how}">${action.label}</button>` : ""}</div>`;
+      })}</div>`,
     );
   }
 
-  async function fixProblem(problem: ModProblem, how: string) {
+  async function fixProblem(problem: ModProblem, how: string, button?: HTMLElement) {
     const instance = ctx.instance();
-    if (how === "search") {
-      const { openBrowse } = await import("./browse");
-      return openBrowse({ kind: "mod", instanceId: instance.id, query: problem.id });
+    if (how === "dependency") {
+      if (problem.fix?.kind !== "install-dependency") return;
+      const dependencyId = problem.fix.id;
+      const started = await withBusy(button ?? body, () => guard(() => rpc("mods.installDependency", { instanceId: instance.id, dependencyId })));
+      if (!started) return;
+      toast(`开始安装前置 ${started.title}`, "ok");
+      openDownloads(started.taskId);
+      void awaitTask(started.taskId, signal).then(() => void load(true), () => undefined);
+      return;
+    }
+    if (how === "enable") {
+      if (problem.fix?.kind !== "enable-mod") return;
+      const targets = problem.fix.files.map((file) => mods.find((mod) => mod.file === file)).filter((mod): mod is LocalMod => Boolean(mod));
+      if (!targets.length) {
+        toast("没有找到被禁用的前置文件，请到模组列表手动启用", "error");
+        return;
+      }
+      for (const mod of targets) await guard(() => rpc("mods.setEnabled", { instanceId: instance.id, path: mod.path, enabled: true }));
+      toast(`已启用 ${targets.length} 个前置文件`, "ok");
+      scheduleReload();
+      return;
+    }
+    if (how === "loader") {
+      if (problem.fix?.kind !== "switch-loader") return;
+      const { openCreate } = await import("./create");
+      return openCreate({ mcVersion: instance.mcVersion, loaderKind: problem.fix.loader });
     }
     if (how === "dedupe") {
       const files = problem.files.map((file) => mods.find((mod) => mod.file === file || mod.path === file)).filter((mod): mod is LocalMod => Boolean(mod));
@@ -422,7 +454,7 @@ export function mount(ctx: TabContext): TabHandle {
   });
   onAll(body, "click", "[data-problem]", (element) => {
     const problem = problems[Number(element.dataset.problem)];
-    if (problem) void fixProblem(problem, element.dataset.fix ?? "");
+    if (problem) void fixProblem(problem, element.dataset.fix ?? "", element);
   });
   onAll(body, "click", "[data-act]", (element) => {
     switch (element.dataset.act) {

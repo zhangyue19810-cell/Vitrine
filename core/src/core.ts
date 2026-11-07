@@ -7,7 +7,7 @@ import { MicrosoftAuth, type MicrosoftEndpoints, MS_ENDPOINTS } from "./account/
 import { FileSecretStore, plainCipher, type Cipher } from "./account/secrets";
 import type { LoginChallenge, PublicAccount } from "./account/types";
 import { YggdrasilClient } from "./account/yggdrasil";
-import { applyModUpdate, checkModUpdates, installContent, type ContentDeps, type InstallContentRequest, type ModUpdate } from "./content/browse";
+import { applyModUpdate, checkModUpdates, installContent, searchContent, type ContentDeps, type InstallContentRequest, type ModUpdate } from "./content/browse";
 import { CurseForgeClient } from "./content/curseforge";
 import { McmodClient } from "./content/mcmod";
 import { ModrinthClient } from "./content/modrinth";
@@ -668,6 +668,61 @@ export class Core {
       },
     });
     return { taskId };
+  }
+
+  /**
+   * Resolve a dependency id against Modrinth / CurseForge and install the matching project.
+   * Only exact (normalized) project ids, slugs or titles are accepted; otherwise the UI opens search instead.
+   */
+  async installMissingDependency(instanceId: string, dependencyId: string): Promise<{ taskId: string; title: string; source: "modrinth" | "curseforge" }> {
+    const info = await this.requireInstance(instanceId);
+    const wanted = dependencyId.trim();
+    if (!wanted) throw new Error("前置模组 ID 不能为空");
+    const loaderEntry = info.loaders.find((entry) => ["fabric", "quilt", "forge", "neoforge"].includes(entry.kind));
+    const loader = loaderEntry?.kind as "fabric" | "quilt" | "forge" | "neoforge" | undefined;
+    const normalize = (value: string | undefined) => (value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "");
+    const target = normalize(wanted);
+    const matches = (projects: { id: string; slug?: string; title: string }[]) =>
+      projects.find((project) => [project.id, project.slug, project.title].some((value) => normalize(value) === target))
+      ?? projects.find((project) => [project.id, project.slug].some((value) => {
+        const candidate = normalize(value);
+        return candidate.length >= 4 && (candidate.includes(target) || target.includes(candidate));
+      }));
+    let found: { source: "modrinth" | "curseforge"; projectId: string; title: string } | undefined;
+
+    if (/^\d+$/.test(wanted)) {
+      try {
+        const mod = await this.curseforge.mod(Number(wanted));
+        found = { source: "curseforge", projectId: String(mod.id), title: mod.name };
+      } catch {
+        /* try text search below */
+      }
+    }
+    if (!found) {
+      const result = await searchContent(this.contentDeps(), { source: "modrinth", kind: "mod", query: wanted, gameVersion: info.mcVersion, loader, pageSize: 10 });
+      const hit = matches(result.projects);
+      if (hit) found = { source: "modrinth", projectId: hit.id, title: hit.title };
+    }
+    if (!found) {
+      try {
+        const result = await searchContent(this.contentDeps(), { source: "curseforge", kind: "mod", query: wanted, gameVersion: info.mcVersion, loader, pageSize: 10 });
+        const hit = matches(result.projects);
+        if (hit) found = { source: "curseforge", projectId: hit.id, title: hit.title };
+      } catch {
+        /* CurseForge may be unavailable without a key; Modrinth already had a chance. */
+      }
+    }
+    if (!found) throw new Error(`没有在 Modrinth 或 CurseForge 找到 ID 完全匹配的前置 ${wanted}，请到内容页手动选择。`);
+    const { taskId } = this.installContentTask({
+      instanceId,
+      kind: "mod",
+      source: found.source,
+      projectId: found.projectId,
+      filter: { gameVersion: info.mcVersion, loader },
+      withDependencies: true,
+      title: `前置 ${found.title}`,
+    });
+    return { taskId, title: found.title, source: found.source };
   }
 
   /** Install a mod / resource pack / shader / data pack into an instance. */
