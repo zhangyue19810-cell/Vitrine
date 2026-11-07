@@ -14,6 +14,7 @@ export type { GameLine, GameLifecycle } from "../../core/src/mc/launcher";
 export type { JavaInstall } from "../../core/src/java/detect";
 export type { LoaderVersion } from "../../core/src/loaders/meta";
 export type { ContentProject, ContentVersion, ContentSearchResult, ContentKind, ContentSource, ModUpdate, InstallContentResult } from "../../core/src/content/browse";
+export type { McmodSearchResult, McmodItem, McmodFilter } from "../../core/src/content/mcmod";
 export type { LocalMod, ModProblem } from "../../core/src/content/local-mods";
 export type { ResourcePackInfo, ShaderPackInfo, ScreenshotInfo } from "../../core/src/content/packs-local";
 export type { SaveInfo } from "../../core/src/world/saves";

@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { statSync } from "node:fs";
 import { analyzeMods, readModIcon, removeModFile, scanMods, setModEnabled } from "./content/local-mods";
 import { getProject, listContentVersions, searchContent, type ContentFilter, type ContentKind, type ContentSource, type ModUpdate } from "./content/browse";
+import type { McmodFilter } from "./content/mcmod";
 import { listResourcePacks, listScreenshots, listShaderPacks, readScreenshot, removePackFile, renamePackFile, type PackFolder } from "./content/packs-local";
 import type { Core } from "./core";
 import { exportLaunchScript } from "./launch";
@@ -222,6 +223,10 @@ export function buildRpc(core: Core): RpcTable {
 
   // ---------------- online content
   def("content.status", () => ({ curseforge: core.curseforge.hasKey }));
+  def("mcmod.search", (params, { signal }) => {
+    const filter = params.filter === undefined ? undefined : oneOf(params, "filter", ["all", "mod", "modpack"] as const) as McmodFilter;
+    return core.mcmod.search(str(params, "query", 120), { filter, page: optNum(params, "page", 0, 200), signal });
+  });
   def("content.search", (params, { signal }) =>
     searchContent(core.contentDeps(), {
       source: oneOf(params, "source", SOURCES) as ContentSource,

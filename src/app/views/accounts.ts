@@ -101,10 +101,9 @@ function buildMicrosoft(panel: HTMLElement) {
   if (!store.system.hasMicrosoftClientId) {
     setHtml(
       panel,
-      html`<div class="notice warn" style="flex-direction:column"><b>需要先配置 Azure 应用 ID</b>
-        <div>微软登录使用“设备代码流”：启动器给你一个代码，你在浏览器里登录并输入它。当前没有可用的 Azure 客户端 ID，请在设置中填写一个已开启公共客户端流、并通过 Mojang 审核的应用 ID。</div>
-        <div><button class="btn sm" data-act="open-settings-accounts">打开设置</button></div></div>
-        <div class="muted" style="margin-top:14px;font-size:12.5px;line-height:1.8">也可以继续使用“离线账号”或“外置登录”，它们不受影响。</div>`,
+      html`<div class="notice warn" style="flex-direction:column"><b>当前构建未启用微软登录</b>
+        <div>这个版本没有内置可用的微软登录配置，因此暂时不能添加微软账号。</div></div>
+        <div class="muted" style="margin-top:14px;font-size:12.5px;line-height:1.8">离线账号和外置登录不受影响。</div>`,
     );
     return;
   }

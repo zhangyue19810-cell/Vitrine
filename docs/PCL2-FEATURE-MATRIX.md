@@ -50,6 +50,7 @@ BMCLAPI、MCIM 两个镜像）。
 | 多线程下载 | ✅ | 并发 32 个文件（1–128 可调）；大文件分段并行（默认 4 段）+ 断点续传；失败重试并自动换源；SHA-1 / SHA-256 / SHA-512 校验；限速；代理 |
 | 下载任务管理 | 🟡 | 进度、速度、取消、清除；没有“暂停 / 继续” |
 | Mod / 整合包 / 资源包 / 光影 / 数据包 搜索与安装 | ✅ | Modrinth + CurseForge；按游戏版本与加载器过滤；模组可连带安装必需的前置 |
+| MC百科中文资料搜索 | ✅ | 独立搜索窗口，支持模组 / 整合包；只提供中文资料页，下载安装仍走 Modrinth / CurseForge |
 | Mod 更新检查与一键更新 | ✅ | |
 | 整合包导入 | ✅ | Modrinth `.mrpack`、CurseForge `.zip`、MultiMC / Prism `.zip`、MCBBS 格式；也可从 Modrinth / CurseForge 直接在线安装；检查整合包新版本 |
 | 整合包导出 | 🟡 | 只有 Modrinth `.mrpack`；CurseForge / MultiMC / PCL 格式没有做 |

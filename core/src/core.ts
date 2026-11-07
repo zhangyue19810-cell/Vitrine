@@ -9,6 +9,7 @@ import type { LoginChallenge, PublicAccount } from "./account/types";
 import { YggdrasilClient } from "./account/yggdrasil";
 import { applyModUpdate, checkModUpdates, installContent, type ContentDeps, type InstallContentRequest, type ModUpdate } from "./content/browse";
 import { CurseForgeClient } from "./content/curseforge";
+import { McmodClient } from "./content/mcmod";
 import { ModrinthClient } from "./content/modrinth";
 import { installPlan, modpackPlan, STAGE_LABELS, type CoreEvent } from "./events";
 import { detectJava, inspectJava, pickJava, type JavaInstall, type JavaRequirement } from "./java/detect";
@@ -195,6 +196,7 @@ export class Core {
   readonly accounts: AccountManager;
   readonly modrinth: ModrinthClient;
   readonly curseforge: CurseForgeClient;
+  readonly mcmod: McmodClient;
   readonly games: GameManager;
   readonly host: HostBridge;
 
@@ -260,6 +262,7 @@ export class Core {
     const apiDeps = { http: this.http, router: this.router, log: this.logger.scope("content") };
     this.modrinth = new ModrinthClient(apiDeps);
     this.curseforge = new CurseForgeClient(apiDeps, () => this.settings.peek().accounts.curseforgeKey || undefined);
+    this.mcmod = new McmodClient(this.http, this.logger.scope("mcmod"));
     this.games = new GameManager(this);
   }
 

@@ -25,6 +25,7 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
 三、第一次使用
   1. 进入“新建实例”，选 Minecraft 版本，需要的话再选 Fabric / Quilt / Forge / NeoForge / OptiFine。
      也可以把 .mrpack、CurseForge 的 .zip、MultiMC / Prism 的 .zip 整合包直接拖进窗口导入。
+     浏览模组时可以用搜索栏旁边的“MC百科”查中文资料。
   2. 左下角账户：可以添加离线账户、外置登录（authlib-injector）或微软账户（见下文第五条）。
   3. 点“启动”。没有合适的 Java 时，启动器会自动下载 Mojang 提供的运行时（可在 设置 → Java 里关闭）。
 
@@ -36,15 +37,11 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
   · 并行下载线程（默认 64）、单文件分段数（默认 8 段，可断点续传）、限速、重试次数、代理都可以调。
     整合包有成千上万个小文件，线程多比较快；网络不稳或被限流时调低。
 
-五、账号与密钥
-  · 微软正版登录已内置通过 Mojang 审核的公共 Azure 客户端 ID，正常不需要自己注册应用。
-      如果要用自己的应用，可在 设置 → 账号与密钥 覆盖 Client ID；应用需要：
-      “任何组织目录中的账户和个人 Microsoft 账户” + “允许公共客户端流”，
-      并按照 Mojang 的说明（https://aka.ms/AppRegInfo）提交审核。
-      审核通过前，Minecraft 服务会拒绝登录，启动器会提示“app-not-approved”。
+五、账号与内容服务
+  · 微软正版登录已内置通过 Mojang 审核的公共 Azure 客户端，正常不需要自己注册应用。
       离线账户和外置登录不受影响。
-  · CurseForge API 密钥（可选）：到 CurseForge for Studios 控制台免费申请，填进同一页。
-      不填时仍然可以用 Modrinth，以及内容镜像提供的 CurseForge 数据。
+  · 官方 Windows 包已经内置 CurseForge 访问配置，不需要用户填写 API 密钥。
+      内容浏览里也可以直接用“MC百科”按钮查中文模组资料。
 
 六、窗口动画与性能
   · 启动游戏后，启动器的 3D 动画会暂停并让出显卡；你回到启动器窗口时自动恢复。

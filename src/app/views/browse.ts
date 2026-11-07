@@ -6,6 +6,7 @@ import { openDialog, openSheet, promptDialog, toast, type ModalHandle } from "..
 import { displayName, primaryLoader } from "../records";
 import { store } from "../store";
 import { cachedTranslation, translateMany } from "../translate";
+import { openMcmodSearch } from "./mcmod";
 import type { ContentKind, ContentProject, ContentSource, ContentVersion, InstanceSummary } from "../types";
 
 /** Browse Modrinth / CurseForge: modpacks (installed as a new instance) and mods, resource packs, shaders, data packs (installed into an instance). */
@@ -152,6 +153,7 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
       <div class="seg" data-f="kinds"></div>
       <div class="search-input"><input class="input" data-f="query" placeholder="搜索名称、作者或关键词（支持中文和模糊匹配）" autocomplete="off" /></div>
       <div class="seg" data-f="sources"></div>
+      <button class="btn sm soft" data-mcmod-open title="在 MC百科搜索中文资料">MC百科</button>
       <select class="select" data-f="sort" style="width:auto"></select>
     </div>
     <div class="br-bar" data-f="target-bar" style="padding-top:0"></div>
@@ -254,7 +256,7 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
     const host = f("notice");
     const messages: ReturnType<typeof html>[] = [];
     if (state.source === "curseforge" && !state.curseforge) {
-      messages.push(html`<div class="notice warn" style="margin-bottom:12px"><div>CurseForge 需要 API 密钥才能搜索。请在 <a class="link" data-act="open-settings-accounts">设置 → 账号与密钥</a> 填写，或切换到 Modrinth。</div></div>`);
+      messages.push(html`<div class="notice warn" style="margin-bottom:12px"><div>当前构建没有内置 CurseForge 搜索密钥，请切换到 Modrinth 源。</div></div>`);
     }
     if (state.relaxedQuery) {
       messages.push(html`<div class="notice" style="margin-bottom:12px"><div>没有找到足够精确的结果，已按相关关键词 <b>${state.relaxedQuery}</b> 搜索。</div></div>`);
@@ -280,6 +282,7 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
           <div style="min-width:0"><h4 title="${p.title}">${p.title}</h4><div class="by">${p.author ? `${p.author} · ` : ""}↓ ${formatCount(p.downloads)}${p.updatedAt ? ` · 更新 ${relativeTime(Date.parse(p.updatedAt))}` : ""}</div></div>
           <p data-summary-index="${index}" title="${p.summary}" ${summary !== p.summary ? 'data-translated="true"' : ""}>${summary}</p>
           <div class="foot"><div class="grow">${p.categories.slice(0, 3).map((c) => html`<span class="chip" title="${c}">${categoryLabel(c)}</span>`)}</div>
+            <button class="btn sm ghost" data-mcmod-project="${p.id}" title="在 MC百科搜索中文资料">百科</button>
             <button class="btn sm ghost" data-page="${p.pageUrl}" title="在浏览器中打开">↗</button>
             <button class="btn sm soft" data-versions="${p.id}">版本…</button>
             <button class="btn sm accent" data-install="${p.id}">安装</button></div>
@@ -411,6 +414,11 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
     }
   });
   const find = (id: string) => state.projects.find((p) => p.id === id);
+  onAll(sheet.body, "click", "[data-mcmod-open]", () => openMcmodSearch(state.query, state.kind));
+  onAll(sheet.body, "click", "[data-mcmod-project]", (element) => {
+    const project = find(element.dataset.mcmodProject!);
+    if (project) openMcmodSearch(project.title, project.kind);
+  });
   onAll(sheet.body, "click", "[data-install]", async (element) => {
     const project = find(element.dataset.install!);
     if (project) await withBusy(element, () => install(project, undefined, state.instanceId, filters(), state.autoDependencies));
