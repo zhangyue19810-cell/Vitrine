@@ -2,6 +2,7 @@ import "@kitlangton/rolling-number/styles.css";
 import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/home.css";
+import "./styles/stage.css";
 import "./styles/sheets.css";
 import "./styles/boot.css";
 import { startApp } from "./app/app";

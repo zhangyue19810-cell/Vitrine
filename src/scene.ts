@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { ArchiveVisibility } from "./archive-visibility";
 import { ArchiveDrawCoverage, ArchiveShadowCoverage } from "./archive-draw-coverage";
 import { InstanceUpdates } from "./instance-updates";
+import { ArchiveStage, type FacePainter } from "./archive-stage";
 import { RenderState } from "./render-state";
 import { SharedDepthAO, SharedDepthBokeh } from "./shared-depth";
 import { disposeThreeTree } from "./three-resources";
@@ -57,6 +58,12 @@ const ease = (t: number) => {
   t = THREE.MathUtils.clamp(t, 0, 1);
   return t * t * t * (t * (t * 6 - 15) + 10);
 };
+/** The ring hangs in empty space (the floor is far below it); the row stands on the floor. */
+const FLOOR_HEIGHT = { ring: -34, row: -4.63 };
+/** The key light shines on the ring from the front (the plates' faces are lit); the row keeps the lighting set-up's own place. */
+const RING_LIGHT = new THREE.Vector3(-9, 15, 12);
+/** Half sizes of the key light's shadow window: the ring is wider than the visible part of the row. */
+const SHADOW_WINDOW = { ring: { x: 23, y: 19 }, row: { x: 16, y: 15 } };
 export class ArchiveScene {
   private inputEvents = new AbortController();
   private presence = 1;
@@ -75,6 +82,8 @@ export class ArchiveScene {
   dispose() {
     this.inputEvents.abort();
     this.cancelPointer();
+    this.stage?.dispose();
+    this.stage = undefined;
     disposeThreeTree(this.scene);
     this.appearance.disposeSources();
     this.model.clear();
@@ -245,6 +254,269 @@ export class ArchiveScene {
   private aoKernelSize = 32;
   private displayHeight = 0;
   private layoutKind = "";
+  // ── The 3D stage (the Möbius ring at home, the single row of the download view): see archive-stage.ts. While it is on it
+  //    draws the archives through the same instanced shells, the old grid sleeps and the old pointer handling is off (canBrowse).
+  private stage?: ArchiveStage;
+  private stageOn = false;
+  private stagePending: { x: number; y: number } | null = null;
+  private stageLast: { x: number; y: number } | null = null;
+  private stageWasBusy = false;
+  private stageLocked = false;
+  /** The floor only exists for the row: the Möbius ring hangs in empty space. */
+  private archiveFloor?: THREE.Mesh;
+  /** The key light's place for the row (the one the lighting set-up chose); the ring is lit from the front instead. */
+  private readonly rowLight = new THREE.Vector3();
+  private cancelStage = () => {};
+  private readonly tmpA = new THREE.Vector3();
+  private readonly tmpB = new THREE.Vector3();
+  /** The stage once installed: the host feeds it items and listens to its events. */
+  get stageHandle() {
+    return this.stage;
+  }
+  get stageActive() {
+    return this.stageOn;
+  }
+  installStage(painter: FacePainter) {
+    if (this.stage) return this.stage;
+    const stage = new ArchiveStage({ painter, anisotropy: Math.min(8, this.renderer.capabilities.getMaxAnisotropy()) });
+    stage.group.visible = this.stageOn;
+    this.scene.add(stage.group);
+    this.stage = stage;
+    return stage;
+  }
+  setStageActive(active: boolean) {
+    if (!this.stage || active === this.stageOn) return;
+    this.cancelPointer();
+    this.cancelStage();
+    this.setHover(null);
+    this.stageOn = active;
+    this.canInspect = false;
+    this.stagePending = null;
+    this.stageLast = null;
+    this.model.visible = !active;
+    for (const old of this.outgoing) old.group.visible = !active;
+    this.stage.group.visible = active;
+    // Leaving the stage hands the floor, light and shadow window back to the old shelf (the row's values are its own).
+    if (!active) this.shapeSurroundings(1);
+    this.renderer.domElement.style.cursor = active ? "grab" : "default";
+    this.renderState.invalidate();
+    this.shadowState.invalidate();
+  }
+  /** While an instance's page is open the ring behind it is only to look at. */
+  setStageLocked(locked: boolean) {
+    if (locked === this.stageLocked) return;
+    this.stageLocked = locked;
+    this.cancelStage();
+    this.stage?.setHover(null);
+  }
+  private stageReady() {
+    return this.stageOn && !this.stageLocked && Boolean(this.stage) && this.presenceTarget === 1 && this.loaded && !this.relayActive && !this.container.closest("[inert]");
+  }
+  private pickStage(x: number, y: number) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    this.cursor.set(((x - rect.left) / rect.width) * 2 - 1, (-(y - rect.top) / rect.height) * 2 + 1);
+    this.raycaster.setFromCamera(this.cursor, this.camera);
+    return this.stage!.pick(this.raycaster.ray);
+  }
+  /** Where the pointer rests may change under it (the row scrolls, a transition ends): look again. */
+  private flushStageHover() {
+    const stage = this.stage!;
+    const sample = this.stagePending;
+    this.stagePending = null;
+    if (!this.stageReady()) {
+      stage.setHover(null);
+      return;
+    }
+    const settled = this.stageWasBusy && !stage.busy;
+    this.stageWasBusy = stage.busy;
+    const point = sample ?? (this.stageLast && (settled || (stage.animating && !stage.busy)) ? this.stageLast : null);
+    if (!point) return;
+    const pick = this.pickStage(point.x, point.y);
+    stage.setHover(pick ? pick.item : null, pick?.hotspot ?? null);
+    this.renderer.domElement.style.cursor = pick ? "pointer" : "grab";
+  }
+  /** Screen pixels that one slot of scrolling moves a card by (a vector: the row runs up and to the right). */
+  private slotPixels() {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    const [from, to] = this.stage!.referenceSlots();
+    this.camera.updateMatrixWorld();
+    const a = this.stage!.slotCentre(from, this.tmpA).project(this.camera);
+    const b = this.stage!.slotCentre(to, this.tmpB).project(this.camera);
+    return { x: ((b.x - a.x) * rect.width) / 2, y: (-(b.y - a.y) * rect.height) / 2 };
+  }
+  private bindStagePointer() {
+    const canvas = this.renderer.domElement;
+    const signal = this.inputEvents.signal;
+    const touch = { id: null as number | null, startX: 0, startY: 0, x: 0, y: 0, moved: false, time: 0, speed: 0 };
+    let wheelTotal = 0;
+    let wheelTime = 0;
+    const finish = () => {
+      const id = touch.id;
+      touch.id = null;
+      touch.moved = false;
+      touch.speed = 0;
+      if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+    };
+    this.cancelStage = () => {
+      if (touch.moved) this.stage?.endDrag(0);
+      finish();
+      wheelTotal = 0;
+      this.stagePending = null;
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      if (!this.stageReady() || (e.pointerType === "mouse" && e.button !== 0) || touch.id !== null) return;
+      touch.id = e.pointerId;
+      touch.startX = touch.x = e.clientX;
+      touch.startY = touch.y = e.clientY;
+      touch.moved = false;
+      touch.speed = 0;
+      touch.time = e.timeStamp;
+      this.stagePending = null;
+      canvas.setPointerCapture(e.pointerId);
+    }, { signal });
+    canvas.addEventListener("pointermove", (e) => {
+      if (!this.stageOn || !this.stage) return;
+      if (touch.id === null) {
+        if (e.pointerType === "mouse") this.stageLast = this.stagePending = { x: e.clientX, y: e.clientY };
+        return;
+      }
+      if (e.pointerId !== touch.id) return;
+      if (!touch.moved) {
+        if (Math.hypot(e.clientX - touch.startX, e.clientY - touch.startY) < 7) return;
+        touch.moved = true;
+        this.stage.setHover(null);
+        canvas.style.cursor = "grabbing";
+      }
+      const per = this.slotPixels();
+      const slots = -((e.clientX - touch.x) * per.x + (e.clientY - touch.y) * per.y) / Math.max(1, per.x * per.x + per.y * per.y);
+      this.stage.dragBy(slots);
+      const seconds = Math.max(1, e.timeStamp - touch.time) / 1000;
+      touch.speed += (slots / seconds - touch.speed) * 0.35;
+      touch.x = e.clientX;
+      touch.y = e.clientY;
+      touch.time = e.timeStamp;
+    }, { signal });
+    const release = (e: PointerEvent, cancelled: boolean) => {
+      if (e.pointerId !== touch.id) return;
+      const { moved, speed } = touch;
+      finish();
+      if (!this.stage) return;
+      if (moved) this.stage.endDrag(cancelled ? 0 : speed);
+      else if (!cancelled && this.stageReady()) this.stage.click(this.pickStage(e.clientX, e.clientY));
+      this.stageLast = { x: e.clientX, y: e.clientY };
+      canvas.style.cursor = "grab";
+    };
+    canvas.addEventListener("pointerup", (e) => release(e, false), { signal });
+    canvas.addEventListener("pointercancel", (e) => release(e, true), { signal });
+    canvas.addEventListener("lostpointercapture", (e) => release(e, true), { signal });
+    canvas.addEventListener("pointerleave", () => {
+      this.stagePending = this.stageLast = null;
+      if (touch.id === null) this.stage?.setHover(null);
+    }, { signal });
+    canvas.addEventListener("wheel", (e) => {
+      if (!this.stageOn || !this.stage || e.ctrlKey) return;
+      // The 3D view owns the wheel: one notch moves the selection by one archive.
+      e.preventDefault();
+      if (!this.stageReady() || touch.id !== null) return;
+      const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+      const delta = THREE.MathUtils.clamp(raw * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? canvas.clientHeight : 1), -300, 300);
+      const now = performance.now();
+      if (now - wheelTime > 180 || Math.sign(delta) !== Math.sign(wheelTotal)) wheelTotal = 0;
+      wheelTime = now;
+      wheelTotal += delta;
+      const steps = Math.min(3, Math.floor(Math.abs(wheelTotal) / 80));
+      if (!steps) return;
+      const direction = Math.sign(wheelTotal);
+      wheelTotal -= direction * steps * 80;
+      this.stage.step(direction * steps);
+    }, { passive: false, signal });
+    window.addEventListener("blur", () => this.cancelStage(), { signal });
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden) this.cancelStage();
+    }, { signal });
+  }
+  /**
+   * The ring floats in empty space; the row stands on a floor. The floor, the key light and its shadow window follow how far
+   * the picture has become the row (`flat`: 0 = ring, 1 = row), so the surroundings change smoothly with the archives.
+   */
+  private shapeSurroundings(flat: number) {
+    const k = THREE.MathUtils.clamp(flat, 0, 1);
+    const blend = k * k * (3 - 2 * k);
+    if (this.archiveFloor) {
+      this.archiveFloor.position.y = THREE.MathUtils.lerp(FLOOR_HEIGHT.ring, FLOOR_HEIGHT.row, blend);
+      this.archiveFloor.visible = blend > 0.001;
+    }
+    this.light.position.lerpVectors(RING_LIGHT, this.rowLight, blend);
+    const window = this.light.shadow.camera;
+    const x = THREE.MathUtils.lerp(SHADOW_WINDOW.ring.x, SHADOW_WINDOW.row.x, blend);
+    const y = THREE.MathUtils.lerp(SHADOW_WINDOW.ring.y, SHADOW_WINDOW.row.y, blend);
+    if (window.right !== x || window.top !== y) {
+      Object.assign(window, { left: -x, right: x, top: y, bottom: -y });
+      window.updateProjectionMatrix();
+    }
+  }
+  /** One frame of the stage: poses, the camera shot, the instanced shells, then the common render tail. */
+  private updateStage(time: number, dt: number) {
+    const stage = this.stage!;
+    this.flushStageHover();
+    stage.setAspect(this.camera.aspect);
+    stage.setPresence(this.presence);
+    stage.setInstant(!this.motion.selectionTransition);
+    stage.setThemeAmount(this.themeAmount);
+    stage.setAmbient(this.motion.idleWave);
+    stage.update(dt);
+    this.shapeSurroundings(stage.layoutBlend);
+
+    // The stage owns the shot (aim, direction, distance, height of the picture); the lens follows from them.
+    const shot = stage.cameraState();
+    this.cameraAim.set(shot.aim[0], shot.aim[1], shot.aim[2]);
+    this.camera.position.set(
+      shot.aim[0] + shot.dir[0] * shot.distance,
+      shot.aim[1] + shot.dir[1] * shot.distance,
+      shot.aim[2] + shot.dir[2] * shot.distance,
+    );
+    this.camera.lookAt(this.cameraAim);
+    this.camera.fov = THREE.MathUtils.radToDeg(shot.fov);
+    this.camera.updateProjectionMatrix();
+    this.camera.updateMatrixWorld();
+    const fog = this.scene.fog as THREE.Fog;
+    const fogTheme = this.themeAmount;
+    // The ring is shallow (a few fog-lengths); the row runs a long way into the picture and must not fade out.
+    const flat = stage.layoutBlend;
+    fog.near = shot.distance + THREE.MathUtils.lerp(5 - 4 * fogTheme, 16, flat);
+    fog.far = shot.distance + THREE.MathUtils.lerp(25 - 9 * fogTheme, 95 - 25 * fogTheme, flat);
+
+    // The archives: the stage's matrices go into the same instance buffers the old grid used.
+    const count = stage.count;
+    this.ensureInstanceCapacity(count);
+    this.matrixUpdates ??= new InstanceUpdates(this.instances[0].instanceMatrix);
+    if (this.themeAttribute) this.themeUpdates ??= new InstanceUpdates(this.themeAttribute);
+    this.shadowCoverage?.begin();
+    const origin = this.selectedCell;
+    const wave = { lane: origin.lane, row: origin.row };
+    for (let i = 0; i < count; i++) {
+      const at = i * 16;
+      this.matrixUpdates.set(at, stage.matrices.subarray(at, at + 16));
+      this.dummy.matrix.fromArray(stage.matrices, at);
+      this.shadowCoverage?.add(this.dummy.matrix);
+      wave.row = origin.row + Math.round(stage.distances[i] * 4) / 4;
+      this.themeUpdates?.scalar(i, this.theme.sample(wave, time));
+    }
+    const countChanged = this.instances[0].count !== count;
+    const visibleChanged = this.matrixUpdates.commit();
+    const shadowChanged = this.shadowCoverage?.commit() ?? false;
+    for (const inst of this.instances) inst.count = count;
+    if (visibleChanged || shadowChanged || countChanged || !this.instances[0].boundingSphere) this.instances[0].computeBoundingSphere();
+    this.themeUpdates?.commit();
+    this.drawnCells = [];
+    this.relayPoints.clear();
+
+    // `detail` is "the instance's page is open beside the ring": the host washes the right of the picture with it. The row
+    // has no such page (its details are printed on the pulled-out archive itself), so it must not wash anything.
+    this.detail = stage.layout === "ring" ? stage.pullAmount * (1 - stage.layoutBlend) : 0;
+    this.container.dataset.inspection = "preview";
+    this.finishFrame(stage.animating || visibleChanged || shadowChanged || countChanged, stage.focus, stage.pullAmount);
+  }
   onSelect?: (index: number, cell?: ArchiveCell) => void;
   onHover?: (index: number | null) => void;
   onNavigate?: (axis: "row" | "lane", direction: number) => void;
@@ -309,6 +581,8 @@ export class ArchiveScene {
     floor.position.y = -4.63;
     floor.receiveShadow = true;
     this.scene.add(floor);
+    this.archiveFloor = floor;
+    this.rowLight.copy(this.light.position);
     this.camera.position.set(-62.26, 35.98, 43.28);
     this.cameraAim.set(-0.5, 1.1, 0.4);
     this.camera.fov = 6.15;
@@ -335,6 +609,7 @@ export class ArchiveScene {
     this.composer.addPass(this.smaa);
     this.composer.addPass(new OutputPass());
     this.bindPointer();
+    this.bindStagePointer();
   }
   async load(assetUrl = publicAsset("assets/archive-cassette.glb")) {
     this.labelMark.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(labelMarkSvg)}`;
@@ -783,6 +1058,7 @@ export class ArchiveScene {
   }
   private canBrowse() {
     return (
+      !this.stageOn &&
       this.presenceTarget === 1 &&
       this.looping &&
       !this.targetDetail &&
@@ -1135,6 +1411,10 @@ export class ArchiveScene {
     this.renderer.domElement.style.opacity = String(THREE.MathUtils.clamp(this.presence / .16, 0, 1));
     this.theme.beginFrame();
     themeEnvironment(this.scene, this.renderer, this.themeAmount);
+    if (this.stageOn && this.stage) {
+      this.updateStage(time, dt);
+      return;
+    }
     const blend = 1 - Math.exp(-dt * (this.motion.selectionTransition ? 2.8 : 35));
     const detailBlend = 1 - Math.exp(-dt * (this.motion.detailTransition ? 2.8 : 35));
     this.reveal = cinematic
@@ -1665,7 +1945,12 @@ export class ArchiveScene {
           : this.targetDetail
             ? "lifting"
             : "preview";
-    const focalPoint = this.model.position
+    this.finishFrame(matricesChanged || Boolean(cinematic), this.model.position, detail);
+  }
+  /** Depth of field, the identical-frame check, the shadow map and the render itself (shared by the old grid and the stage). */
+  private finishFrame(invalid: boolean, focus: THREE.Vector3, detail: number) {
+    const fog = this.scene.fog as THREE.Fog;
+    const focalPoint = focus
       .clone()
       .add(new THREE.Vector3(0, 2, 0))
       .applyMatrix4(this.camera.matrixWorldInverse);
@@ -1685,7 +1970,7 @@ export class ArchiveScene {
     this.scene.updateMatrixWorld();
     // A changed instance buffer already proves the image changed. Avoid a
     // material/matrix snapshot on those busy frames; capture when it settles.
-    if (matricesChanged || cinematic) {
+    if (invalid) {
       state.invalidate();
     } else {
       state.begin();
@@ -1764,6 +2049,8 @@ export class ArchiveScene {
         .map((v) => Math.round(v * 10000) / 10000),
       fieldOfView: this.camera.fov,
       loaded: this.loaded,
+      stageActive: this.stageOn,
+      stage: this.stage?.describe() ?? null,
       drawCalls: this.renderer.info.render.calls,
       renderedFrames: this.renderedFrames,
       reusedFrames: this.reusedFrames,

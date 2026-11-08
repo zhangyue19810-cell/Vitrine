@@ -1,11 +1,16 @@
 /**
- * Keyboard map. Arrow keys move over the shelf, Enter launches, Space opens the instance page, `/` or Ctrl+K searches.
+ * Keyboard map. Arrow keys turn the Möbius ring (PageUp / PageDown jump a group), Enter launches, Space opens the instance
+ * page, `/` or Ctrl+K searches. In the download view the arrows scroll the row, Enter installs and Esc goes back home.
  * Nothing here fires while a text field has the focus, an overlay is open (those handle their own keys) or an
  * input method is composing text.
  */
 
 export interface ShortcutHandlers {
   mode(): "archive" | "detail";
+  /** In archive mode: the home ring, or the download row (Enter installs, Esc goes home). */
+  view?(): "home" | "browse";
+  /** The 3D ring is on screen: every arrow key turns it, and PageUp / PageDown jump a whole group. */
+  ring?(): boolean;
   /** A sheet, dialog, launch screen or the splash is in front. */
   blocked(): boolean;
   stepFile(direction: number): void;
@@ -28,7 +33,7 @@ const isTyping = (target: EventTarget | null) => {
 
 export function installShortcuts(handlers: ShortcutHandlers): () => void {
   const onKey = (event: KeyboardEvent) => {
-    if (event.defaultPrevented || event.isComposing || event.repeat && event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    if (event.defaultPrevented || event.isComposing || (event.repeat && !event.key.startsWith("Arrow"))) return;
     const command = event.ctrlKey || event.metaKey;
     // Chords work from anywhere on the page except over an overlay.
     if (command && !handlers.blocked()) {
@@ -44,15 +49,23 @@ export function installShortcuts(handlers: ShortcutHandlers): () => void {
     }
     // A focused button handles Enter / Space itself; only take them when nothing specific has the focus.
     const onControl = (event.target as HTMLElement | null)?.closest?.("button, a, [role=tab], select, summary");
+    const ring = handlers.ring?.() ?? false;
+    if (handlers.view?.() === "browse" && event.key === "Escape") return void (event.preventDefault(), handlers.back());
     switch (event.key) {
       case "ArrowUp":
         return void (event.preventDefault(), handlers.stepFile(-1));
       case "ArrowDown":
         return void (event.preventDefault(), handlers.stepFile(1));
       case "ArrowLeft":
-        return void (event.preventDefault(), handlers.stepLane(-1));
+        return void (event.preventDefault(), ring ? handlers.stepFile(-1) : handlers.stepLane(-1));
       case "ArrowRight":
-        return void (event.preventDefault(), handlers.stepLane(1));
+        return void (event.preventDefault(), ring ? handlers.stepFile(1) : handlers.stepLane(1));
+      case "PageUp":
+        if (ring && handlers.view?.() !== "browse") return void (event.preventDefault(), handlers.stepLane(-1));
+        return;
+      case "PageDown":
+        if (ring && handlers.view?.() !== "browse") return void (event.preventDefault(), handlers.stepLane(1));
+        return;
       case "Enter":
         if (!onControl) return void (event.preventDefault(), handlers.launch());
         return;

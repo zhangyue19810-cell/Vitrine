@@ -62,8 +62,8 @@ core/src/      核心（与界面无关，Electron 与开发服务器共用）
   world/       存档（NBT）、服务器列表
   crash/       崩溃分析
   tasks.ts     任务管理（进度、取消、界面刷新频率）
-  rpc.ts       88 个 RPC 方法；界面与核心之间唯一的接口
-core/test/     217 项测试和本地 mock 服务器（假 Mojang / Modrinth / 假游戏 jar）
+  rpc.ts       89 个 RPC 方法；界面与核心之间唯一的接口
+core/test/     272 项测试和本地 mock 服务器（假 Mojang / Modrinth / 假游戏 jar）
 electron/      主进程、preload、app:// 协议、窗口、托盘、系统密钥保护
 src/           界面（Vite + three.js）；src/app/perf*.ts / scheduler.ts 是动画暂停与降帧策略
 scripts/       dev-backend、dev-demo、图标生成、Electron 打包、Windows 打包、第三方许可汇总

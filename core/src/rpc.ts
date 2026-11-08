@@ -235,6 +235,7 @@ export function buildRpc(core: Core): RpcTable {
       signal,
     }),
   );
+  def("content.icon", async (params, { signal }) => (await core.icons(str(params, "url", 800), signal)) ?? null);
   def("content.project", (params, { signal }) => getProject(core.contentDeps(), oneOf(params, "source", SOURCES), str(params, "id", 100), signal));
   def("content.versions", (params, { signal }) => listContentVersions(core.contentDeps(), oneOf(params, "source", SOURCES), str(params, "projectId", 100), filterOf(params), signal));
   def("content.install", (params) =>
