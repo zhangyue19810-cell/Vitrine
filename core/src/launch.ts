@@ -22,7 +22,7 @@ import type { TaskContext } from "./tasks";
 import { throwIfAborted } from "./util/async";
 import { ensureDir, writeFileAtomic } from "./util/fsx";
 import { freeMemoryMB, totalMemoryMB } from "./util/os";
-import { runProcess } from "./util/proc";
+import { cleanJavaEnv, runProcess } from "./util/proc";
 import { fallbackJavaMajor } from "./util/version";
 import type { Core } from "./core";
 
@@ -293,7 +293,7 @@ export class GameManager {
       const windows = core.os.name === "windows";
       const result = await runProcess(windows ? "cmd.exe" : "sh", windows ? ["/d", "/s", "/c", plan.preLaunch] : ["-c", plan.preLaunch], {
         cwd: plan.gameDir,
-        env: plan.env,
+        env: cleanJavaEnv(process.env, plan.env, plan.javaPath),
         signal: reporter.signal,
         timeoutMs: 120_000,
         onLine: (line) => reporter.log(`[启动前命令] ${line}`),

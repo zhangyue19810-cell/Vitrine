@@ -37,7 +37,7 @@ export async function installOptiFine(params: OptiFineParams): Promise<VersionJs
   const result = await runProcess(
     params.javaPath,
     ["-cp", params.installerJar, "optifine.Patcher", params.minecraftJar, params.installerJar, target],
-    { signal: params.signal, onLine: params.hooks?.output },
+    { signal: params.signal, javaPath: params.javaPath, onLine: params.hooks?.output },
   );
   if (result.code !== 0) throw new Error(`OptiFine patching failed (exit ${result.code}): ${result.tail.slice(-6).join(" | ")}`);
 

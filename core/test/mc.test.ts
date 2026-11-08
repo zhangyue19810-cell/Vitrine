@@ -32,7 +32,7 @@ import {
 } from "../src/mc/version-json";
 import { mavenKey, mavenPath, parseMaven } from "../src/mc/maven";
 import { JVM_PRESETS, presetArgs, recommendMemory } from "../src/mc/jvm";
-import { detectJava, inspectJava, javaRequirement, parseRegistryHomes, pickJava, type JavaInstall } from "../src/java/detect";
+import { detectJava, inspectJava, javaRequirement, parseRegistryHomes, pickJava, probeJava, type JavaInstall } from "../src/java/detect";
 import { startFakeMojang, zipBuffer, type FakeWorld } from "./helpers/fake-mojang";
 
 const WIN: OsInfo = { name: "windows", arch: "x64", version: "10.0.22631" };
@@ -590,6 +590,21 @@ describe("java detection", () => {
     assert.equal(java?.isJdk, false);
   });
 
+  it("probes the selected JVM instead of trusting release metadata alone", async () => {
+    assert.equal(
+      await probeJava("/broken/java", { runJava: async () => ({ stdout: "", stderr: 'java version "17.0.9" 2023-10-17' }) }),
+      true,
+    );
+    assert.equal(
+      await probeJava("/broken/java", {
+        runJava: async () => {
+          throw new Error("Error occurred during initialization of VM\nFailed setting boot class path.");
+        },
+      }),
+      false,
+    );
+  });
+
   it("scans directories, de-duplicates and sorts", async () => {
     await fakeHome(join(tmp, "jvm", "jdk-21"), 'JAVA_VERSION="21.0.2"\nOS_ARCH="x86_64"\n', true);
     await fakeHome(join(tmp, "jvm", "jdk-8"), 'JAVA_VERSION="1.8.0_402"\nOS_ARCH="x86_64"\n');
@@ -636,7 +651,8 @@ HKEY_LOCAL_MACHINE\\SOFTWARE\\Eclipse Adoptium\\JDK\\21.0.1.12\\hotspot\\MSI
   it("derives requirements for legacy loaders", () => {
     assert.deepEqual(javaRequirement({ declared: 8, fallback: 8, loaders: [{ kind: "forge" }], mcVersion: "1.12.2" }), { min: 8, max: 8 });
     assert.deepEqual(javaRequirement({ declared: 8, fallback: 8, loaders: [{ kind: "forge" }], mcVersion: "1.16.5" }), { min: 8, max: 15 });
-    assert.deepEqual(javaRequirement({ declared: 17, fallback: 17, loaders: [{ kind: "forge" }], mcVersion: "1.20.1" }), { min: 17, max: undefined });
+    assert.deepEqual(javaRequirement({ declared: 17, fallback: 17, loaders: [{ kind: "forge" }], mcVersion: "1.20.1" }), { min: 17, max: 21 });
+    assert.deepEqual(javaRequirement({ declared: 21, fallback: 21, loaders: [{ kind: "neoforge" }], mcVersion: "1.21.1" }), { min: 21, max: 21 });
     assert.deepEqual(javaRequirement({ declared: 8, fallback: 8, loaders: [{ kind: "fabric" }], mcVersion: "1.12.2" }), { min: 8, max: undefined });
     assert.deepEqual(javaRequirement({ fallback: 21, loaders: [], mcVersion: "1.21.1" }), { min: 21, max: undefined });
   });

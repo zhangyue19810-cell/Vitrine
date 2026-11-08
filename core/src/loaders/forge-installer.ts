@@ -204,9 +204,13 @@ async function installModern(zip: ZipReader, profile: InstallProfile, params: In
       const result = await runProcess(params.javaPath, ["-cp", classpath.join(separator), mainClass, ...args], {
         cwd: workDir,
         signal: params.signal,
+        javaPath: params.javaPath,
         onLine: hooks?.output,
       });
-      if (result.code !== 0) throw new InstallerError(`Installer step "${name}" failed with exit code ${result.code}`, result.tail);
+      if (result.code !== 0) {
+        const prefix = `Installer step "${name}" failed with exit code ${result.code}`;
+        throw new InstallerError(javaInstallerFailure(prefix, params.javaPath, result.tail), result.tail);
+      }
       if (outputs.size && !(await outputsValid(outputs))) {
         throw new InstallerError(`Installer step "${name}" produced unexpected files (checksum mismatch)`, result.tail);
       }
@@ -223,6 +227,15 @@ async function outputsValid(outputs: Map<string, string>): Promise<boolean> {
     if (sha1 && /^[0-9a-f]{40}$/.test(sha1) && (await hashFile(path, "sha1")).toLowerCase() !== sha1) return false;
   }
   return true;
+}
+
+/** Add an actionable hint when the JVM itself cannot boot, not when Forge rejected a file. */
+function javaInstallerFailure(prefix: string, javaPath: string, tail: string[]): string {
+  const text = tail.join("\n");
+  if (/Failed setting boot class path|Error occurred during initialization of VM|Could not create the Java Virtual Machine/i.test(text)) {
+    return `${prefix}\nJava VM 无法启动（${javaPath}）。启动器已忽略环境中的 JAVA_TOOL_OPTIONS / _JAVA_OPTIONS / JDK_JAVA_OPTIONS；请到“设置 → Java”改选一个与 Minecraft 版本匹配的 64 位 JDK。`;
+  }
+  return prefix;
 }
 
 /**
@@ -243,9 +256,13 @@ export async function installWithOfficialInstaller(params: InstallerParams, expe
     const result = await runProcess(params.javaPath, ["-jar", params.installerJar, "--installClient", staging], {
       cwd: staging,
       signal: params.signal,
+      javaPath: params.javaPath,
       onLine: hooks?.output,
     });
-    if (result.code !== 0) throw new InstallerError(`The official installer failed with exit code ${result.code}`, result.tail);
+    if (result.code !== 0) {
+      const prefix = `The official installer failed with exit code ${result.code}`;
+      throw new InstallerError(javaInstallerFailure(prefix, params.javaPath, result.tail), result.tail);
+    }
     const { readdir } = await import("node:fs/promises");
     const folders = (await readdir(join(staging, "versions"), { withFileTypes: true })).filter((entry) => entry.isDirectory() && entry.name !== params.mcVersion);
     const pick = folders.find((entry) => entry.name === expectedVersionId) ?? folders[0];

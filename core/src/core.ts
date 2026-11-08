@@ -13,7 +13,7 @@ import { CurseForgeClient } from "./content/curseforge";
 import { McmodClient } from "./content/mcmod";
 import { ModrinthClient } from "./content/modrinth";
 import { installPlan, modpackPlan, STAGE_LABELS, type CoreEvent } from "./events";
-import { detectJava, inspectJava, pickJava, type JavaInstall, type JavaRequirement } from "./java/detect";
+import { detectJava, inspectJava, pickJava, probeJava, type JavaInstall, type JavaRequirement } from "./java/detect";
 import { componentForMajor, installMojangRuntime } from "./java/runtime";
 import { listFabricLike, listForge, listNeoForge, listOptiFine, type LoaderVersion, type MetaDeps } from "./loaders/meta";
 import { installInstance, type InstallDeps, type LoaderChoice } from "./loaders/install";
@@ -372,14 +372,24 @@ export class Core {
     return installs;
   }
 
-  /** Find a Java that satisfies the requirement, or download Mojang's runtime for it. */
+  /** Find a Java that satisfies the requirement and can really boot, or download Mojang's runtime for it. */
   async ensureJava(requirement: JavaRequirement, component: string | undefined, signal?: AbortSignal, onProgress?: (progress: Progress) => void): Promise<{ path: string; major: number; is64: boolean }> {
-    const pick = pickJava(await this.javaInstalls(), requirement);
-    if (pick) return { path: pick.path, major: pick.major, is64: pick.is64 };
+    const remaining = (await this.javaInstalls()).slice();
+    for (;;) {
+      const pick = pickJava(remaining, requirement);
+      if (!pick) break;
+      // `release` metadata can survive a moved or half-deleted JDK. Probe the VM itself before
+      // handing it to the Forge installer, then fall through to auto-install if it cannot start.
+      if (await probeJava(pick.path)) return { path: pick.path, major: pick.major, is64: pick.is64 };
+      this.log.warn(`Java at ${pick.path} cannot start under the selected environment; skipping it`);
+      for (let index = remaining.length - 1; index >= 0; index--) {
+        if (remaining[index].home.toLowerCase() === pick.home.toLowerCase()) remaining.splice(index, 1);
+      }
+    }
     const range = requirement.max !== undefined ? `${requirement.min}–${requirement.max}` : `${requirement.min} 或更高`;
     if (!this.settings.peek().java.autoInstall) throw new Error(`没有找到可用的 Java ${range}。请在 设置 → Java 里添加，或者打开“自动下载 Java”。`);
     const wanted = component ?? componentForMajor(requirement.min);
-    this.log.info(`no Java ${range} installed; downloading Mojang runtime ${wanted}`);
+    this.log.info(`no working Java ${range} installed; downloading Mojang runtime ${wanted}`);
     const runtime = await installMojangRuntime({ root: this.root, component: wanted, http: this.http, router: this.router, engine: this.engine, os: this.os, log: this.logger.scope("java"), signal, onProgress });
     this.javaCache = undefined;
     const inspected = await inspectJava(runtime.home, "mojang", { os: this.os });
@@ -387,6 +397,7 @@ export class Core {
     if (inspected.major < requirement.min || (requirement.max !== undefined && inspected.major > requirement.max)) {
       throw new Error(`下载到的 Java ${inspected.major} 不符合要求（需要 ${range}）。请手动指定 Java。`);
     }
+    if (!(await probeJava(inspected.path))) throw new Error("下载到的 Java 无法启动，可能被杀毒软件拦截或运行时文件损坏。请检查隔离项或手动指定 JDK。");
     return { path: inspected.path, major: inspected.major, is64: inspected.is64 };
   }
 

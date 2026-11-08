@@ -58,6 +58,11 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
 七、遇到问题
   · 窗口黑屏 / 3D 画面异常：先把 设置 → 外观与性能 → 3D 画质 调到“低”；
     还不行就在快捷方式的目标后面加上  --disable-gpu  再打开。
+  · 安装 Forge / NeoForge 时出现“Failed setting boot class path”：
+    这一版会在启动 Java 安装器前忽略系统里的 JAVA_TOOL_OPTIONS、_JAVA_OPTIONS、
+    JDK_JAVA_OPTIONS 和旧 CLASSPATH，并先验证 Java 真能启动；也会避免给旧版
+    Forge 选中过新的 JDK。如果仍然失败，请在 设置 → Java 中手动指定 64 位 JDK：
+    1.12.2 及以前用 Java 8，1.18–1.20.4 用 Java 17 或 21，1.20.5 起用 Java 21。
   · 日志在 %APPDATA%\Vitrine\logs（便携模式在 data\logs）。反馈问题时请附上最新的日志。
   · 这是 0.1.0 的第一个版本：核心有自动化测试，界面和 Electron 外壳在 Linux 上做过冒烟测试，
     但还没有在真实的 Windows 机器上长时间使用过。遇到问题很可能是我们没覆盖到的情况，请反馈。

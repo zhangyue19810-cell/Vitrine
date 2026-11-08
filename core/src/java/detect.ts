@@ -4,6 +4,7 @@ import { homedir } from "node:os";
 import { basename, delimiter, dirname, join } from "node:path";
 import { mapLimit } from "../util/async";
 import { exists } from "../util/fsx";
+import { cleanJavaEnv } from "../util/proc";
 import { currentOs, exeName, type OsInfo } from "../util/os";
 import { compareVersions, parseJavaMajor } from "../util/version";
 
@@ -37,10 +38,15 @@ export interface DetectOptions {
 
 function defaultRunJava(executable: string, args: string[]) {
   return new Promise<{ stdout: string; stderr: string }>((resolve, reject) => {
-    execFile(executable, args, { timeout: 10_000, windowsHide: true }, (error, stdout, stderr) => {
-      if (error && !stderr && !stdout) reject(error);
-      else resolve({ stdout: String(stdout), stderr: String(stderr) });
-    });
+    execFile(
+      executable,
+      args,
+      { timeout: 10_000, windowsHide: true, env: cleanJavaEnv(process.env, undefined, executable) },
+      (error, stdout, stderr) => {
+        if (error && !stderr && !stdout) reject(error);
+        else resolve({ stdout: String(stdout), stderr: String(stderr) });
+      },
+    );
   });
 }
 
@@ -117,6 +123,25 @@ export async function inspectJava(
   if (arch === "unknown") arch = os.arch;
   const isJdk = (await exists(join(home, "bin", exeName("javac", os)))) || release.IMAGE_TYPE === "JDK";
   return { path: executable, home, version, major, vendor, arch, is64: arch !== "x86", isJdk, source };
+}
+
+/**
+ * Verify that the executable can really boot a JVM. A `release` file is useful metadata, but it can
+ * belong to a moved or half-deleted JDK; trusting it would pick a Java that only fails later inside
+ * the Forge installer. The probe runs with the same cleaned environment as launcher-owned JVMs.
+ */
+export async function probeJava(
+  executable: string,
+  options: Pick<DetectOptions, "runJava"> = {},
+): Promise<boolean> {
+  try {
+    const run = options.runJava ?? defaultRunJava;
+    const { stdout, stderr } = await run(executable, ["-version"]);
+    const text = `${stderr}\n${stdout}`;
+    return /version "[^"]+"/i.test(text) && !/Failed setting boot class path|Error occurred during initialization of VM|Could not create the Java Virtual Machine/i.test(text);
+  } catch {
+    return false;
+  }
 }
 
 async function childDirs(dir: string): Promise<string[]> {
@@ -298,11 +323,15 @@ export function javaRequirement(input: JavaRequirementInput): JavaRequirement {
   const min = input.declared ?? input.fallback;
   const parts = /^(\d+)\.(\d+)/.exec(input.mcVersion ?? "");
   const minor = parts && Number(parts[1]) === 1 ? Number(parts[2]) : undefined;
-  const legacyLoader = input.loaders.some((loader) => ["forge", "liteloader", "optifine"].includes(loader.kind));
+  const boundedLoader = input.loaders.some((loader) => ["forge", "neoforge", "liteloader", "optifine"].includes(loader.kind));
   let max: number | undefined;
-  if (legacyLoader && minor !== undefined) {
+  if (boundedLoader && minor !== undefined) {
     if (minor <= 12) max = 8;
     else if (minor <= 16) max = 15;
+    else if (minor === 17) max = 17;
+    // Modern Forge/NeoForge installers are certified through Java 21. Do not pick an arbitrary
+    // newer JDK just because it satisfies the game's minimum; install the matching runtime instead.
+    else max = 21;
   }
   if (max !== undefined && max < min) max = undefined;
   return { min, max };

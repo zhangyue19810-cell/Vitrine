@@ -4,6 +4,7 @@ import { dirname } from "node:path";
 import { ensureDir, writeFileAtomic } from "../util/fsx";
 import type { OsInfo } from "../util/os";
 import { commandLineLength, quoteForArgFile } from "./launch-args";
+import { cleanJavaEnv } from "../util/proc";
 
 export interface SpawnParams {
   javaPath: string;
@@ -162,7 +163,7 @@ export async function spawnGame(params: SpawnParams): Promise<GameProcess> {
   const commandArgs = wrapper.length ? [...wrapper.slice(1), params.javaPath, ...args] : args;
   const child = spawn(command, commandArgs, {
     cwd: params.cwd,
-    env: { ...process.env, ...params.env },
+    env: cleanJavaEnv(process.env, params.env, params.javaPath),
     windowsHide: true,
     stdio: ["ignore", "pipe", "pipe"],
   });
