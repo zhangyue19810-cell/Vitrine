@@ -1,0 +1,290 @@
+/*
+ * The chrome of the 3D stage: the strip of view tabs under the brand, and the controls of the download view that sit
+ * under the row of archives. Everything else the stage shows is printed on the archives themselves (see app/faces.ts).
+ */
+
+/* ------------------------------------------------------------------------------------------ view tabs */
+
+.view-tabs {
+  position: absolute;
+  left: 46px;
+  top: 98px;
+  z-index: 7;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  transition: opacity 0.4s var(--ease), transform 0.5s var(--ease);
+}
+
+#stage[data-mode="detail"] .view-tabs {
+  opacity: 0;
+  transform: translateX(-24px);
+  pointer-events: none;
+}
+
+.view-tab {
+  position: relative;
+  padding: 9px 16px 12px;
+  font-size: 13px;
+  letter-spacing: 1.6px;
+  color: var(--muted);
+  transition: color 0.2s;
+}
+
+.view-tab:hover {
+  color: var(--ink);
+}
+
+.view-tab[aria-current="page"] {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.view-tab::after {
+  content: "";
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 4px;
+  height: 2px;
+  background: var(--accent-ink);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.4s var(--ease);
+}
+
+.view-tab[aria-current="page"]::after {
+  transform: scaleX(1);
+}
+
+/* ------------------------------------------------------------------------------------------ home HUD while the row is up */
+
+#stage[data-view="browse"] .home {
+  opacity: 0;
+  transform: translateX(-24px);
+}
+
+#stage[data-view="browse"] .home > * {
+  pointer-events: none;
+}
+
+/* The keyboard hint names the keys of the ring; the plain shelf (no 3D) keeps the old wording. */
+.hint .hint-grid {
+  display: none;
+}
+
+#stage[data-ring="off"] .hint .hint-ring {
+  display: none;
+}
+
+#stage[data-ring="off"] .hint .hint-grid {
+  display: inline;
+}
+
+/* ------------------------------------------------------------------------------------------ download view */
+
+.download {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.35s var(--ease), visibility 0s linear 0.35s;
+}
+
+#stage[data-view="browse"] .download {
+  opacity: 1;
+  visibility: visible;
+  /* The controls arrive after the archives have started to regroup. */
+  transition: opacity 0.6s var(--ease) 0.45s, visibility 0s;
+}
+
+.download > * {
+  pointer-events: auto;
+}
+
+.dl-bar {
+  position: absolute;
+  left: 52px;
+  right: 52px;
+  bottom: 64px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 22px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.dl-count {
+  display: grid;
+  gap: 4px;
+  min-width: 168px;
+  font-size: 11.5px;
+  letter-spacing: 0.9px;
+  color: var(--muted);
+}
+
+.dl-count b {
+  font-size: 17px;
+  font-weight: 750;
+  letter-spacing: 0.6px;
+  color: var(--ink);
+}
+
+.dl-controls {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dl-search {
+  position: relative;
+  display: block;
+  width: 250px;
+}
+
+.dl-search .glyph {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.dl-search .input {
+  min-height: 34px;
+  padding-left: 32px;
+}
+
+.dl-controls .seg button {
+  min-height: 34px;
+}
+
+.dl-sort {
+  width: auto;
+  min-height: 34px;
+}
+
+.dl-filters {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px 14px;
+  min-width: 0;
+}
+
+.dl-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+
+.dl-filter .select {
+  width: auto;
+  min-width: 126px;
+  max-width: 190px;
+  min-height: 34px;
+}
+
+.dl-check {
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.dl-target {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dl-target .select {
+  width: auto;
+  min-width: 180px;
+  max-width: 250px;
+  min-height: 34px;
+}
+
+.dl-target .check {
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--muted);
+}
+
+.dl-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.dl-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 36px;
+  transform: translateX(-50%);
+  font-size: 10.5px;
+  letter-spacing: 1.2px;
+  color: var(--muted);
+  white-space: nowrap;
+  pointer-events: none !important;
+}
+
+.dl-hint kbd {
+  display: inline-block;
+  min-width: 18px;
+  margin: 0 3px;
+  padding: 1px 5px;
+  text-align: center;
+  border: 1px solid var(--line);
+  font-size: 10px;
+}
+
+/* Words in the middle of the picture, for when there are no archives to look at (nothing found, a failure). */
+.dl-state {
+  position: absolute;
+  left: 66%;
+  top: 44%;
+  width: min(380px, 34%);
+  transform: translate(-50%, -50%);
+  text-align: center;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--muted);
+}
+
+.dl-message b {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 16px;
+  color: var(--ink);
+}
+
+.dl-message .btn {
+  margin-top: 10px;
+}
+
+#stage[data-compact="true"] .dl-search {
+  width: 190px;
+}
+
+#stage[data-compact="true"] .dl-target .check,
+#stage[data-compact="true"] .dl-filters .chip {
+  display: none;
+}
+
+#stage[data-compact="true"] .dl-filter .select {
+  min-width: 108px;
+  max-width: 150px;
+}

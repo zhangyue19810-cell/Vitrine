@@ -19,7 +19,7 @@ const KINDS: { id: ContentKind; label: string }[] = [
   { id: "datapack", label: "数据包" },
 ];
 
-const SORTS: [string, string][] = [
+export const SORTS: [string, string][] = [
   ["relevance", "相关度"],
   ["downloads", "下载量"],
   ["updated", "最近更新"],
@@ -440,7 +440,7 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
 
 // ---------------------------------------------------------------------------------------------- installing
 
-async function chooseVersion(project: ContentProject, instanceId: string | undefined, filter: { gameVersion?: string; loader?: string }, withDependencies = true) {
+export async function chooseVersion(project: ContentProject, instanceId: string | undefined, filter: { gameVersion?: string; loader?: string }, withDependencies = true) {
   const body = document.createElement("div");
   body.innerHTML = `<div class="empty" style="min-height:120px"><span class="spinner"></span>正在获取版本列表…</div>`;
   const dialog = openDialog({ eyebrow: `版本选择 · ${sourceLabel(project.source)}`, title: project.title, size: "wide", body, buttons: [{ id: "cancel", label: "关闭" }] });
@@ -467,7 +467,7 @@ function versionRow(v: ContentVersion) {
 }
 
 /** Install a project (the latest compatible version unless one is given). Resolves false when nothing was started. */
-async function install(project: ContentProject, version: ContentVersion | undefined, instanceId: string | undefined, filter: { gameVersion?: string; loader?: string }, withDependencies = true): Promise<boolean> {
+export async function install(project: ContentProject, version: ContentVersion | undefined, instanceId: string | undefined, filter: { gameVersion?: string; loader?: string }, withDependencies = true): Promise<boolean> {
   if (project.kind === "modpack") {
     const name = await promptDialog({
       title: `安装整合包“${project.title}”`,

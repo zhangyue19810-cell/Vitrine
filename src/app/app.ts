@@ -6,6 +6,7 @@ import { rpc, setBridge, tryRpc } from "./api";
 import { createBridge, type Bridge } from "./bridge";
 import { $, action, html, sleep } from "./dom";
 import { guard, importPack, launchInstance, repairInstance, stopGame, toggleFavorite } from "./actions";
+import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
 import { Layout } from "./layout";
@@ -16,6 +17,7 @@ import { installShortcuts } from "./shortcuts";
 import { sound } from "./sound";
 import { showSplash, type Splash } from "./splash";
 import { store } from "./store";
+import { renderTabs, type ViewId } from "./tabs";
 import { ThemeFader, paint, resolveDark, systemPrefersDark } from "./theme";
 import type { Settings, TaskSnapshot } from "./types";
 import { DetailView, TABS } from "./views/detail";
@@ -28,6 +30,8 @@ import { launchOverlay, showLaunchFor } from "./views/launch";
  */
 
 type Mode = "archive" | "detail";
+/** What the 3D stage shows in archive mode: the Möbius ring of the instances, or the single row of the download view. */
+type View = "home" | "browse";
 
 const cache = {
   get(key: string): string | null {
@@ -60,7 +64,10 @@ export class App implements PerfApp {
   private readonly fader = new ThemeFader();
   private inspection?: InspectionOverlay;
 
+  private download!: DownloadView;
   private mode: Mode = "archive";
+  private view: View = "home";
+  private tab: ViewId = "home";
   private selected = 0;
   private readonly laneMemory = new Map<number, number>();
   private splashActive = true;
@@ -105,7 +112,8 @@ export class App implements PerfApp {
       this.lastShade = shade;
       this.stage.style.setProperty("--detail-shade", String(shade));
     }
-    if (this.mode === "detail" || visibility > 0.005 || this.overlayShown) {
+    // The old inspection lines belong to the plain shelf; the 3D stage prints its own information on the archives.
+    if (!scene.stageActive && (this.mode === "detail" || visibility > 0.005 || this.overlayShown)) {
       this.inspection ??= new InspectionOverlay();
       this.inspection.render(scene.decryptionFrame, (x, y) => scene.projectCard(x, y), false, !this.reduced);
       this.overlayShown = this.mode === "detail" || visibility > 0.005;
@@ -120,6 +128,7 @@ export class App implements PerfApp {
   async restore() {
     const ok = await this.host.ensure();
     this.stage.dataset.scene = this.host.status;
+    this.stage.dataset.ring = this.host.stage ? "on" : "off";
     if (!ok) return;
     this.host.present(true);
     this.perf.refresh();
@@ -153,6 +162,15 @@ export class App implements PerfApp {
       navigate: (axis, direction) => this.canBrowse() && (axis === "lane" ? this.stepLane(direction) : this.stepFile(direction)),
       hover: (index) => this.setHover(index),
     });
+    this.host.stageHandlers = {
+      select: (index) => this.onStageSelect(index),
+      activate: () => this.onStageActivate(),
+      action: (id, index) => this.download.handleAction(id, index),
+      more: () => this.download.loadMore(),
+    };
+    this.download = new DownloadView(this.host, $("#download"), () => this.selectedInstance()?.id);
+    this.stage.dataset.view = "home";
+    this.renderTabs();
     this.host.setDark(this.dark, true);
     this.perf = new Perf(this, detectRendererName());
     this.registerActions();
@@ -180,6 +198,7 @@ export class App implements PerfApp {
     this.syncShelf(true);
     await this.host.ensure();
     this.stage.dataset.scene = this.host.status;
+    this.stage.dataset.ring = this.host.stage ? "on" : "off";
     if (this.host.status === "failed") toast(`无法启动 3D 画面：${this.host.error ?? "未知原因"}。仍可以用键盘、右侧按钮和搜索操作。`, "error", 10_000);
     this.perf.sceneReady();
     splash?.status("准备就绪", 1);
@@ -284,6 +303,8 @@ export class App implements PerfApp {
   }
 
   private stepFile(direction: number) {
+    // The 3D ring has no columns: every step goes to the next archive round the loop.
+    if (this.host.stage) return this.select(this.selected + direction, { axis: "row", direction });
     const files = columnFiles(fileLocation(this.selected).lane);
     if (files.length < 2) return;
     this.select(files[(files.indexOf(this.selected) + direction + files.length) % files.length], { axis: "row", direction });
@@ -306,6 +327,7 @@ export class App implements PerfApp {
     this.laneMemory.clear();
     this.laneMemory.set(fileLocation(this.selected).lane, this.selected);
     this.home.update(this.selected, "auto");
+    this.download?.refreshTargets();
   }
 
   private selectById(id: string) {
@@ -313,6 +335,7 @@ export class App implements PerfApp {
     if (index < 0) return false;
     if (this.mode === "detail") this.exitDetail();
     this.select(index);
+    if (this.view === "browse") this.showHome();
     return true;
   }
 
@@ -342,6 +365,62 @@ export class App implements PerfApp {
     const maxX = this.layout.state.width - label.offsetWidth - 12;
     const x = Math.max(8, Math.min(maxX, this.pointer.x + 16));
     label.style.transform = `translate(${x}px, ${this.pointer.y + 20}px)`;
+  }
+
+  // ------------------------------------------------------------------------------------------ views (ring ↔ download row)
+
+  private renderTabs() {
+    renderTabs($("#view-tabs"), this.tab);
+  }
+
+  private setView(view: View) {
+    this.view = view;
+    this.stage.dataset.view = view;
+    this.setHover(null);
+    this.updateInert();
+    this.perf.refresh();
+  }
+
+  /** A tab was clicked: the ring regroups into the row (or the row swaps its category, or goes back to the ring). */
+  private async showView(id: ViewId) {
+    if (this.splashActive || modals.open || launchOverlay.open) return;
+    if (this.mode === "detail") this.exitDetail();
+    if (id === "home") return this.showHome();
+    if (!this.host.stage) {
+      // No 3D stage (no WebGL, or the GPU is with the game): the plain sheet does the same job.
+      return void (await import("./views/browse")).openBrowse({ kind: id, instanceId: this.selectedInstance()?.id });
+    }
+    this.tab = id;
+    this.renderTabs();
+    if (this.view === "browse") return void (await this.download.switchKind(id));
+    this.setView("browse");
+    sound.play("open");
+    await this.download.enter(id);
+  }
+
+  private showHome() {
+    this.tab = "home";
+    this.renderTabs();
+    if (this.view === "home") return;
+    this.download.leave();
+    this.setView("home");
+    this.host.showRing();
+    sound.play("close");
+  }
+
+  private onStageSelect(index: number) {
+    if (this.splashActive) return;
+    if (this.view === "browse") {
+      this.download.onSelect(index);
+      sound.play("tick", 0);
+      return;
+    }
+    if (this.canBrowse()) this.select(index);
+  }
+
+  /** The selected archive of the ring was clicked again: open it (an instance's page, or the action it stands for). */
+  private onStageActivate() {
+    if (this.view === "home" && this.canBrowse()) this.openSelected();
   }
 
   // ------------------------------------------------------------------------------------------ modes
@@ -383,7 +462,7 @@ export class App implements PerfApp {
 
   private async runRecordAction(kind: (typeof records)[number]["action"]) {
     if (kind === "create") return (await import("./views/create")).openCreate({});
-    if (kind === "browse") return (await import("./views/browse")).openBrowse({ kind: "modpack" });
+    if (kind === "browse") return this.host.stage ? this.showView("modpack") : (await import("./views/browse")).openBrowse({ kind: "modpack" });
     if (kind === "import") return importPack();
   }
 
@@ -407,7 +486,9 @@ export class App implements PerfApp {
     set("#three-scene", front);
     set("#nav", front);
     set("#footer", front);
-    set("#home", front || this.mode === "detail");
+    set("#home", front || this.mode === "detail" || this.view === "browse");
+    set("#download", front || this.mode === "detail" || this.view !== "browse");
+    set("#view-tabs", front || this.mode === "detail");
     set("#detail", front || this.mode !== "detail");
   }
 
@@ -433,6 +514,7 @@ export class App implements PerfApp {
     });
     const refreshHome = () => {
       this.later("home", 120, () => {
+        this.host.refreshRing();
         this.home.update(this.selected, "auto");
         this.home.renderNav({ windowControls: Boolean(this.bridge?.window) });
         this.home.renderFooter();
@@ -515,13 +597,15 @@ export class App implements PerfApp {
 
     installShortcuts({
       mode: () => this.mode,
+      view: () => this.view,
+      ring: () => Boolean(this.host.stage),
       blocked: () => this.splashActive || modals.open || launchOverlay.open,
-      stepFile: (d) => this.stepFile(d),
-      stepLane: (d) => this.stepLane(d),
-      launch: () => void this.launchSelected(),
-      open: () => this.openSelected(),
-      back: () => this.exitDetail(),
-      search: () => this.openSearch(false),
+      stepFile: (d) => (this.view === "browse" ? this.download.step(d) : this.stepFile(d)),
+      stepLane: (d) => (this.view === "browse" ? this.download.step(d) : this.stepLane(d)),
+      launch: () => (this.view === "browse" ? this.download.installSelected() : void this.launchSelected()),
+      open: () => (this.view === "browse" ? this.download.handleAction("page", this.host.stage?.selectedItem ?? 0) : this.openSelected()),
+      back: () => (this.mode === "detail" ? this.exitDetail() : this.view === "browse" ? this.showHome() : undefined),
+      search: () => (this.view === "browse" ? this.download.focusSearch() : this.openSearch(false)),
       settings: () => void import("./views/settings").then((m) => m.openSettings()),
       downloads: () => void import("./views/downloads").then((m) => m.openDownloads()),
       create: () => void this.runRecordAction("create"),
@@ -557,6 +641,7 @@ export class App implements PerfApp {
       const instance = this.selectedInstance();
       if (instance) return job(instance.id);
     };
+    action("view-tab", (element) => void this.showView(element.dataset.view as ViewId));
     action("open-selected", () => this.openSelected());
     action("open-detail", () => this.enterDetail());
     action("back-home", () => this.exitDetail());
@@ -587,6 +672,7 @@ export class App implements PerfApp {
     (window as unknown as { __vitrine: unknown }).__vitrine = {
       app: this,
       host: this.host,
+      download: this.download,
       perf: this.perf,
       store,
       layout: this.layout,

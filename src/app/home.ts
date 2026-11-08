@@ -24,8 +24,10 @@ export const STAGE_TEMPLATE = `
   <div class="drag-strip" aria-hidden="true"></div>
   <header class="brand" aria-label="${PRODUCT.name}"><span class="brand-mark">${markSvg({ label: PRODUCT.name })}</span><div class="brand-text">${brandHeading}</div></header>
   <nav class="system-nav" id="nav" aria-label="主导航"></nav>
+  <nav class="view-tabs" id="view-tabs" aria-label="视图"></nav>
 
   <div class="home" id="home"></div>
+  <section class="download" id="download" aria-label="下载"></section>
   <div class="detail" id="detail"></div>
   <div class="hover-label" id="hover-label" aria-hidden="true"></div>
 
@@ -62,7 +64,7 @@ const HOME_TEMPLATE = `
     <div class="name"><small data-f="lane-label"></small><b data-f="lane-name"></b></div>
     <button class="arrow-btn" data-act="step-lane" data-dir="next" data-step="1" aria-label="下一个分组">→</button>
   </div>
-  <div class="hint"><kbd>↑</kbd><kbd>↓</kbd> 切换实例 <kbd>←</kbd><kbd>→</kbd> 切换分组 <kbd>Enter</kbd> 启动 <kbd>Space</kbd> 管理 <kbd>/</kbd> 搜索</div>
+  <div class="hint"><span class="hint-ring"><kbd>←</kbd><kbd>→</kbd> 转动环 <kbd>PgUp</kbd><kbd>PgDn</kbd> 切换分组 </span><span class="hint-grid"><kbd>↑</kbd><kbd>↓</kbd> 切换实例 <kbd>←</kbd><kbd>→</kbd> 切换分组 </span><kbd>Enter</kbd> 启动 <kbd>Space</kbd> 管理 <kbd>/</kbd> 搜索</div>
 `;
 
 const FOOTER_TEMPLATE = `

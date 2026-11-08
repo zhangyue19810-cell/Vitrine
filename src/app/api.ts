@@ -116,6 +116,8 @@ export interface RpcMap {
   "packs.latest": [{ instanceId: string }, LatestPack | null];
   "content.status": [void, { curseforge: boolean }];
   "mcmod.search": [{ query: string; filter?: "all" | "mod" | "modpack"; page?: number }, McmodSearchResult];
+  /** An online project's icon as a data: URL (fetched by the core: the page cannot read cross-origin pixels). */
+  "content.icon": [{ url: string }, string | null];
   "content.search": [
     { source: ContentSource; kind: ContentKind; query?: string; sort?: "relevance" | "downloads" | "updated" | "newest"; category?: string; page?: number; pageSize?: number; gameVersion?: string; loader?: string },
     ContentSearchResult,

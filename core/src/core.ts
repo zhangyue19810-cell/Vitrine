@@ -8,6 +8,7 @@ import { FileSecretStore, plainCipher, type Cipher } from "./account/secrets";
 import type { LoginChallenge, PublicAccount } from "./account/types";
 import { YggdrasilClient } from "./account/yggdrasil";
 import { applyModUpdate, checkModUpdates, installContent, searchContent, type ContentDeps, type InstallContentRequest, type ModUpdate } from "./content/browse";
+import { createIconFetcher, type IconFetcher } from "./content/icons";
 import { CurseForgeClient } from "./content/curseforge";
 import { McmodClient } from "./content/mcmod";
 import { ModrinthClient } from "./content/modrinth";
@@ -189,6 +190,8 @@ export class Core {
   readonly log: ScopedLog;
   readonly settings: SettingsStore;
   readonly http: HttpClient;
+  /** Icons of online projects as data: URLs (the 3D interface cannot read cross-origin images). */
+  readonly icons: IconFetcher;
   readonly router: SourceRouter;
   readonly engine: DownloadEngine;
   readonly tasks: TaskManager;
@@ -243,6 +246,7 @@ export class Core {
         return this.host.systemProxy?.(url) ?? envProxy(url);
       },
     });
+    this.icons = createIconFetcher(this.http);
     this.router = new SourceRouter(() => this.settings.peek().sources);
     this.engine = new DownloadEngine(this.http, () => {
       const download = this.settings.peek().download;
