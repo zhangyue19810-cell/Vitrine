@@ -10,11 +10,7 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 可以安装原版 Minecraft，也可以装 Fabric、Quilt、Forge、NeoForge 和 OptiFine。启动器会检查 Java，缺失时下载 Mojang 提供的运行时，还会根据实例里的模组数量估算内存。
 
-所有实例都固定在 `versions/<实例名>` 下面使用自己的游戏目录，存档、模组、配置和截图不会互相串。升级后第一次打开旧实例时，原来共用根目录的 `saves` 会复制到对应实例里，不会直接丢弃。每个实例还可以单独指定账号、JVM 参数、窗口大小、全屏和启动后的行为。
-
-**账号**
-
-支持微软、离线和外置登录。微软登录使用设备代码流程，内置的公共 Azure 客户端已经通过 Mojang 审核，不需要自己注册应用。离线账号可以固定 UUID，改名后存档和背包还能对应上。登录令牌保存在系统密钥存储里。
+所有实例都固定在 `versions/<实例名>` 下面使用自己的游戏目录，存档、模组、配置和截图不会互相串。升级后第一次打开旧实例时，原来共用根目录的 `saves` 会复制到对应实例里，不会直接丢弃。每个实例还可以单独指定 JVM 参数、窗口大小、全屏和启动后的行为。
 
 **模组和整合包**
 
@@ -40,7 +36,7 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 ## 当前状态
 
-版本是 0.1.0。后端主要流程有自动化测试，新的环↔下载行界面有几何、镜头和重组动画测试，Windows 包用官方 Electron 重新打包。当前构建环境没有可用的真实 GPU，所以这一版 3D 界面还没有做完整的实际渲染截图验收；我也没有在真实 Windows 机器上长时间使用过，没有用真实微软账号把 Xbox Live、XSTS 和 Minecraft 服务整条登录流程走完。
+版本是 0.1.0。后端主要流程有自动化测试，新的环↔下载行界面有几何、镜头和重组动画测试，Windows 包用官方 Electron 重新打包。当前构建环境没有可用的真实 GPU，所以这一版 3D 界面还没有做完整的实际渲染截图验收；我也没有在真实 Windows 机器上长时间使用过。
 
 Windows 包没有代码签名，SmartScreen 可能会拦。遇到问题时，请附上 `%APPDATA%\Vitrine\logs` 里最新的日志。
 
@@ -48,7 +44,7 @@ Windows 包没有代码签名，SmartScreen 可能会拦。遇到问题时，请
 
 下载 `Vitrine-0.1.0-win-x64.zip`，解压后运行 `Vitrine\Vitrine.exe`，不需要安装。更详细的说明在 [docs/WINDOWS-README.txt](docs/WINDOWS-README.txt)。
 
-启动器数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。如果更新后不小心弄丢了 `portable.txt`，但 `data\` 里还有账号和设置，启动器会自动继续使用这份数据。
+启动器数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。如果更新后不小心弄丢了 `portable.txt`，但 `data\` 里还有设置和缓存，启动器会自动继续使用这份数据。
 
 Minecraft 游戏目录默认使用系统桌面的 `Minecraft` 文件夹。第一次运行时，如果启动器自己的数据目录里已经有旧的 `minecraft`，会把它整体移动到桌面，并把游戏目录切过去；如果桌面已经有同名文件夹，不会覆盖里面的文件。
 
@@ -85,7 +81,7 @@ npm run dist:win      # 生成 release/Vitrine-<版本>-win-x64.zip
 ## 源码结构
 
 ```text
-core/src/       后端。网络、版本安装、加载器、Java、账号、整合包、内容、存档、崩溃分析
+core/src/       后端。网络、版本安装、加载器、Java、整合包、内容、存档、崩溃分析
 core/test/      后端测试和本地 mock 服务
 electron/       主进程、preload、app:// 协议、窗口和托盘
 src/            界面，Vite + Three.js
