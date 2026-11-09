@@ -48,6 +48,24 @@ describe("SourceRouter", () => {
     );
   });
 
+  it("tries BMCL's version endpoint and secondary entry point before the client object fallback", () => {
+    const url = "https://piston-data.mojang.com/v1/objects/30/c/hash/client.jar";
+    assert.deepEqual(router().clientCandidates("1.21.1", url), [
+      "https://bmclapi2.bangbang93.com/version/1.21.1/client",
+      "https://bmclapi.bangbang93.com/version/1.21.1/client",
+      "https://bmclapi2.bangbang93.com/v1/objects/30/c/hash/client.jar",
+      "https://bmclapi.bangbang93.com/v1/objects/30/c/hash/client.jar",
+      url,
+    ]);
+    assert.deepEqual(router({ policy: "official-only" }).clientCandidates("1.21.1", url), [url]);
+    assert.deepEqual(router({ policy: "mirror-only" }).clientCandidates("1.21.1", url), [
+      "https://bmclapi2.bangbang93.com/version/1.21.1/client",
+      "https://bmclapi.bangbang93.com/version/1.21.1/client",
+      "https://bmclapi2.bangbang93.com/v1/objects/30/c/hash/client.jar",
+      "https://bmclapi.bangbang93.com/v1/objects/30/c/hash/client.jar",
+    ]);
+  });
+
   it("honours every policy", () => {
     const url = "https://piston-meta.mojang.com/x.json";
     assert.deepEqual(router({ policy: "official-first" }).candidates(url), [url, "https://bmclapi2.bangbang93.com/x.json"]);

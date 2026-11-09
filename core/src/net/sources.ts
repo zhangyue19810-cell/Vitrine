@@ -60,6 +60,10 @@ const CONTENT_RULES: Rule[] = [
 /** Hosts whose legacy http:// URLs (old Forge/Mojang JSON) are safe to upgrade to https://. */
 const UPGRADABLE = /(^|\.)(minecraft\.net|mojang\.com|minecraftforge\.net|fabricmc\.net|quiltmc\.(org|net)|neoforged\.net|modrinth\.com|forgecdn\.net|curseforge\.com|bangbang93\.com|mcimirror\.top)$/i;
 
+/** Public entry points for the BMCLAPI layout. The canonical host sometimes hands large objects back to Mojang. */
+const BMCL_DIRECT_FALLBACK = "https://bmclapi.bangbang93.com";
+const isBmclHost = (hostname: string) => hostname === "bangbang93.com" || hostname.endsWith(".bangbang93.com");
+
 export function upgradeScheme(url: string): string {
   if (!url.startsWith("http://")) return url;
   try {
@@ -102,23 +106,54 @@ export class SourceRouter {
     return applyRules(CONTENT_RULES, upgradeScheme(url), this.settings().contentMirrorBase);
   }
 
-  private order(official: string, mirror: string | undefined, policy: SourcePolicy): string[] {
+  private orderList(official: string, mirrors: string[], policy: SourcePolicy): string[] {
+    const alternatives = [...new Set(mirrors.filter(Boolean))];
     switch (policy) {
       case "official-only":
         return [official];
       case "mirror-only":
-        return [mirror ?? official];
+        return alternatives.length ? alternatives : [official];
       case "official-first":
-        return mirror ? [official, mirror] : [official];
+        return [official, ...alternatives];
       case "mirror-first":
-        return mirror ? [mirror, official] : [official];
+        return [...alternatives, official];
     }
+  }
+
+  private order(official: string, mirror: string | undefined, policy: SourcePolicy): string[] {
+    return this.orderList(official, mirror ? [mirror] : [], policy);
   }
 
   /** Candidate URLs for a game/loader file, ordered by the user's source policy. */
   candidates(url: string): string[] {
     const official = upgradeScheme(url);
     return this.order(official, this.toMirror(official), this.settings().policy);
+  }
+
+  /**
+   * Candidate URLs for the Minecraft client jar. BMCLAPI's generic object path can redirect the
+   * large client jar back to Mojang; the version endpoint is served from a different mirror pool.
+   * Trying both known BMCL entry points first gives the downloader real alternatives when one
+   * pool or the official CDN stalls.
+   */
+  clientCandidates(mcVersion: string, url: string): string[] {
+    const official = upgradeScheme(url);
+    const primary = this.settings().mirrorBase.replace(/\/+$/, "");
+    const bases = [primary];
+    try {
+      if (isBmclHost(new URL(primary).hostname.toLowerCase()) && !bases.includes(BMCL_DIRECT_FALLBACK)) bases.push(BMCL_DIRECT_FALLBACK);
+    } catch {
+      /* invalid custom base: the routed URL below is still usable */
+    }
+    const direct = bases.flatMap((base) => {
+      try {
+        return isBmclHost(new URL(base).hostname.toLowerCase()) ? [`${base}/version/${encodeURIComponent(mcVersion)}/client`] : [];
+      } catch {
+        return [];
+      }
+    });
+    const translated = bases.map((base) => applyRules(GAME_RULES, official, base)).filter((entry): entry is string => Boolean(entry));
+    return this.orderList(official, [...direct, ...translated], this.settings().policy);
   }
 
   /** Candidate URLs for a Modrinth/CurseForge request or CDN file. */

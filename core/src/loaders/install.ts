@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { javaRequirement, type JavaRequirement } from "../java/detect";
-import type { Progress } from "../net/download";
+import type { HashSpec, Progress } from "../net/download";
 import { isAbort, throwIfAborted } from "../util/async";
 import { ensureDir, exists, removeRecursive, writeJsonAtomic } from "../util/fsx";
 import { fallbackJavaMajor } from "../util/version";
@@ -60,8 +60,19 @@ export interface InstallResult {
   loader?: LoaderChoice;
 }
 
-async function downloadOne(deps: InstallDeps, urls: string[], dest: string, label: string, signal?: AbortSignal, onProgress?: (p: Progress) => void) {
-  const result = await deps.env.engine.run([{ urls, dest, label, group: "installer" }], { signal, onProgress });
+async function downloadOne(
+  deps: InstallDeps,
+  urls: string[],
+  dest: string,
+  label: string,
+  signal?: AbortSignal,
+  onProgress?: (p: Progress) => void,
+  expected?: { size?: number; hash?: HashSpec },
+) {
+  const result = await deps.env.engine.run(
+    [{ urls, dest, size: expected?.size, hash: expected?.hash, verify: expected?.hash ? "hash" : undefined, label, group: "installer" }],
+    { signal, onProgress },
+  );
   throwIfAborted(signal);
   if (!result.ok) throw new Error(`Could not download ${label}: ${result.failed[0]?.error ?? "unknown error"}`);
 }
@@ -89,7 +100,10 @@ export async function installInstance(deps: InstallDeps, request: InstallRequest
     const client = vanilla.downloads?.client;
     if (!client?.url) throw new Error(`Minecraft ${request.mcVersion} has no client download`);
     const jarPath = versionJarPath(env.root, request.name);
-    await downloadOne(deps, env.router.candidates(client.url), jarPath, `${request.name}.jar`, signal, (progress) => hooks?.progress?.(progress, "client-jar"));
+    await downloadOne(deps, env.router.clientCandidates(request.mcVersion, client.url), jarPath, `${request.name}.jar`, signal, (progress) => hooks?.progress?.(progress, "client-jar"), {
+      size: client.size,
+      hash: client.sha1 ? { sha1: client.sha1 } : undefined,
+    });
     // downloadOne verifies nothing by itself; check size so a truncated mirror response does not slip through.
     const { fileSize } = await import("../util/fsx");
     if (client.size && (await fileSize(jarPath)) !== client.size) throw new Error("The downloaded client jar has the wrong size");
