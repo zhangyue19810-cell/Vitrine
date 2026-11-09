@@ -232,6 +232,27 @@ describe("TaskManager", () => {
     await promise;
   });
 
+  it("returns live pending progress through get even when event publication is throttled", async () => {
+    const manager = new TaskManager();
+    manager.setUiLevel("hidden");
+    const release = deferred();
+    const { id, promise } = manager.start({
+      kind: "install",
+      title: "dl",
+      run: async (ctx) => {
+        ctx.stage("files");
+        ctx.progress(progress(25), "files");
+        await release.promise;
+      },
+    });
+    await sleep(30);
+    const live = manager.get(id)!;
+    assert.equal(live.progress?.doneFiles, 25, "the downloads page can poll the newest progress without waiting for a throttled event");
+    assert.equal(live.fraction, 0.25);
+    release.resolve();
+    await promise;
+  });
+
   it("keeps terminal state events immediate regardless of the level", async () => {
     const manager = new TaskManager();
     manager.setUiLevel("hidden");

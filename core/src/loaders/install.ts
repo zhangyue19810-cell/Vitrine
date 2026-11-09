@@ -67,10 +67,10 @@ async function downloadOne(
   label: string,
   signal?: AbortSignal,
   onProgress?: (p: Progress) => void,
-  expected?: { size?: number; hash?: HashSpec },
+  expected?: { size?: number; hash?: HashSpec; segments?: number },
 ) {
   const result = await deps.env.engine.run(
-    [{ urls, dest, size: expected?.size, hash: expected?.hash, verify: expected?.hash ? "hash" : undefined, label, group: "installer" }],
+    [{ urls, dest, size: expected?.size, hash: expected?.hash, segments: expected?.segments, verify: expected?.hash ? "hash" : undefined, label, group: "installer" }],
     { signal, onProgress },
   );
   throwIfAborted(signal);
@@ -100,9 +100,16 @@ export async function installInstance(deps: InstallDeps, request: InstallRequest
     const client = vanilla.downloads?.client;
     if (!client?.url) throw new Error(`Minecraft ${request.mcVersion} has no client download`);
     const jarPath = versionJarPath(env.root, request.name);
-    await downloadOne(deps, env.router.clientCandidates(request.mcVersion, client.url), jarPath, `${request.name}.jar`, signal, (progress) => hooks?.progress?.(progress, "client-jar"), {
+    const clientUrls = env.router.clientCandidates(request.mcVersion, client.url);
+    const hosts = clientUrls.map((url) => {
+      try { return new URL(url).host; } catch { return url; }
+    });
+    hooks?.stage?.("client-jar", `${clientUrls.length} 个下载源`);
+    hooks?.output?.(`主程序下载源：${hosts.join(" → ")}`);
+    await downloadOne(deps, clientUrls, jarPath, `${request.name}.jar`, signal, (progress) => hooks?.progress?.(progress, "client-jar"), {
       size: client.size,
       hash: client.sha1 ? { sha1: client.sha1 } : undefined,
+      segments: 16,
     });
     // downloadOne verifies nothing by itself; check size so a truncated mirror response does not slip through.
     const { fileSize } = await import("../util/fsx");

@@ -12,6 +12,7 @@ describe("SourceRouter", () => {
     const r = router({ policy: "mirror-first" });
     assert.deepEqual(r.candidates("https://piston-meta.mojang.com/mc/game/version_manifest_v2.json"), [
       "https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json",
+      "https://bmclapi.bangbang93.com/mc/game/version_manifest_v2.json",
       "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
     ]);
     assert.equal(
@@ -68,9 +69,9 @@ describe("SourceRouter", () => {
 
   it("honours every policy", () => {
     const url = "https://piston-meta.mojang.com/x.json";
-    assert.deepEqual(router({ policy: "official-first" }).candidates(url), [url, "https://bmclapi2.bangbang93.com/x.json"]);
+    assert.deepEqual(router({ policy: "official-first" }).candidates(url), [url, "https://bmclapi2.bangbang93.com/x.json", "https://bmclapi.bangbang93.com/x.json"]);
     assert.deepEqual(router({ policy: "official-only" }).candidates(url), [url]);
-    assert.deepEqual(router({ policy: "mirror-only" }).candidates(url), ["https://bmclapi2.bangbang93.com/x.json"]);
+    assert.deepEqual(router({ policy: "mirror-only" }).candidates(url), ["https://bmclapi2.bangbang93.com/x.json", "https://bmclapi.bangbang93.com/x.json"]);
   });
 
   it("leaves unknown hosts alone", () => {
@@ -99,6 +100,9 @@ describe("SourceRouter", () => {
     assert.deepEqual(r.candidates("http://files.minecraftforge.net/maven/net/minecraftforge/forge/1.7.10/forge.jar"), [
       "https://files.minecraftforge.net/maven/net/minecraftforge/forge/1.7.10/forge.jar",
       "https://bmclapi2.bangbang93.com/maven/net/minecraftforge/forge/1.7.10/forge.jar",
+      "https://bmclapi.bangbang93.com/maven/net/minecraftforge/forge/1.7.10/forge.jar",
+      "https://mirrors.cernet.edu.cn/bmclapi/net/minecraftforge/forge/1.7.10/forge.jar",
+      "https://mirror.nyist.edu.cn/bmclapi/net/minecraftforge/forge/1.7.10/forge.jar",
     ]);
   });
 });

@@ -60,6 +60,12 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
 七、遇到问题
   · 窗口黑屏 / 3D 画面异常：先把 设置 → 外观与性能 → 3D 画质 调到“低”；
     还不行就在快捷方式的目标后面加上  --disable-gpu  再打开。
+  · 下载游戏主程序长时间速度为 0：15 秒没有任何数据时会自动换下载源；如果所有源
+    都失败，请检查系统代理是否可用，或在 设置 → 下载 里分别试一次“只用官方源”和
+    “只用镜像源”。下载任务详情里会列出实际尝试的主机顺序。
+  · Forge / NeoForge 安装器下载超时：启动器会依次尝试 BMCLAPI 的两个入口，以及
+    CERNET / 南阳理工的 BMCLAPI 镜像，最后才访问官方 Maven，避免域名被错误解析后
+    一直连接超时。
   · 安装 Forge / NeoForge 时出现“Failed setting boot class path”：
     这一版会在启动 Java 安装器前忽略系统里的 JAVA_TOOL_OPTIONS、_JAVA_OPTIONS、
     JDK_JAVA_OPTIONS 和旧 CLASSPATH，并先验证 Java 真能启动；也会避免给旧版

@@ -216,6 +216,7 @@ export function openCreate(initial?: { mcVersion?: string; loaderKind?: string }
     if (!started) return;
     toast(`开始安装 ${state.name.trim()}`, "ok");
     sheet.close();
+    await sheet.closed;
     (await import("./downloads")).openDownloads(started.taskId);
   });
 

@@ -1,4 +1,4 @@
-import { rpc } from "../api";
+import { rpc, tryRpc } from "../api";
 import { guard, openLink } from "../actions";
 import { $, $$, html, onAll, setHtml } from "../dom";
 import { formatBytes, formatDuration, formatSpeed, relativeTime } from "../format";
@@ -56,6 +56,7 @@ interface Page {
   raf: number;
   dirty: { list: boolean; detail: boolean };
   off: (() => void)[];
+  poll: ReturnType<typeof setInterval>;
 }
 
 let page: Page | undefined;
@@ -72,10 +73,11 @@ export function openDownloads(focusTaskId?: string) {
     onClose: () => {
       for (const off of current().off) off();
       cancelAnimationFrame(current().raf);
+      clearInterval(current().poll);
       page = undefined;
     },
   });
-  const state: Page = { sheet, lanes: new Map(), raf: 0, dirty: { list: true, detail: true }, off: [] };
+  const state: Page = { sheet, lanes: new Map(), raf: 0, dirty: { list: true, detail: true }, off: [], poll: setInterval(() => undefined, 60_000) };
   page = state;
   sheet.body.innerHTML = `<div class="dl"><div class="dl-list" data-f="list"></div><div class="dl-detail" data-f="detail"></div></div>`;
   const first = focusTaskId ?? store.activeDownloads()[0]?.id ?? store.taskList()[0]?.id;
@@ -85,6 +87,27 @@ export function openDownloads(focusTaskId?: string) {
     store.on<TaskSnapshot>("task", (task) => schedule(task.state !== "running", task.id === state.selected)),
     store.on<string>("task-log", (id) => id === state.selected && schedule(false, true)),
   );
+  // Event publication is intentionally throttled when the window is in the background. The
+  // foreground details page polls the live task so bytes/speed keep moving even then.
+  let polling = false;
+  state.poll = setInterval(async () => {
+    if (!page || polling) return;
+    const id = page.selected;
+    const current = id ? store.tasks.get(id) : undefined;
+    if (!id || !current || (current.state !== "running" && current.state !== "queued")) return;
+    polling = true;
+    try {
+      const fresh = await tryRpc("tasks.get", { id });
+      if (fresh && page && page.selected === id) {
+        store.tasks.set(fresh.id, fresh);
+        store.emit("task", fresh);
+        store.emit("tasks");
+        schedule(false, true);
+      }
+    } finally {
+      polling = false;
+    }
+  }, 700);
   onAll(sheet.body, "click", "[data-task]", (element) => select(element.dataset.task!));
   onAll(sheet.body, "click", "[data-link]", (element) => void openLink(element.dataset.link!));
   onAll(sheet.body, "click", "[data-cancel]", async (element) => {

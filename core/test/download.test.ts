@@ -86,6 +86,36 @@ describe("DownloadEngine", () => {
     await assert.rejects(stat(item.dest));
   });
 
+  it("falls back to a single stream when a range request stalls", async () => {
+    const data = bytes(2 * 1024 * 1024, 19);
+    let rangeCalls = 0;
+    let fullCalls = 0;
+    const server = await mock((req, res) => {
+      const range = /bytes=(\d+)-(\d+)/.exec(String(req.headers.range ?? ""));
+      if (range) {
+        rangeCalls++;
+        const from = Number(range[1]);
+        const to = Number(range[2]);
+        res.writeHead(206, {
+          "content-range": `bytes ${from}-${to}/${data.length}`,
+          "content-length": String(to - from + 1),
+          "accept-ranges": "bytes",
+        });
+        return; // deliberately never writes a body
+      }
+      fullCalls++;
+      return serveBytes(req, res, data);
+    });
+    const item: DownloadItem = { urls: [`${server.url}/stall.bin`], dest: join(dir, "stall.bin"), size: data.length, hash: { sha1: sha1(data) }, verify: "hash" };
+    const started = Date.now();
+    const result = await engine({ segments: 4, retries: 2, stallTimeoutMs: 120, segmentMinSize: 1 << 20 }).run([item]);
+    assert.equal(result.ok, true);
+    assert.ok(rangeCalls >= 1, "the ranged attempt should be tried first");
+    assert.ok(fullCalls >= 1, "a no-Range request should recover the file");
+    assert.deepEqual(await readFile(item.dest), data);
+    assert.ok(Date.now() - started < 5000, "a stalled range request must not hang the install");
+  });
+
   it("falls back to a single stream when the server ignores Range", async () => {
     const data = bytes(10 * 1024 * 1024, 9);
     const server = await mock((req, res) => serveBytes(req, res, data, { ranges: false }));

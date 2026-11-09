@@ -25,6 +25,8 @@ export interface DownloadItem {
   group?: string;
   /** Unix mode applied after download (executables from Mojang's Java runtime). */
   mode?: number;
+  /** Preferred number of range connections for this file (overrides the global segment setting). */
+  segments?: number;
   /** How an existing file is judged valid: "size" (default, fast) or "hash" (reads the file). */
   verify?: "size" | "hash";
   /** A failure of an optional item is reported but does not fail the run. */
@@ -95,6 +97,8 @@ export interface EngineSettings {
   /** Bytes per second; 0 for unlimited. */
   speedLimit: number;
   requestTimeoutMs: number;
+  /** Abort an attempt when its socket stops delivering bytes for this long. */
+  stallTimeoutMs: number;
   backoffBaseMs: number;
 }
 
@@ -105,6 +109,7 @@ export const DEFAULT_ENGINE: EngineSettings = {
   retries: 3,
   speedLimit: 0,
   requestTimeoutMs: 30_000,
+  stallTimeoutMs: 15_000,
   backoffBaseMs: 400,
 };
 
@@ -401,27 +406,54 @@ export class DownloadEngine {
       const tmp = `${item.dest}.vtmp`;
       const urlStarted = Date.now();
       if (u > 0) await rm(tmp, { force: true }); // never resume across different servers
+      let forceSingle = false;
       for (let attempt = 1; attempt <= cfg.retries; attempt++) {
         throwIfAborted(ctx.signal);
         lane.state = attempt > 1 ? "retrying" : "connecting";
         lane.attempt = attempt;
         lane.host = hostOf(url);
         lane.received = 0;
+        lane.parts = 1;
         const counted: Counted = { bytes: 0, discovered: 0 };
+        const usedSingle = forceSingle;
+        const stall = new AbortController();
+        const attemptSignal = anySignal(ctx.signal, stall.signal);
+        let lastReceived = 0;
+        let lastProgressAt = Date.now();
+        // Tiny files already finish quickly; only spend a timer on large or unknown-size downloads.
+        const watchdog = item.size === undefined || item.size >= cfg.segmentMinSize
+          ? setInterval(() => {
+              if (lane.received > lastReceived) {
+                lastReceived = lane.received;
+                lastProgressAt = Date.now();
+              } else if (Date.now() - lastProgressAt >= cfg.stallTimeoutMs && !stall.signal.aborted) {
+                stall.abort();
+              }
+            }, Math.max(250, Math.min(1000, Math.floor(cfg.stallTimeoutMs / 3))))
+          : undefined;
+        watchdog?.unref?.();
         try {
-          const hashes = await this.fetchToFile(url, tmp, item, lane, ctx, counted);
+          const hashes = await this.fetchToFile(url, tmp, item, lane, ctx, counted, attemptSignal, !forceSingle);
           lane.state = "verifying";
           await this.verifyFile(item.mode !== undefined ? tmp : tmp, item, hashes);
           await this.finalize(tmp, item);
           this.health.ok(url);
           this.health.record(url, lane.received || counted.bytes, Date.now() - urlStarted);
           return "done";
-        } catch (error) {
+        } catch (caught) {
+          const error = stall.signal.aborted && !ctx.signal.aborted
+            ? new NetworkError(`download made no progress for ${Math.round(cfg.stallTimeoutMs / 1000)}s`, "ERR_STALLED", url)
+            : caught;
           ctx.addBytes(-counted.bytes);
           ctx.discover(-counted.discovered);
           if (isAbort(error) || ctx.signal.aborted) throw error;
           lastError = error;
+          // Some proxies/CDNs accept a Range request and then never send a body. Retry this
+          // source once as a plain stream before moving on; the checksum still protects the file.
+          if (!forceSingle && item.size !== undefined && item.size >= cfg.segmentMinSize && error instanceof NetworkError && error.code === "ERR_STALLED") forceSingle = true;
           if (!isFatalForUrl(error)) this.health.fail(url);
+          // This attempt was already the plain-stream fallback and it stalled too: move to the next source.
+          if (usedSingle && error instanceof NetworkError && error.code === "ERR_STALLED") break;
           if (error instanceof VerifyError || error instanceof RetryableError) await rm(tmp, { force: true });
           if (isFatalForUrl(error)) break;
           if (attempt < cfg.retries) {
@@ -429,6 +461,8 @@ export class DownloadEngine {
             const backoff = Math.min(8000, cfg.backoffBaseMs * 2 ** (attempt - 1)) * (0.75 + Math.random() * 0.5);
             await sleep(Math.max(backoff, Math.min(hint ?? 0, 10_000)), ctx.signal);
           }
+        } finally {
+          if (watchdog) clearInterval(watchdog);
         }
       }
     }
@@ -470,8 +504,10 @@ export class DownloadEngine {
     lane: LaneState,
     ctx: RunContext,
     counted: Counted,
+    signal: AbortSignal,
+    allowSegments = true,
   ): Promise<Partial<Record<HashAlgorithm, string>> | undefined> {
-    const { cfg, signal } = ctx;
+    const { cfg } = ctx;
     const known = item.size;
     let start = 0;
     const existing = await fileSize(tmp);
@@ -487,8 +523,8 @@ export class DownloadEngine {
       counted.bytes += known;
       return undefined;
     }
-    if (known !== undefined && start === 0 && known >= cfg.segmentMinSize && cfg.segments > 1) {
-      await this.fetchSegmented(url, item, lane, ctx, counted);
+    if (allowSegments && known !== undefined && start === 0 && known >= cfg.segmentMinSize && cfg.segments > 1) {
+      await this.fetchSegmented(url, item, lane, ctx, counted, signal);
       return undefined;
     }
 
@@ -538,7 +574,7 @@ export class DownloadEngine {
     const hasher: Hash | undefined = offset === 0 && hashSpec ? createHash(hashSpec[0]) : undefined;
     const handle = await open(tmp, offset === 0 ? "w" : "r+");
     try {
-      await this.pump(response.body, handle, offset, lane, ctx, counted, hasher, expectedBody, remaining);
+      await this.pump(response.body, handle, offset, lane, ctx, counted, hasher, expectedBody, signal, remaining);
     } finally {
       await handle.close();
     }
@@ -554,6 +590,7 @@ export class DownloadEngine {
     counted: Counted,
     hasher: Hash | undefined,
     expected: number | undefined,
+    signal: AbortSignal,
     limit?: number,
   ) {
     let position = offset;
@@ -565,7 +602,7 @@ export class DownloadEngine {
         body.destroy();
         throw new VerifyError(`response is larger than the expected ${limit} bytes`);
       }
-      await this.limiter.take(buffer.length, ctx.signal);
+      await this.limiter.take(buffer.length, signal);
       await handle.write(buffer, 0, buffer.length, position);
       hasher?.update(buffer);
       position += buffer.length;
@@ -579,10 +616,10 @@ export class DownloadEngine {
     }
   }
 
-  private async fetchSegmented(url: string, item: DownloadItem, lane: LaneState, ctx: RunContext, counted: Counted) {
+  private async fetchSegmented(url: string, item: DownloadItem, lane: LaneState, ctx: RunContext, counted: Counted, outerSignal: AbortSignal) {
     const { cfg } = ctx;
     const size = item.size!;
-    const segments = Math.max(2, Math.min(cfg.segments, Math.ceil(size / (1 << 20))));
+    const segments = Math.max(2, Math.min(item.segments ?? cfg.segments, Math.ceil(size / (1 << 20))));
     const partSize = Math.ceil(size / segments);
     const ranges = Array.from({ length: segments }, (_, i) => [i * partSize, Math.min(size, (i + 1) * partSize) - 1] as [number, number]);
     const part = `${item.dest}.vseg`;
@@ -590,7 +627,7 @@ export class DownloadEngine {
     lane.parts = segments;
     lane.total = size;
     const failure = new AbortController();
-    const signal = anySignal(ctx.signal, failure.signal);
+    const signal = anySignal(outerSignal, failure.signal);
     const first = await this.http.request(url, {
       headers: { range: `bytes=${ranges[0][0]}-${ranges[0][1]}` },
       signal,
@@ -603,7 +640,7 @@ export class DownloadEngine {
         // The server does not do ranges: stream the body as one piece.
         lane.parts = 1;
         const length = Number(first.headers["content-length"]);
-        await this.pump(first.body, handle, 0, lane, ctx, counted, undefined, Number.isFinite(length) ? length : undefined);
+        await this.pump(first.body, handle, 0, lane, ctx, counted, undefined, Number.isFinite(length) ? length : undefined, signal);
       } else if (first.status === 206) {
         const range = /bytes (\d+)-(\d+)\/(\d+)/.exec(String(first.headers["content-range"] ?? ""));
         if (!range || Number(range[3]) !== size) {

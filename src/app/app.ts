@@ -553,6 +553,9 @@ export class App implements PerfApp {
     const before = this.taskStates.get(task.id);
     if (before === task.state) return;
     this.taskStates.set(task.id, task.state);
+    if (task.state === "running" && (before === "queued" || before === undefined) && (task.kind === "install" || task.kind === "modpack")) {
+      void import("./views/downloads").then(({ openDownloads }) => openDownloads(task.id));
+    }
     if (task.kind === "launch" || before === undefined && task.state !== "failed" && task.state !== "done") return;
     if (task.state === "done") {
       toast(`${task.title} 已完成`, "ok");

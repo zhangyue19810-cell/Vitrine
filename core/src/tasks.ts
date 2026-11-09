@@ -138,7 +138,15 @@ export class TaskManager {
 
   get(id: string): (TaskSnapshot & { log: string[] }) | undefined {
     const entry = this.entries.get(id);
-    return entry ? { ...entry.snapshot, log: [...entry.log] } : undefined;
+    if (!entry) return undefined;
+    const snapshot: TaskSnapshot = { ...entry.snapshot, stages: entry.snapshot.stages.map((stage) => ({ ...stage })), warnings: [...entry.snapshot.warnings] };
+    // A foreground details page polls this method; return the freshest queued progress even when
+    // event publication is throttled while the window is unfocused or hidden.
+    if (snapshot.state === "running" && entry.pendingProgress) {
+      snapshot.progress = entry.pendingProgress;
+      snapshot.fraction = fractionOf(entry.pendingProgress);
+    }
+    return { ...snapshot, log: [...entry.log] };
   }
 
   /** Start a task. `promise` settles with the task's result; ignoring it is safe. */

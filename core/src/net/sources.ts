@@ -63,6 +63,10 @@ const UPGRADABLE = /(^|\.)(minecraft\.net|mojang\.com|minecraftforge\.net|fabric
 /** Public entry points for the BMCLAPI layout. The canonical host sometimes hands large objects back to Mojang. */
 const BMCL_DIRECT_FALLBACK = "https://bmclapi.bangbang93.com";
 const isBmclHost = (hostname: string) => hostname === "bangbang93.com" || hostname.endsWith(".bangbang93.com");
+/** Loader Maven artifacts are also available through these BMCLAPI mirrors, which avoid a poisoned DNS entry. */
+const MAVEN_MIRROR_HOSTS = new Set(["maven.minecraftforge.net", "files.minecraftforge.net", "maven.neoforged.net", "maven.fabricmc.net", "maven.quiltmc.org"]);
+const CERNET_BMCLAPI = "https://mirrors.cernet.edu.cn/bmclapi";
+const NYIST_BMCLAPI = "https://mirror.nyist.edu.cn/bmclapi";
 
 export function upgradeScheme(url: string): string {
   if (!url.startsWith("http://")) return url;
@@ -106,6 +110,36 @@ export class SourceRouter {
     return applyRules(CONTENT_RULES, upgradeScheme(url), this.settings().contentMirrorBase);
   }
 
+  private gameMirrorBases(): string[] {
+    const primary = this.settings().mirrorBase.replace(/\/+$/, "");
+    const bases = [primary];
+    try {
+      if (isBmclHost(new URL(primary).hostname.toLowerCase()) && !bases.includes(BMCL_DIRECT_FALLBACK)) bases.push(BMCL_DIRECT_FALLBACK);
+    } catch {
+      /* invalid custom base: use only the configured value */
+    }
+    return bases;
+  }
+
+  private gameMirrors(url: string): string[] {
+    return this.gameMirrorBases().map((base) => applyRules(GAME_RULES, url, base)).filter((entry): entry is string => Boolean(entry));
+  }
+
+  /** Additional education-network mirrors for loader Maven artifacts. */
+  private loaderMavenMirrors(official: string, translated: string): string[] {
+    try {
+      if (!MAVEN_MIRROR_HOSTS.has(new URL(official).hostname.toLowerCase())) return [];
+      const parsed = new URL(translated);
+      const marker = "/maven/";
+      const at = parsed.pathname.indexOf(marker);
+      if (at < 0) return [];
+      const suffix = parsed.pathname.slice(at + marker.length);
+      return [`${CERNET_BMCLAPI}/${suffix}${parsed.search}`, `${NYIST_BMCLAPI}/${suffix}${parsed.search}`];
+    } catch {
+      return [];
+    }
+  }
+
   private orderList(official: string, mirrors: string[], policy: SourcePolicy): string[] {
     const alternatives = [...new Set(mirrors.filter(Boolean))];
     switch (policy) {
@@ -127,7 +161,9 @@ export class SourceRouter {
   /** Candidate URLs for a game/loader file, ordered by the user's source policy. */
   candidates(url: string): string[] {
     const official = upgradeScheme(url);
-    return this.order(official, this.toMirror(official), this.settings().policy);
+    const translated = this.gameMirrors(official);
+    const loaderMirrors = translated.flatMap((mirror) => this.loaderMavenMirrors(official, mirror));
+    return this.orderList(official, [...translated, ...loaderMirrors], this.settings().policy);
   }
 
   /**
@@ -138,13 +174,7 @@ export class SourceRouter {
    */
   clientCandidates(mcVersion: string, url: string): string[] {
     const official = upgradeScheme(url);
-    const primary = this.settings().mirrorBase.replace(/\/+$/, "");
-    const bases = [primary];
-    try {
-      if (isBmclHost(new URL(primary).hostname.toLowerCase()) && !bases.includes(BMCL_DIRECT_FALLBACK)) bases.push(BMCL_DIRECT_FALLBACK);
-    } catch {
-      /* invalid custom base: the routed URL below is still usable */
-    }
+    const bases = this.gameMirrorBases();
     const direct = bases.flatMap((base) => {
       try {
         return isBmclHost(new URL(base).hostname.toLowerCase()) ? [`${base}/version/${encodeURIComponent(mcVersion)}/client`] : [];
@@ -152,8 +182,7 @@ export class SourceRouter {
         return [];
       }
     });
-    const translated = bases.map((base) => applyRules(GAME_RULES, official, base)).filter((entry): entry is string => Boolean(entry));
-    return this.orderList(official, [...direct, ...translated], this.settings().policy);
+    return this.orderList(official, [...direct, ...this.gameMirrors(official)], this.settings().policy);
   }
 
   /** Candidate URLs for a Modrinth/CurseForge request or CDN file. */
