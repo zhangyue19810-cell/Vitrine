@@ -97,8 +97,13 @@ describe("manifest parsers", () => {
         { path: "mods/a.jar", hashes: { sha1: "AA".repeat(20), sha512: "bb".repeat(64) }, env: { client: "required", server: "required" }, downloads: ["https://cdn.modrinth.com/data/a/versions/1/a.jar"], fileSize: 10 },
         { path: "mods/server-only.jar", hashes: { sha1: "cc".repeat(20) }, env: { client: "unsupported", server: "required" }, downloads: ["https://cdn.modrinth.com/data/s/versions/1/s.jar"], fileSize: 10 },
         { path: "mods/opt.jar", hashes: { sha1: "dd".repeat(20) }, env: { client: "optional" }, downloads: ["https://github.com/x/y/releases/download/1/opt.jar"], fileSize: 10 },
+        { path: "mods/cf-edge.jar", hashes: { sha1: "12".repeat(20) }, downloads: ["https://edge.forgecdn.net/files/1/2/cf-edge.jar"], fileSize: 10 },
+        { path: "mods/cf-media.jar", hashes: { sha1: "13".repeat(20) }, downloads: ["https://mediafilez.forgecdn.net/files/3/4/cf-media.jar"], fileSize: 10 },
         { path: "mods/evil.jar", hashes: { sha1: "ee".repeat(20) }, downloads: ["https://evil.example/evil.jar"], fileSize: 10 },
         { path: "mods/plain-http.jar", hashes: { sha1: "ee".repeat(20) }, downloads: ["http://cdn.modrinth.com/data/p/versions/1/p.jar"], fileSize: 10 },
+        { path: "mods/no-hash.jar", downloads: ["https://cdn.modrinth.com/data/n/versions/1/n.jar"], fileSize: 10 },
+        { path: "mods/no-size.jar", hashes: { sha1: "14".repeat(20) }, downloads: ["https://cdn.modrinth.com/data/s/versions/1/s.jar"] },
+        { path: "mods/odd-port.jar", hashes: { sha1: "15".repeat(20) }, downloads: ["https://cdn.modrinth.com:444/data/o/versions/1/o.jar"], fileSize: 10 },
         { path: "../escape.jar", hashes: { sha1: "ff".repeat(20) }, downloads: ["https://cdn.modrinth.com/data/e/versions/1/e.jar"], fileSize: 10 },
         { path: "mods/A.jar", hashes: { sha1: "11".repeat(20) }, downloads: ["https://cdn.modrinth.com/data/a2/versions/1/a.jar"], fileSize: 10 },
       ],
@@ -106,13 +111,14 @@ describe("manifest parsers", () => {
     assert.equal(manifest.name, "My Pack");
     assert.equal(manifest.version, "2.0.0");
     assert.deepEqual(manifest.loader, { kind: "fabric", version: "0.15.11" });
-    assert.deepEqual(manifest.files.map((f) => f.path), ["mods/a.jar", "mods/opt.jar"]);
+    assert.deepEqual(manifest.files.map((f) => f.path), ["mods/a.jar", "mods/opt.jar", "mods/cf-edge.jar", "mods/cf-media.jar"]);
     assert.equal(manifest.files[0].hashes?.sha1, "aa".repeat(20), "hashes are lower-cased");
     assert.equal(manifest.files[1].optional, true);
     assert.deepEqual(manifest.overrides, ["overrides/", "client-overrides/"]);
     const text = manifest.warnings.join("\n");
     assert.match(text, /仅服务端文件/);
-    assert.match(text, /不在 Modrinth 允许的域名/);
+    assert.match(text, /不在受信任的域名/);
+    assert.match(text, /缺少文件大小或 SHA 校验值/);
     assert.match(text, /路径不合法/);
     assert.match(text, /重复路径/);
     assert.match(text, /mystery-dep/);

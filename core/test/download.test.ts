@@ -72,6 +72,20 @@ describe("DownloadEngine", () => {
     assert.ok(server.stats.maxActive >= 3, "parts must run concurrently");
   });
 
+  it("stops a response that is larger than the expected file", async () => {
+    const expected = bytes(4096, 17);
+    const server = await mock((_req, res) => {
+      res.writeHead(200);
+      res.write(expected);
+      res.write(bytes(2048, 18));
+      res.end();
+    });
+    const item: DownloadItem = { urls: [`${server.url}/too-big`], dest: join(dir, "too-big.bin"), size: expected.length, hash: { sha1: sha1(expected) } };
+    const result = await engine({ retries: 1, segmentMinSize: 1 << 30 }).run([item]);
+    assert.equal(result.ok, false);
+    await assert.rejects(stat(item.dest));
+  });
+
   it("falls back to a single stream when the server ignores Range", async () => {
     const data = bytes(10 * 1024 * 1024, 9);
     const server = await mock((req, res) => serveBytes(req, res, data, { ranges: false }));

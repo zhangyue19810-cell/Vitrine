@@ -3,8 +3,19 @@ import { ORIGIN_SOURCE, PackError, hashSpecFrom, type PackFile, type PackLoader,
 
 export const MRPACK_INDEX = "modrinth.index.json";
 
-/** Hosts the Modrinth pack format allows downloads from; anything else must be refused by launchers. */
-export const MRPACK_ALLOWED_HOSTS = ["cdn.modrinth.com", "github.com", "raw.githubusercontent.com", "gitlab.com"];
+/**
+ * Download hosts accepted in a `.mrpack`. Modrinth's own format only names its CDN and Git hosts,
+ * but many exported packs reference CurseForge's two CDN hostnames. They are trusted here as well;
+ * every accepted file is still checked against the pack's size and SHA hashes before installation.
+ */
+export const MRPACK_ALLOWED_HOSTS = [
+  "cdn.modrinth.com",
+  "github.com",
+  "raw.githubusercontent.com",
+  "gitlab.com",
+  "edge.forgecdn.net",
+  "mediafilez.forgecdn.net",
+];
 
 interface RawFile {
   path?: unknown;
@@ -32,14 +43,22 @@ const LOADER_KEYS: [string, PackLoader["kind"]][] = [
 ];
 
 function allowedUrl(url: unknown, hosts: Set<string>): string | undefined {
-  if (typeof url !== "string") return undefined;
+  if (typeof url !== "string" || url.length > 4096) return undefined;
   try {
     const parsed = new URL(url);
     if (parsed.protocol !== "https:") return undefined;
-    return hosts.has(parsed.hostname.toLowerCase()) ? parsed.toString() : undefined;
+    if (parsed.username || parsed.password) return undefined;
+    if (parsed.port && parsed.port !== "443") return undefined;
+    if (!hosts.has(parsed.hostname.toLowerCase())) return undefined;
+    return parsed.toString();
   } catch {
     return undefined;
   }
+}
+
+/** A pack file may only be fetched with a checksum that can actually detect changed content. */
+function strongHash(hashes: { sha1?: string; sha256?: string; sha512?: string } | undefined): boolean {
+  return Boolean(hashes?.sha512 || hashes?.sha256 || hashes?.sha1);
 }
 
 /** Parse `modrinth.index.json` into the shared manifest shape. */
@@ -67,6 +86,7 @@ export function parseMrpackIndex(raw: unknown, options: { allowHosts?: string[] 
   const seen = new Set<string>();
   let serverOnly = 0;
   let untrusted = 0;
+  let unverified = 0;
   let invalid = 0;
   let duplicates = 0;
   for (const entry of index.files ?? []) {
@@ -86,18 +106,23 @@ export function parseMrpackIndex(raw: unknown, options: { allowHosts?: string[] 
       untrusted++;
       continue;
     }
+    const hashes = hashSpecFrom(entry.hashes);
+    const size = Number.isSafeInteger(entry.fileSize) && (entry.fileSize as number) >= 0 ? (entry.fileSize as number) : undefined;
+    if (!strongHash(hashes) || size === undefined) {
+      unverified++;
+      continue;
+    }
     const key = path.toLowerCase();
     if (seen.has(key)) {
       duplicates++;
       continue;
     }
     seen.add(key);
-    const hashes = hashSpecFrom(entry.hashes);
-    const size = typeof entry.fileSize === "number" && entry.fileSize >= 0 ? entry.fileSize : undefined;
     files.push({ path, urls, size, hashes, optional: entry.env?.client === "optional", label: path.split("/").pop() });
   }
   if (serverOnly) warnings.push(`已跳过 ${serverOnly} 个仅服务端文件`);
-  if (untrusted) warnings.push(`有 ${untrusted} 个文件的下载地址不在 Modrinth 允许的域名内，已跳过`);
+  if (untrusted) warnings.push(`有 ${untrusted} 个文件的下载地址不在受信任的域名内，已跳过`);
+  if (unverified) warnings.push(`有 ${unverified} 个文件缺少文件大小或 SHA 校验值，出于安全考虑已跳过`);
   if (invalid) warnings.push(`有 ${invalid} 个文件路径不合法，已跳过`);
   if (duplicates) warnings.push(`有 ${duplicates} 个重复路径，只保留了第一个`);
 

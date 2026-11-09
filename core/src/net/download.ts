@@ -512,6 +512,17 @@ export class DownloadEngine {
     }
     const contentLength = Number(response.headers["content-length"]);
     const expectedBody = Number.isFinite(contentLength) ? contentLength : undefined;
+    const remaining = known !== undefined ? known - offset : undefined;
+    if (remaining !== undefined && remaining < 0) {
+      response.body.destroy();
+      await rm(tmp, { force: true });
+      throw new VerifyError("existing partial download is larger than the expected file");
+    }
+    if (remaining !== undefined && expectedBody !== undefined && expectedBody > remaining) {
+      response.body.destroy();
+      await rm(tmp, { force: true });
+      throw new VerifyError(`server announced ${expectedBody} bytes, but only ${remaining} are expected`);
+    }
     const total = expectedBody !== undefined ? offset + expectedBody : (known ?? 0);
     lane.total = total;
     if (known === undefined && total > 0) {
@@ -527,7 +538,7 @@ export class DownloadEngine {
     const hasher: Hash | undefined = offset === 0 && hashSpec ? createHash(hashSpec[0]) : undefined;
     const handle = await open(tmp, offset === 0 ? "w" : "r+");
     try {
-      await this.pump(response.body, handle, offset, lane, ctx, counted, hasher, expectedBody);
+      await this.pump(response.body, handle, offset, lane, ctx, counted, hasher, expectedBody, remaining);
     } finally {
       await handle.close();
     }
@@ -543,12 +554,17 @@ export class DownloadEngine {
     counted: Counted,
     hasher: Hash | undefined,
     expected: number | undefined,
+    limit?: number,
   ) {
     let position = offset;
     let received = 0;
     lane.state = "downloading";
     for await (const chunk of body) {
       const buffer = chunk as Buffer;
+      if (limit !== undefined && received + buffer.length > limit) {
+        body.destroy();
+        throw new VerifyError(`response is larger than the expected ${limit} bytes`);
+      }
       await this.limiter.take(buffer.length, ctx.signal);
       await handle.write(buffer, 0, buffer.length, position);
       hasher?.update(buffer);

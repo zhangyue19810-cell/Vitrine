@@ -28,6 +28,8 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
      档案会抽到左边，安装按钮和项目介绍都印在档案上。
   2. 进入“新建实例”，选 Minecraft 版本，需要的话再选 Fabric / Quilt / Forge / NeoForge / OptiFine。
      也可以把 .mrpack、CurseForge 的 .zip、MultiMC / Prism 的 .zip 整合包直接拖进窗口导入。
+     导入 .mrpack 时兼容 CurseForge CDN 下载地址；只接受 HTTPS 受信任域名，并要求
+     文件大小和 SHA 校验值齐全，未知域名或没有校验信息的文件会被跳过。
      下载行下方可以按游戏版本和加载器筛选，默认跟随要安装到的实例；搜索支持中文和模糊匹配。
      浏览模组时可以用下载行旁边的“MC百科”按钮或档案上的“MC百科”按钮查中文资料。
   3. 左下角账户：可以添加离线账户、外置登录（authlib-injector）或微软账户（见下文第五条）。

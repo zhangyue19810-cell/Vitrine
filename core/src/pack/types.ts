@@ -70,12 +70,14 @@ export const ORIGIN_SOURCE: Record<PackFormat, ModpackOrigin["source"]> = {
   mcbbs: "mcbbs",
 };
 
+const HASH_LENGTH = { sha1: 40, sha256: 64, sha512: 128, md5: 32 } as const;
+
 export function hashSpecFrom(value: Record<string, unknown> | undefined): HashSpec | undefined {
   if (!value) return undefined;
   const out: HashSpec = {};
   for (const key of ["sha1", "sha256", "sha512", "md5"] as const) {
     const entry = value[key];
-    if (typeof entry === "string" && /^[0-9a-f]+$/i.test(entry)) out[key] = entry.toLowerCase();
+    if (typeof entry === "string" && entry.length === HASH_LENGTH[key] && /^[0-9a-f]+$/i.test(entry)) out[key] = entry.toLowerCase();
   }
   return Object.keys(out).length ? out : undefined;
 }

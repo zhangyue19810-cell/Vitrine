@@ -1,3 +1,4 @@
+import { isIP } from "node:net";
 import http from "node:http";
 import https from "node:https";
 import zlib from "node:zlib";
@@ -59,6 +60,35 @@ export interface HttpClientOptions {
 
 const REDIRECTS = new Set([301, 302, 303, 307, 308]);
 
+/**
+ * Redirects must not turn a trusted download URL into a request to the user's machine, LAN or
+ * a cloud metadata endpoint. Initial requests may target loopback for local dev/mirrors; only
+ * redirect destinations are checked here.
+ */
+export function isUnsafeRedirectHostname(hostname: string): boolean {
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  if (!host) return true;
+  if (isIP(host) !== 0) return true;
+  return host === "localhost" || host === "metadata.google.internal" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal") || host.endsWith(".home.arpa");
+}
+
+/** Why a redirect must be refused, or undefined when the destination is an ordinary public HTTPS URL. */
+export function unsafeRedirectReason(currentUrl: string, nextUrl: string): string | undefined {
+  let current: URL;
+  let next: URL;
+  try {
+    current = new URL(currentUrl);
+    next = new URL(nextUrl);
+  } catch {
+    return "invalid URL";
+  }
+  if (next.protocol !== "https:" && next.protocol !== "http:") return "unsupported protocol";
+  if (current.protocol === "https:" && next.protocol !== "https:") return "HTTPS downgrade";
+  if (next.username || next.password) return "URL credentials";
+  if (isUnsafeRedirectHostname(next.hostname)) return "loopback/private/IP destination";
+  return undefined;
+}
+
 function parseRetryAfter(value: string | string[] | undefined): number | undefined {
   const raw = Array.isArray(value) ? value[0] : value;
   if (!raw) return undefined;
@@ -118,7 +148,14 @@ export class HttpClient {
       const location = response.headers.location;
       if (REDIRECTS.has(response.status) && location) {
         response.body.destroy();
-        const next = new URL(location, current).toString();
+        let next: string;
+        try {
+          next = new URL(location, current).toString();
+        } catch {
+          throw new NetworkError(`Invalid redirect location from ${current}`, "ERR_INVALID_REDIRECT", current);
+        }
+        const unsafe = unsafeRedirectReason(current, next);
+        if (unsafe) throw new NetworkError(`Refused unsafe redirect to ${next} (${unsafe})`, "ERR_UNSAFE_REDIRECT", next);
         if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === "POST")) {
           method = "GET";
           body = undefined;
