@@ -401,68 +401,69 @@ export class DownloadEngine {
     const cfg = ctx.cfg;
     let lastError: unknown;
     const urls = this.health.order(item.urls);
+    const canSegment = item.size !== undefined && item.size >= cfg.segmentMinSize && (item.segments ?? cfg.segments) > 1;
+    // Level 1 is multi-range. If that cannot finish, the same source gets one plain-stream
+    // Level 2 chance before Level 3 switches to the next mirror.
+    const phases: ("segmented" | "single")[] = canSegment ? ["segmented", "single"] : ["single"];
     for (let u = 0; u < urls.length; u++) {
       const url = urls[u];
       const tmp = `${item.dest}.vtmp`;
       const urlStarted = Date.now();
       if (u > 0) await rm(tmp, { force: true }); // never resume across different servers
-      let forceSingle = false;
-      for (let attempt = 1; attempt <= cfg.retries; attempt++) {
-        throwIfAborted(ctx.signal);
-        lane.state = attempt > 1 ? "retrying" : "connecting";
-        lane.attempt = attempt;
-        lane.host = hostOf(url);
-        lane.received = 0;
-        lane.parts = 1;
-        const counted: Counted = { bytes: 0, discovered: 0 };
-        const usedSingle = forceSingle;
-        const stall = new AbortController();
-        const attemptSignal = anySignal(ctx.signal, stall.signal);
-        let lastReceived = 0;
-        let lastProgressAt = Date.now();
-        // Tiny files already finish quickly; only spend a timer on large or unknown-size downloads.
-        const watchdog = item.size === undefined || item.size >= cfg.segmentMinSize
-          ? setInterval(() => {
-              if (lane.received > lastReceived) {
-                lastReceived = lane.received;
-                lastProgressAt = Date.now();
-              } else if (Date.now() - lastProgressAt >= cfg.stallTimeoutMs && !stall.signal.aborted) {
-                stall.abort();
-              }
-            }, Math.max(250, Math.min(1000, Math.floor(cfg.stallTimeoutMs / 3))))
-          : undefined;
-        watchdog?.unref?.();
-        try {
-          const hashes = await this.fetchToFile(url, tmp, item, lane, ctx, counted, attemptSignal, !forceSingle);
-          lane.state = "verifying";
-          await this.verifyFile(item.mode !== undefined ? tmp : tmp, item, hashes);
-          await this.finalize(tmp, item);
-          this.health.ok(url);
-          this.health.record(url, lane.received || counted.bytes, Date.now() - urlStarted);
-          return "done";
-        } catch (caught) {
-          const error = stall.signal.aborted && !ctx.signal.aborted
-            ? new NetworkError(`download made no progress for ${Math.round(cfg.stallTimeoutMs / 1000)}s`, "ERR_STALLED", url)
-            : caught;
-          ctx.addBytes(-counted.bytes);
-          ctx.discover(-counted.discovered);
-          if (isAbort(error) || ctx.signal.aborted) throw error;
-          lastError = error;
-          // Some proxies/CDNs accept a Range request and then never send a body. Retry this
-          // source once as a plain stream before moving on; the checksum still protects the file.
-          if (!forceSingle && item.size !== undefined && item.size >= cfg.segmentMinSize && error instanceof NetworkError && error.code === "ERR_STALLED") forceSingle = true;
-          if (!isFatalForUrl(error)) this.health.fail(url);
-          // This attempt was already the plain-stream fallback and it stalled too: move to the next source.
-          if (usedSingle && error instanceof NetworkError && error.code === "ERR_STALLED") break;
-          if (error instanceof VerifyError || error instanceof RetryableError) await rm(tmp, { force: true });
-          if (isFatalForUrl(error)) break;
-          if (attempt < cfg.retries) {
+      phaseLoop: for (const phase of phases) {
+        for (let attempt = 1; attempt <= cfg.retries; attempt++) {
+          throwIfAborted(ctx.signal);
+          lane.state = attempt > 1 ? "retrying" : "connecting";
+          lane.attempt = attempt;
+          lane.host = hostOf(url);
+          lane.received = 0;
+          lane.parts = 1;
+          const counted: Counted = { bytes: 0, discovered: 0 };
+          const stall = new AbortController();
+          const attemptSignal = anySignal(ctx.signal, stall.signal);
+          let lastReceived = 0;
+          let lastProgressAt = Date.now();
+          // Tiny files already finish quickly; only spend a timer on large or unknown-size downloads.
+          const watchdog = item.size === undefined || item.size >= cfg.segmentMinSize
+            ? setInterval(() => {
+                if (lane.received > lastReceived) {
+                  lastReceived = lane.received;
+                  lastProgressAt = Date.now();
+                } else if (Date.now() - lastProgressAt >= cfg.stallTimeoutMs && !stall.signal.aborted) {
+                  stall.abort();
+                }
+              }, Math.max(250, Math.min(1000, Math.floor(cfg.stallTimeoutMs / 3))))
+            : undefined;
+          watchdog?.unref?.();
+          try {
+            const hashes = await this.fetchToFile(url, tmp, item, lane, ctx, counted, attemptSignal, phase === "segmented");
+            lane.state = "verifying";
+            await this.verifyFile(tmp, item, hashes);
+            await this.finalize(tmp, item);
+            this.health.ok(url);
+            this.health.record(url, lane.received || counted.bytes, Date.now() - urlStarted);
+            return "done";
+          } catch (caught) {
+            const error = stall.signal.aborted && !ctx.signal.aborted
+              ? new NetworkError(`download made no progress for ${Math.round(cfg.stallTimeoutMs / 1000)}s`, "ERR_STALLED", url)
+              : caught;
+            ctx.addBytes(-counted.bytes);
+            ctx.discover(-counted.discovered);
+            if (isAbort(error) || ctx.signal.aborted) throw error;
+            lastError = error;
+            if (!isFatalForUrl(error)) this.health.fail(url);
+            if (error instanceof VerifyError || error instanceof RetryableError) await rm(tmp, { force: true });
+            // A missing URL will be missing on this host in single-stream mode too: go straight to Level 3.
+            if (isFatalForUrl(error)) break phaseLoop;
+            const rangeProblem = phase === "segmented" && (error instanceof RetryableError || error instanceof VerifyError || (error instanceof NetworkError && error.code === "ERR_STALLED"));
+            // Range rejected/stalled/corrupt or all range retries exhausted: Level 2 on this URL.
+            if (rangeProblem || attempt >= cfg.retries) break;
             const hint = error instanceof HttpError ? error.retryAfterMs : undefined;
             const backoff = Math.min(8000, cfg.backoffBaseMs * 2 ** (attempt - 1)) * (0.75 + Math.random() * 0.5);
             await sleep(Math.max(backoff, Math.min(hint ?? 0, 10_000)), ctx.signal);
+          } finally {
+            if (watchdog) clearInterval(watchdog);
           }
-        } finally {
-          if (watchdog) clearInterval(watchdog);
         }
       }
     }

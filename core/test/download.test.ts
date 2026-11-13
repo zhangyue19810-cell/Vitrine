@@ -1,11 +1,14 @@
 import { after, afterEach, beforeEach, describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DEFAULT_ENGINE, DownloadEngine, type DownloadItem, type EngineSettings, type Progress } from "../src/net/download";
 import { HttpClient } from "../src/net/http";
 import { bytes, serveBytes, sha1, startMock, type MockServer } from "./helpers/mock-server";
+
+const sha256 = (data: Buffer | string) => createHash("sha256").update(data).digest("hex");
 
 const http = new HttpClient({ userAgent: "vitrine-test" });
 after(() => http.destroy());
@@ -114,6 +117,41 @@ describe("DownloadEngine", () => {
     assert.ok(fullCalls >= 1, "a no-Range request should recover the file");
     assert.deepEqual(await readFile(item.dest), data);
     assert.ok(Date.now() - started < 5000, "a stalled range request must not hang the install");
+  });
+
+  it("drops to a single stream after all ranged retries fail", async () => {
+    const data = bytes(2 * 1024 * 1024, 23);
+    let rangeCalls = 0;
+    let fullCalls = 0;
+    const server = await mock((req, res) => {
+      if (req.headers.range) {
+        rangeCalls++;
+        res.writeHead(503, { "retry-after": "0" });
+        res.end("range unavailable");
+        return;
+      }
+      fullCalls++;
+      return serveBytes(req, res, data);
+    });
+    const item: DownloadItem = { urls: [`${server.url}/retry-then-single.bin`], dest: join(dir, "retry-then-single.bin"), size: data.length, hash: { sha256: sha256(data) }, verify: "hash" };
+    const result = await engine({ segments: 4, retries: 2, segmentMinSize: 1 << 20 }).run([item]);
+    assert.equal(result.ok, true);
+    assert.equal(rangeCalls, 2, "both ranged attempts are retried first");
+    assert.equal(fullCalls, 1, "the fallback plain stream succeeds");
+    assert.deepEqual(await readFile(item.dest), data);
+  });
+
+  it("verifies SHA-256 in a temporary file before atomically replacing the destination", async () => {
+    const good = bytes(32_000, 29);
+    const bad = Buffer.from(good);
+    bad[0] ^= 0xff;
+    const server = await mock((req, res) => serveBytes(req, res, bad));
+    const item: DownloadItem = { urls: [`${server.url}/bad.bin`], dest: join(dir, "safe.bin"), size: good.length, hash: { sha256: sha256(good) }, verify: "hash" };
+    await writeFile(item.dest, "previous-good-copy");
+    const result = await engine({ retries: 1, segmentMinSize: 1 << 30 }).run([item]);
+    assert.equal(result.ok, false);
+    assert.equal(await readFile(item.dest, "utf8"), "previous-good-copy", "a failed checksum must not replace the existing file");
+    await assert.rejects(stat(`${item.dest}.vtmp`));
   });
 
   it("falls back to a single stream when the server ignores Range", async () => {
