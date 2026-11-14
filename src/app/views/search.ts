@@ -21,9 +21,9 @@ interface Command {
   run(): void | Promise<void>;
 }
 
-const commands = (): Command[] => [
+const commands = (onBrowse?: () => void): Command[] => [
   { id: "create", label: "新建实例", hint: "N", words: "新建 创建 安装 new create install", run: async () => (await import("./create")).openCreate({}) },
-  { id: "browse", label: "浏览整合包 / 模组", hint: "", words: "浏览 整合包 模组 搜索 modrinth curseforge browse mods modpack", run: async () => (await import("./browse")).openBrowse({ kind: "modpack" }) },
+  { id: "browse", label: "浏览整合包 / 模组", hint: "", words: "浏览 整合包 模组 搜索 modrinth curseforge browse mods modpack", run: async () => (onBrowse ? onBrowse() : (await import("./browse")).openBrowse({ kind: "modpack" })) },
   { id: "import", label: "导入整合包文件", hint: "", words: "导入 整合包 mrpack zip import", run: async () => (await import("../actions")).importPack() },
   { id: "downloads", label: "下载与任务", hint: "D", words: "下载 任务 进度 downloads tasks", run: async () => (await import("./downloads")).openDownloads() },
   { id: "accounts", label: "账号管理", hint: "", words: "账号 登录 微软 离线 account login", run: async () => (await import("./accounts")).openAccounts() },
@@ -48,7 +48,7 @@ function rank(instance: InstanceSummary, tokens: string[]): number {
   return score;
 }
 
-export function openSearch(options: { favorites?: boolean; query?: string; onPick(id: string, mode: PickMode): void }) {
+export function openSearch(options: { favorites?: boolean; query?: string; onPick(id: string, mode: PickMode): void; onBrowse?(): void }) {
   const body = document.createElement("div");
   body.innerHTML = `<div class="search-input" style="margin-bottom:10px"><input class="input" data-q autocomplete="off" spellcheck="false" placeholder="${options.favorites ? "在收藏里搜索…" : "搜索实例、版本、加载器…（Enter 选中 · Ctrl+Enter 启动）"}" aria-label="搜索" role="combobox" aria-expanded="true" aria-controls="search-list" /></div><div class="search-results" id="search-list" role="listbox"></div>`;
   const dialog = openDialog({ eyebrow: options.favorites ? "FAVORITES" : "SEARCH", title: options.favorites ? "收藏的实例" : "搜索", body, size: "wide", buttons: [] });
@@ -68,7 +68,7 @@ export function openSearch(options: { favorites?: boolean; query?: string; onPic
           .sort((a, b) => b.score - a.score || (b.instance.config.lastPlayed ?? 0) - (a.instance.config.lastPlayed ?? 0))
           .map((entry) => entry.instance)
       : [...pool].sort((a, b) => Number(Boolean(b.config.favorite)) - Number(Boolean(a.config.favorite)) || (b.config.lastPlayed ?? 0) - (a.config.lastPlayed ?? 0));
-    const cmds = options.favorites ? [] : commands().filter((command) => !tokens.length || tokens.every((token) => `${command.label} ${command.words}`.toLowerCase().includes(token)));
+    const cmds = options.favorites ? [] : commands(options.onBrowse).filter((command) => !tokens.length || tokens.every((token) => `${command.label} ${command.words}`.toLowerCase().includes(token)));
     found = [...instances.slice(0, 40).map((instance) => ({ type: "instance" as const, instance })), ...(tokens.length || !instances.length ? cmds : cmds.slice(0, 3)).map((command) => ({ type: "command" as const, command }))];
     active = Math.min(active, Math.max(0, found.length - 1));
     if (!found.length) {

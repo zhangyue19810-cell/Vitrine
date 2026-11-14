@@ -525,11 +525,12 @@ export class ArchiveScene {
     private readonly selectionPulse = baselineSelectionWave,
     private readonly deferSelectionPulse = false,
     private readonly lightingLook: LightingLook = "baseline",
+    rendererOptions: { antialias?: boolean; powerPreference?: WebGLPowerPreference } = {},
   ) {
     this.renderer = new THREE.WebGLRenderer({
-      antialias: true,
+      antialias: rendererOptions.antialias ?? true,
       alpha: false,
-      powerPreference: "high-performance",
+      powerPreference: rendererOptions.powerPreference ?? "high-performance",
     });
     this.renderer.setPixelRatio(
       Math.min(devicePixelRatio, 1.5) *

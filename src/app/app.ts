@@ -386,10 +386,7 @@ export class App implements PerfApp {
     if (this.splashActive || modals.open || launchOverlay.open) return;
     if (this.mode === "detail") this.exitDetail();
     if (id === "home") return this.showHome();
-    if (!this.host.stage) {
-      // No 3D stage (no WebGL, or the GPU is with the game): the plain sheet does the same job.
-      return void (await import("./views/browse")).openBrowse({ kind: id, instanceId: this.selectedInstance()?.id });
-    }
+    // Without WebGL the download view renders its DOM rail instead; it must not silently become the old modal sheet.
     this.tab = id;
     this.renderTabs();
     if (this.view === "browse") return void (await this.download.switchKind(id));
@@ -462,7 +459,7 @@ export class App implements PerfApp {
 
   private async runRecordAction(kind: (typeof records)[number]["action"]) {
     if (kind === "create") return (await import("./views/create")).openCreate({});
-    if (kind === "browse") return this.host.stage ? this.showView("modpack") : (await import("./views/browse")).openBrowse({ kind: "modpack" });
+    if (kind === "browse") return this.showView("modpack");
     if (kind === "import") return importPack();
   }
 
@@ -635,6 +632,7 @@ export class App implements PerfApp {
           if (how === "launch") void this.launchSelected();
           else if (how === "manage") setTimeout(() => this.enterDetail(), 60);
         },
+        onBrowse: () => setTimeout(() => void this.showView("modpack"), 0),
       }),
     );
   }

@@ -1,9 +1,11 @@
+import type { StageItem } from "../archive-stage";
 import { guard, openLink } from "./actions";
 import { rpc, tryRpc } from "./api";
 import { $, debounce, html, Latest, safeUrl, setHtml } from "./dom";
 import { fontSample, type FacePayload } from "./faces";
 import { formatCount, loaderLabel } from "./format";
 import { toast } from "./modal";
+import { FlatDownloadStage } from "./flat-download";
 import { displayName, primaryLoader } from "./records";
 import type { SceneHost } from "./scene-host";
 import { KIND_LABEL, placeholderItems, projectItem } from "./stage-items";
@@ -75,6 +77,9 @@ export class DownloadView {
   private iconBusy = 0;
   private iconQueue: { generation: number; index: number }[] = [];
   private readonly searchLater = debounce(() => void this.reload("swap"), 380);
+  private readonly flat: FlatDownloadStage;
+  /** The stage needs WebGL; the DOM rail is a first-class view of the same data when it is unavailable. */
+  private flatMode = false;
 
   constructor(
     private readonly host: SceneHost,
@@ -94,7 +99,13 @@ export class DownloadView {
         <div class="dl-filters" data-f="filter-bar"></div>
       </div>
       <div class="dl-state" data-f="state" role="status"></div>
-      <div class="dl-hint"><kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 点击档案抽出 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页</div>`;
+      <div class="dl-hint" data-f="hint"><kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 点击档案抽出 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页</div>`;
+    this.flat = new FlatDownloadStage(root, {
+      select: (index) => this.onSelect(index),
+      activate: (index) => this.handleAction("install", index),
+      action: (id, index) => this.handleAction(id, index),
+      more: () => this.loadMore(),
+    });
     this.bind();
   }
 
@@ -123,9 +134,12 @@ export class DownloadView {
     this.relaxedQuery = "";
     this.resetResults();
     this.pickInstance();
+    this.flatMode = !this.host.stage;
+    this.root.dataset.flat = String(this.flatMode);
+    if (this.flatMode) this.flat.hide();
     this.renderChrome();
     this.renderState();
-    this.host.showRow(placeholderItems(kind), 0);
+    this.showRow(placeholderItems(kind), 0);
     void this.loadVersionOptions();
     await this.checkStatus();
     await this.reload("replace");
@@ -148,6 +162,8 @@ export class DownloadView {
 
   leave() {
     this.active = false;
+    this.flat.hide();
+    delete this.root.dataset.flat;
     this.token.next();
     this.generation++;
     this.iconQueue = [];
@@ -238,7 +254,7 @@ export class DownloadView {
     this.loading = true;
     this.renderChrome();
     this.renderState();
-    if (mode === "swap") this.host.swapRow(null);
+    if (mode === "swap") this.swapRow(null);
     if (this.source === "curseforge" && !this.curseforge) return this.finish(mine, [], 0, "", mode);
     try {
       const result = await rpc("content.search", {
@@ -274,11 +290,11 @@ export class DownloadView {
     this.relaxedQuery = relaxed && effectiveQuery ? effectiveQuery : "";
     this.exhausted = projects.length === 0 || projects.length >= total;
     const items = projects.map((project) => projectItem(project, this.cachedIcon(project), this.summaryOf(project)));
-    if (mode === "replace") this.host.replaceRow(items);
-    else this.host.swapRow(items);
+    if (mode === "replace") this.replaceRow(items);
+    else this.swapRow(items);
     this.renderChrome();
     this.renderState();
-    void this.host.preloadFonts(fontSample(items.map((item) => item.payload as FacePayload)));
+    this.preloadFaces(items);
     this.queueIcons(0, projects.length);
     this.translateSummaries(projects, 0);
   }
@@ -300,7 +316,7 @@ export class DownloadView {
         const row = offset + index;
         const current = this.projects[row];
         if (!current || current.source !== project.source || current.id !== project.id) return;
-        this.host.updateRow(row, projectItem(project, this.cachedIcon(project), summary));
+        this.updateRow(row, projectItem(project, this.cachedIcon(project), summary));
       });
     });
   }
@@ -336,8 +352,8 @@ export class DownloadView {
       this.projects = this.projects.concat(fresh);
       this.exhausted = result.projects.length === 0 || this.projects.length >= this.total;
       const items = fresh.map((project) => projectItem(project, this.cachedIcon(project), this.summaryOf(project)));
-      if (items.length) this.host.appendRow(items);
-      void this.host.preloadFonts(fontSample(items.map((item) => item.payload as FacePayload)));
+      if (items.length) this.appendRow(items);
+      this.preloadFaces(items);
       this.queueIcons(start, this.projects.length);
       this.translateSummaries(fresh, start);
     } catch {
@@ -376,7 +392,7 @@ export class DownloadView {
       const url = project && safeUrl(project.iconUrl);
       if (!url) continue;
       if (this.icons.has(url)) {
-        this.host.updateRow(job.index, projectItem(project, this.icons.get(url), this.summaryOf(project)));
+        this.updateRow(job.index, projectItem(project, this.icons.get(url), this.summaryOf(project)));
         continue;
       }
       this.iconBusy++;
@@ -384,7 +400,7 @@ export class DownloadView {
         this.iconBusy--;
         this.icons.set(url, image);
         if (this.icons.size > ICON_CACHE) this.icons.delete(this.icons.keys().next().value as string);
-        if (job.generation === this.generation && this.active) this.host.updateRow(job.index, projectItem(project, image, this.summaryOf(project)));
+        if (job.generation === this.generation && this.active) this.updateRow(job.index, projectItem(project, image, this.summaryOf(project)));
         this.pumpIcons();
       });
     }
@@ -422,7 +438,7 @@ export class DownloadView {
   }
 
   installSelected() {
-    const index = this.host.stage?.selectedItem ?? this.selected;
+    const index = this.flatMode ? this.flat.selectedItem : (this.host.stage?.selectedItem ?? this.selected);
     this.handleAction("install", index);
   }
 
@@ -435,7 +451,39 @@ export class DownloadView {
   }
 
   step(direction: number) {
-    this.host.stage?.step(direction);
+    if (this.flatMode) this.flat.step(direction);
+    else this.host.stage?.step(direction);
+  }
+
+  private showRow(items: StageItem[], selected = 0) {
+    if (this.flatMode) this.flat.show(items, selected);
+    else this.host.showRow(items, selected);
+  }
+
+  private replaceRow(items: StageItem[]) {
+    if (this.flatMode) this.flat.replace(items);
+    else this.host.replaceRow(items);
+  }
+
+  private swapRow(items: StageItem[] | null) {
+    if (this.flatMode) this.flat.swap(items);
+    else this.host.swapRow(items);
+  }
+
+  private appendRow(items: StageItem[]) {
+    if (this.flatMode) this.flat.append(items);
+    else this.host.appendRow(items);
+  }
+
+  private updateRow(index: number, item: StageItem) {
+    if (this.flatMode) this.flat.update(index, item);
+    else this.host.updateRow(index, item);
+  }
+
+  /** Fonts are preloaded for canvas faces; the flat rail uses normal DOM text and needs no face atlas. */
+  private preloadFaces(items: StageItem[]) {
+    if (this.flatMode) return;
+    void this.host.preloadFonts(fontSample(items.map((item) => item.payload as FacePayload)));
   }
 
   focusSearch() {
@@ -557,6 +605,12 @@ export class DownloadView {
     if (versionSelect) versionSelect.value = effectiveVersion;
     const loaderSelect = bar.querySelector<HTMLSelectElement>("[data-f='loader']");
     if (loaderSelect) loaderSelect.value = loaderValue;
+    setHtml(
+      this.f("hint"),
+      this.flatMode
+        ? html`<span class="chip" title="WebGL 不可用，已自动使用同布局的 DOM 卡片视图">兼容视图</span> <kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 双击卡片安装 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页`
+        : html`<kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 点击档案抽出 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页`,
+    );
     this.renderCount();
   }
 

@@ -54,7 +54,8 @@ export function detectRendererName(): string {
     if (!gl) return "no-webgl";
     const info = gl.getExtension("WEBGL_debug_renderer_info");
     const name = info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : String(gl.getParameter(gl.RENDERER));
-    gl.getExtension("WEBGL_lose_context")?.loseContext();
+    // Do not force-lose this probe context: on some recent NVIDIA drivers the asynchronous loss races the real
+    // renderer's context creation and makes the whole 3D stage fail. The tiny canvas is collectable on its own.
     return name;
   } catch {
     return "unknown";
@@ -114,44 +115,55 @@ export class SceneHost {
   private async create(): Promise<boolean> {
     this.status = "loading";
     this.error = undefined;
-    let next: ArchiveScene | undefined;
-    try {
-      await this.loadFonts();
-      next = new ArchiveScene(this.container);
-      next.renderer.domElement.style.opacity = "0";
-      next.setPresentationVisible(false, true);
-      next.labelPainter = paintLabel;
-      await next.load();
-      if (this.disposed) {
-        next.dispose();
-        return false;
-      }
-      next.setMotion(this.reduced ? reducedMotion() : fullMotion());
-      next.setQuality(TIER_QUALITY[this.tier]);
-      next.setSuperPerformance(this.tier === "minimal");
-      next.setMode(this.mode);
-      next.setTheme(this.dark, true);
-      next.onSelect = (index, cell) => this.callbacks.select(index, cell);
-      next.onNavigate = (axis, direction) => this.callbacks.navigate(axis, direction);
-      next.onHover = (index) => this.callbacks.hover(index);
-      next.select(this.index);
-      next.revealImmediately();
-      this.installStage(next);
-      this.scene = next;
-      this.status = "ready";
-      return true;
-    } catch (error) {
-      console.error("3D scene unavailable", error);
+    await this.loadFonts();
+    // Most machines get the full-quality context. Some newer GPU drivers reject the high-performance/MSAA request
+    // specifically; retry with a conservative default context before giving up and showing the DOM-only view.
+    const profiles: { label: string; options: { antialias?: boolean; powerPreference?: WebGLPowerPreference } }[] = [
+      { label: "high-performance", options: {} },
+      { label: "compatibility", options: { antialias: false, powerPreference: "default" } },
+    ];
+    let lastError: unknown;
+    for (const profile of profiles) {
+      let next: ArchiveScene | undefined;
       try {
-        next?.dispose();
-      } catch {
-        /* half-built scene */
+        next = new ArchiveScene(this.container, undefined, false, "baseline", profile.options);
+        next.renderer.domElement.style.opacity = "0";
+        next.setPresentationVisible(false, true);
+        next.labelPainter = paintLabel;
+        await next.load();
+        if (this.disposed) {
+          next.dispose();
+          return false;
+        }
+        next.setMotion(this.reduced ? reducedMotion() : fullMotion());
+        next.setQuality(TIER_QUALITY[this.tier]);
+        next.setSuperPerformance(this.tier === "minimal");
+        next.setMode(this.mode);
+        next.setTheme(this.dark, true);
+        next.onSelect = (index, cell) => this.callbacks.select(index, cell);
+        next.onNavigate = (axis, direction) => this.callbacks.navigate(axis, direction);
+        next.onHover = (index) => this.callbacks.hover(index);
+        next.select(this.index);
+        next.revealImmediately();
+        this.installStage(next);
+        this.scene = next;
+        this.status = "ready";
+        return true;
+      } catch (error) {
+        lastError = error;
+        console.warn(`[vitrine] 3D context ${profile.label} failed`, error);
+        try {
+          next?.dispose();
+        } catch {
+          /* half-built scene */
+        }
       }
-      this.scene = undefined;
-      this.status = "failed";
-      this.error = (error as Error)?.message ?? String(error);
-      return false;
     }
+    console.error("3D scene unavailable", lastError);
+    this.scene = undefined;
+    this.status = "failed";
+    this.error = (lastError as Error)?.message ?? String(lastError);
+    return false;
   }
 
   /** Give the GPU everything back. The shelf contents and selection are kept; `ensure()` rebuilds the scene. */
