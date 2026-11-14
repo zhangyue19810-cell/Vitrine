@@ -6,6 +6,7 @@ import { rpc, setBridge, tryRpc } from "./api";
 import { createBridge, type Bridge } from "./bridge";
 import { $, action, html, sleep } from "./dom";
 import { guard, importPack, launchInstance, repairInstance, stopGame, toggleFavorite } from "./actions";
+import { browseContent } from "./content-browse";
 import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
@@ -19,7 +20,7 @@ import { showSplash, type Splash } from "./splash";
 import { store } from "./store";
 import { renderTabs, type ViewId } from "./tabs";
 import { ThemeFader, paint, resolveDark, systemPrefersDark } from "./theme";
-import type { Settings, TaskSnapshot } from "./types";
+import type { ContentKind, Settings, TaskSnapshot } from "./types";
 import { DetailView, TABS } from "./views/detail";
 import { launchOverlay, showLaunchFor } from "./views/launch";
 
@@ -169,6 +170,12 @@ export class App implements PerfApp {
       more: () => this.download.loadMore(),
     };
     this.download = new DownloadView(this.host, $("#download"), () => this.selectedInstance()?.id);
+    window.addEventListener("vitrine:browse", (event) => {
+      const detail = (event as CustomEvent<{ kind?: ContentKind; instanceId?: string; query?: string }>).detail;
+      if (!detail?.kind) return;
+      // Commands close their dialog before dispatching; defer one tick so `modals.open` is already clear.
+      setTimeout(() => void this.openContent(detail.kind!, { instanceId: detail.instanceId, query: detail.query }), 0);
+    });
     this.stage.dataset.view = "home";
     this.renderTabs();
     this.host.setDark(this.dark, true);
@@ -393,6 +400,17 @@ export class App implements PerfApp {
     this.setView("browse");
     sound.play("open");
     await this.download.enter(id);
+  }
+
+  /** Open the main content browser for an explicit instance/query, used by the instance tabs and crash fixes. */
+  private async openContent(kind: ContentKind, preset: { instanceId?: string; query?: string } = {}) {
+    if (this.splashActive || modals.open || launchOverlay.open) return;
+    if (this.mode === "detail") this.exitDetail();
+    this.tab = kind;
+    this.renderTabs();
+    this.setView("browse");
+    sound.play("open");
+    await this.download.enter(kind, preset);
   }
 
   private showHome() {
@@ -632,7 +650,7 @@ export class App implements PerfApp {
           if (how === "launch") void this.launchSelected();
           else if (how === "manage") setTimeout(() => this.enterDetail(), 60);
         },
-        onBrowse: () => setTimeout(() => void this.showView("modpack"), 0),
+        onBrowse: () => browseContent({ kind: "modpack" }),
       }),
     );
   }

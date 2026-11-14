@@ -344,8 +344,8 @@ async function applyFix(fix: CrashFix, instance: InstanceSummary, options: { onF
         return options.onFixed?.();
       }
       toast("没有自动找到完全匹配的前置，已打开搜索", "info");
-      const { openBrowse } = await import("./browse");
-      return openBrowse({ kind: "mod", instanceId: id, query: fix.modIds[0] });
+      const { browseContent } = await import("../content-browse");
+      return browseContent({ kind: "mod", instanceId: id, query: fix.modIds[0] });
     }
     case "disable-mods":
     case "remove-duplicates": {

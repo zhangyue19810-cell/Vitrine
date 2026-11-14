@@ -290,7 +290,7 @@ export function mount(ctx: TabContext): TabHandle {
   onAll(body, "click", "[data-act]", (element) => {
     switch (element.dataset.act) {
       case "res-browse":
-        return void import("./browse").then(({ openBrowse }) => openBrowse({ kind: element.dataset.kind as "resourcepack" | "shader", instanceId: ctx.instance().id }));
+        return void import("../content-browse").then(({ browseContent }) => browseContent({ kind: element.dataset.kind as "resourcepack" | "shader", instanceId: ctx.instance().id }));
       case "res-folder":
         return void openFolder(ctx.instance().id, section);
       case "res-reload":

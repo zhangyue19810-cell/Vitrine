@@ -176,8 +176,8 @@ export function mount(ctx: TabContext): TabHandle {
         openDownloads(started.taskId);
       }
     } else if (choice === "datapack") {
-      const { openBrowse } = await import("./browse");
-      openBrowse({ kind: "datapack", instanceId });
+      const { browseContent } = await import("../content-browse");
+      browseContent({ kind: "datapack", instanceId });
     } else if (choice === "delete") {
       const size = sizes.get(world.folder);
       const ok = await confirmDialog({

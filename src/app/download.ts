@@ -124,13 +124,14 @@ export class DownloadView {
   // ───────────────────────────────────────────── entering, leaving, switching ─────────────────────────────────────────────
 
   /** Come from the home ring: the archives regroup into the row while the first results are being fetched. */
-  async enter(kind: ContentKind) {
+  async enter(kind: ContentKind, preset: { instanceId?: string; query?: string } = {}) {
     this.active = true;
     this.kind = kind;
-    this.query = "";
+    this.query = preset.query ?? "";
     this.gameVersion = "instance";
     this.loader = "instance";
-    this.searchQuery = "";
+    this.instanceId = preset.instanceId;
+    this.searchQuery = this.query;
     this.relaxedQuery = "";
     this.resetResults();
     this.pickInstance();

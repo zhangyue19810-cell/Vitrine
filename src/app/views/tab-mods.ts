@@ -459,7 +459,7 @@ export function mount(ctx: TabContext): TabHandle {
   onAll(body, "click", "[data-act]", (element) => {
     switch (element.dataset.act) {
       case "mods-install":
-        return void import("./browse").then(({ openBrowse }) => openBrowse({ kind: "mod", instanceId: ctx.instance().id }));
+        return void import("../content-browse").then(({ browseContent }) => browseContent({ kind: "mod", instanceId: ctx.instance().id }));
       case "mods-check":
         return void checkUpdates(element);
       case "mods-apply":
