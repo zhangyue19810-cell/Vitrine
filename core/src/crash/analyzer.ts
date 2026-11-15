@@ -670,8 +670,11 @@ function modHints(text: string, mods: CrashInput["installedMods"] = []): string[
   for (const mod of mods) {
     if (!mod.id) continue;
     const id = mod.id.toLowerCase();
-    if (new RegExp(`(^|[^a-z0-9])${escapeRegExp(id)}([^a-z0-9]|$)`, "i").test(lowerText)) hints.add(mod.id);
-    if (mod.name && mod.name.length >= 4 && lowerText.includes(mod.name.toLowerCase())) hints.add(mod.id);
+    // Match package/log-channel boundaries (`com.simibubi.create.content`, `[create/ERROR]`) rather than an
+    // arbitrary word. Short ids such as "core" or "api" would otherwise match unrelated log prose.
+    if (new RegExp(`(?:^|[./\\])${escapeRegExp(id)}(?:[./\\$]|$)`, "i").test(lowerText)) hints.add(mod.id);
+    // Human names are normally capitalised; keep case sensitivity so "Core" does not match "core".
+    if (mod.name && mod.name.length >= 4 && text.includes(mod.name)) hints.add(mod.id);
   }
   return [...hints].slice(0, 12);
 }
