@@ -11,7 +11,7 @@ import type { SceneHost } from "./scene-host";
 import { KIND_LABEL, placeholderItems, projectItem } from "./stage-items";
 import { store } from "./store";
 import { cachedTranslation, translateMany } from "./translate";
-import type { ContentKind, ContentProject, ContentSource, InstanceSummary } from "./types";
+import type { ContentKind, ContentProject, ContentSearchSource, InstanceSummary } from "./types";
 import { chooseVersion, install, SORTS } from "./views/browse";
 import { openMcmodSearch } from "./views/mcmod";
 
@@ -43,13 +43,13 @@ interface VersionOption {
 }
 
 /** Remembered between visits, like the old browse sheet did. */
-const memory: { source: ContentSource; sort: string } = { source: "modrinth", sort: "relevance" };
+const memory: { sort: string } = { sort: "relevance" };
 
 export class DownloadView {
   private active = false;
   private kind: ContentKind = "mod";
   private query = "";
-  private source: ContentSource = memory.source;
+  private source: ContentSearchSource = "all";
   private sort = memory.sort;
   private instanceId: string | undefined;
   /** "instance": follow the selected instance, "all": no filter, otherwise an explicit version / loader. */
@@ -62,6 +62,7 @@ export class DownloadView {
   private versionsLoaded = false;
   private curseforge = true;
   private statusKnown = false;
+  private warnings: string[] = [];
   private projects: ContentProject[] = [];
   private total = 0;
   private page = 0;
@@ -92,7 +93,7 @@ export class DownloadView {
         <div class="dl-count" data-f="count" aria-live="polite"></div>
         <div class="dl-controls">
           <label class="dl-search"><span class="glyph" aria-hidden="true">⌕</span><input class="input" data-f="query" placeholder="搜索名称、作者或关键词（支持中文和模糊匹配）" autocomplete="off" spellcheck="false" /></label>
-          <div class="seg" data-f="sources"></div>
+          <div class="row-flex" data-f="sources" aria-label="搜索来源"></div>
           <select class="select dl-sort" data-f="sort" aria-label="排序"></select>
           <button class="btn sm soft" data-mcmod-open title="在 MC百科搜索中文资料">MC百科</button>
         </div>
@@ -190,6 +191,7 @@ export class DownloadView {
     this.page = 0;
     this.exhausted = false;
     this.error = "";
+    this.warnings = [];
     this.selected = 0;
     this.loading = false;
     this.loadingMore = false;
@@ -246,7 +248,6 @@ export class DownloadView {
   /** A new result set: "replace" fills the blanks the row was entered with, "swap" pulls the old archives apart first. */
   private async reload(mode: "replace" | "swap") {
     if (!this.active) return;
-    memory.source = this.source;
     memory.sort = this.sort;
     const mine = this.token.next();
     this.generation++;
@@ -256,7 +257,7 @@ export class DownloadView {
     this.renderChrome();
     this.renderState();
     if (mode === "swap") this.swapRow(null);
-    if (this.source === "curseforge" && !this.curseforge) return this.finish(mine, [], 0, "", mode);
+    if (this.source === "curseforge" && !this.curseforge) return this.finish(mine, [], 0, "", mode, undefined, false, ["CurseForge 当前不可用。"]);
     try {
       const result = await rpc("content.search", {
         source: this.source,
@@ -267,7 +268,7 @@ export class DownloadView {
         pageSize: PAGE_SIZE,
         ...this.filters(),
       });
-      this.finish(mine, result.projects, result.total, "", mode, result.effectiveQuery, Boolean(result.relaxed));
+      this.finish(mine, result.projects, result.total, "", mode, result.effectiveQuery, Boolean(result.relaxed), result.warnings);
     } catch (error) {
       this.finish(mine, [], 0, (error as Error).message, mode);
     }
@@ -281,10 +282,12 @@ export class DownloadView {
     mode: "replace" | "swap",
     effectiveQuery?: string,
     relaxed = false,
+    warnings: string[] | undefined = undefined,
   ) {
     if (!this.token.isCurrent(mine) || !this.active) return;
     this.loading = false;
     this.projects = projects;
+    this.warnings = warnings ?? [];
     this.total = total;
     this.error = error;
     this.searchQuery = effectiveQuery ?? this.query;
@@ -349,6 +352,7 @@ export class DownloadView {
       const fresh = result.projects.filter((project) => !known.has(`${project.source}:${project.id}`));
       const start = this.projects.length;
       this.page = nextPage;
+      this.warnings = result.warnings ?? [];
       this.total = Math.max(result.total, this.projects.length + fresh.length);
       this.projects = this.projects.concat(fresh);
       this.exhausted = result.projects.length === 0 || this.projects.length >= this.total;
@@ -540,22 +544,19 @@ export class DownloadView {
       }
     });
     root.addEventListener("click", (event) => {
-      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-source], [data-retry], [data-mcmod-open]");
+      const target = (event.target as HTMLElement).closest<HTMLElement>("[data-retry], [data-mcmod-open]");
       if (!target) return;
-      if (target.dataset.mcmodOpen !== undefined) {
-        openMcmodSearch(this.query, this.kind);
-      } else if (target.dataset.source) {
-        this.source = target.dataset.source as ContentSource;
-        this.renderChrome();
-        void this.reload("swap");
-      } else void this.reload(this.projects.length ? "swap" : "replace");
+      if (target.dataset.mcmodOpen !== undefined) openMcmodSearch(this.query, this.kind);
+      else void this.reload(this.projects.length ? "swap" : "replace");
     });
   }
 
   private renderChrome() {
     setHtml(
       this.f("sources"),
-      html`<button data-source="modrinth" aria-pressed="${this.source === "modrinth"}">Modrinth</button><button data-source="curseforge" aria-pressed="${this.source === "curseforge"}">CurseForge</button>`,
+      html`<span class="chip accent" title="一次搜索同时查询 Modrinth 和 CurseForge，结果合并排序">双源融合</span>${
+        this.warnings.length ? html`<span class="chip warn" title="${this.warnings.join("\n")}">部分来源不可用</span>` : ""
+      }`,
     );
     const sort = this.f<HTMLSelectElement>("sort");
     if (!sort.options.length) sort.innerHTML = SORTS.map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
@@ -633,11 +634,11 @@ export class DownloadView {
     if (this.error) {
       return setHtml(state, html`<div class="dl-message"><b>搜索失败</b>${this.error}<br /><button class="btn sm soft" data-retry>重试</button></div>`);
     }
-    if (this.source === "curseforge" && !this.curseforge && !this.loading) {
-      return setHtml(state, html`<div class="dl-message"><b>当前构建没有内置 CurseForge 搜索密钥</b>请切换到 Modrinth 源，内置密钥只会在正式安装包里生效。</div>`);
-    }
     if (!this.loading && !this.projects.length) {
-      return setHtml(state, html`<div class="dl-message"><b>没有找到结果</b>试试更短的关键词，或者放宽版本和加载器过滤。搜索会自动尝试相关词。</div>`);
+      return setHtml(
+        state,
+        html`<div class="dl-message"><b>没有找到结果</b>试试更短的关键词，或者放宽版本和加载器过滤。搜索会自动尝试相关词。${this.warnings.length ? html`<div style="margin-top:8px;font-size:12px">${this.warnings.join(" ")}</div>` : ""}</div>`,
+      );
     }
     setHtml(state, html``);
   }

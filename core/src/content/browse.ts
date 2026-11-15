@@ -8,6 +8,8 @@ import { hashMods, removeModFile, scanMods, type LocalMod } from "./local-mods";
 import { fileHashes, type ModrinthClient, type ModrinthHit, type ModrinthProject, type ModrinthProjectType, type ModrinthVersion } from "./modrinth";
 
 export type ContentSource = "modrinth" | "curseforge";
+/** Search across both providers while keeping each project's real source for versions/downloads. */
+export type ContentSearchSource = ContentSource | "all";
 export type ContentKind = "mod" | "modpack" | "resourcepack" | "shader" | "datapack";
 
 export interface ContentProject {
@@ -74,7 +76,7 @@ export interface ContentFilter {
 }
 
 export interface ContentSearchQuery extends ContentFilter {
-  source: ContentSource;
+  source: ContentSearchSource;
   kind: ContentKind;
   query?: string;
   sort?: "relevance" | "downloads" | "updated" | "newest";
@@ -93,6 +95,8 @@ export interface ContentSearchResult {
   effectiveQuery?: string;
   /** True when `effectiveQuery` differs from the query the user typed. */
   relaxed?: boolean;
+  /** Non-fatal source failures in a fused search (for example CurseForge without a reachable mirror/key). */
+  warnings?: string[];
 }
 
 const MR_TYPE: Record<ContentKind, ModrinthProjectType> = { mod: "mod", modpack: "modpack", resourcepack: "resourcepack", shader: "shader", datapack: "datapack" };
@@ -356,7 +360,118 @@ function fromCurseForge(mod: CfMod, kind: ContentKind): ContentProject {
   };
 }
 
-async function searchContentOnce(deps: ContentDeps, query: ContentSearchQuery, page: number, pageSize: number): Promise<ContentSearchResult> {
+type OneSourceQuery = Omit<ContentSearchQuery, "source"> & { source: ContentSource };
+
+function normalizedProjectText(value: string | undefined): string {
+  return (value ?? "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, "");
+}
+
+function projectKey(project: ContentProject): string {
+  return `${normalizedProjectText(project.title)}|${normalizedProjectText(project.author ?? project.slug)}`;
+}
+
+function projectCoverage(projects: ContentProject[], query: string): number {
+  const translated = translatedSearch(query);
+  const tokens = [...new Set(
+    [...searchTokens(translated.text), ...translated.aliases.flatMap((alias) => searchTokens(alias))]
+      .filter((token) => !SEARCH_STOPWORDS.has(token) && (token.length > 1 || hasCjk(token))),
+  )];
+  if (!tokens.length) return 0;
+  let score = 0;
+  for (const project of projects.slice(0, 12)) {
+    const title = project.title.normalize("NFKC").toLowerCase();
+    const summary = project.summary.normalize("NFKC").toLowerCase();
+    const author = (project.author ?? "").normalize("NFKC").toLowerCase();
+    const categories = project.categories.join(" ").normalize("NFKC").toLowerCase();
+    for (const token of tokens) {
+      if (title.includes(token)) score += 8;
+      else if (author.includes(token)) score += 3;
+      else if (summary.includes(token)) score += 2;
+      else if (categories.includes(token)) score += 2;
+    }
+  }
+  return score;
+}
+
+function fusedRelevance(project: ContentProject, query: string | undefined, rank: number): number {
+  const text = cleanSearchText(query ?? "");
+  const tokens = text.toLowerCase().split(/\s+/).filter(Boolean);
+  const title = project.title.normalize("NFKC").toLowerCase();
+  const author = (project.author ?? "").normalize("NFKC").toLowerCase();
+  const summary = project.summary.normalize("NFKC").toLowerCase();
+  let score = Math.max(0, 60 - rank * 3) + Math.log10(Math.max(1, project.downloads) + 1) * 2;
+  if (!tokens.length) return score;
+  if (title === text.toLowerCase()) score += 100;
+  else if (title.includes(text.toLowerCase())) score += 45;
+  for (const token of tokens) {
+    if (title.includes(token)) score += 35;
+    else if (author.includes(token)) score += 8;
+    else if (summary.includes(token)) score += 5;
+  }
+  return score;
+}
+
+/** Merge the two providers' current page, preserving every fetched item and removing the same project twice. */
+function fuseProjects(modrinth: ContentProject[], curseforge: ContentProject[], query: ContentSearchQuery): ContentProject[] {
+  const candidates: { project: ContentProject; rank: number; score: number }[] = [
+    ...modrinth.map((project, rank) => ({ project, rank, score: fusedRelevance(project, query.query, rank) })),
+    ...curseforge.map((project, rank) => ({ project, rank, score: fusedRelevance(project, query.query, rank) })),
+  ];
+  const unique = new Map<string, (typeof candidates)[number]>();
+  for (const entry of candidates) {
+    const key = projectKey(entry.project);
+    const previous = unique.get(key);
+    if (!previous || entry.score > previous.score + 0.001) unique.set(key, entry);
+  }
+  const sorted = [...unique.values()].sort((left, right) => {
+    if (query.sort === "downloads") {
+      return right.project.downloads - left.project.downloads || right.score - left.score;
+    }
+    if (query.sort === "updated" || query.sort === "newest") {
+      return (Date.parse(right.project.updatedAt ?? "") || 0) - (Date.parse(left.project.updatedAt ?? "") || 0) || right.score - left.score;
+    }
+    return right.score - left.score || right.project.downloads - left.project.downloads;
+  });
+  return sorted.map((entry) => entry.project);
+}
+
+async function searchFusedOnce(deps: ContentDeps, query: ContentSearchQuery & { source: "all" }, page: number, pageSize: number): Promise<ContentSearchResult> {
+  const [modrinth, curseforge] = await Promise.allSettled([
+    searchSourceOnce(deps, { ...query, source: "modrinth" }, page, pageSize),
+    searchSourceOnce(deps, { ...query, source: "curseforge" }, page, pageSize),
+  ]);
+  if (query.signal?.aborted) {
+    const reason = [modrinth, curseforge].find((entry) => entry.status === "rejected");
+    throw reason?.status === "rejected" ? reason.reason : new AbortError("已取消");
+  }
+  const warnings: string[] = [];
+  const failures: string[] = [];
+  let mr: ContentSearchResult | undefined;
+  let cf: ContentSearchResult | undefined;
+  if (modrinth.status === "fulfilled") mr = modrinth.value;
+  else {
+    const message = modrinth.reason instanceof Error ? modrinth.reason.message : String(modrinth.reason);
+    failures.push(`Modrinth：${message.slice(0, 220)}`);
+  }
+  if (curseforge.status === "fulfilled") cf = curseforge.value;
+  else {
+    const message = curseforge.reason instanceof Error ? curseforge.reason.message : String(curseforge.reason);
+    failures.push(`CurseForge：${message.slice(0, 220)}`);
+  }
+  if (!mr && !cf) throw new Error(`Modrinth 和 CurseForge 都没有返回结果（${failures.join("；")}）`);
+  if (!mr) warnings.push(`Modrinth 暂时不可用，只显示 CurseForge 的结果。${failures[0] ? `（${failures[0]}）` : ""}`);
+  if (!cf) warnings.push(`CurseForge 暂时不可用，只显示 Modrinth 的结果。${failures[failures.length - 1] ? `（${failures[failures.length - 1]}）` : ""}`);
+  const projects = fuseProjects(mr?.projects ?? [], cf?.projects ?? [], query);
+  return {
+    projects,
+    total: (mr?.total ?? 0) + (cf?.total ?? 0),
+    page,
+    pageSize,
+    warnings: warnings.length ? warnings : undefined,
+  };
+}
+
+async function searchSourceOnce(deps: ContentDeps, query: OneSourceQuery, page: number, pageSize: number): Promise<ContentSearchResult> {
   const useLoader = LOADER_AWARE.has(query.kind);
   if (query.source === "modrinth") {
     const index = query.sort === "downloads" ? "downloads" : query.sort === "updated" ? "updated" : query.sort === "newest" ? "newest" : undefined;
@@ -391,30 +506,43 @@ export async function searchContent(deps: ContentDeps, query: ContentSearchQuery
   const pageSize = Math.max(1, Math.min(query.pageSize ?? 20, 50));
   const page = Math.max(0, query.page ?? 0);
   const rawQuery = query.query?.trim();
-  const first = await searchContentOnce(deps, { ...query, query: rawQuery || undefined }, page, pageSize);
+  const fetchOnce = (q: ContentSearchQuery, targetPage: number, targetSize: number) =>
+    q.source === "all"
+      ? searchFusedOnce(deps, { ...q, source: "all" }, targetPage, targetSize)
+      : searchSourceOnce(deps, { ...q, source: q.source }, targetPage, targetSize);
+  const first = await fetchOnce({ ...query, query: rawQuery || undefined }, page, pageSize);
 
   // Exact full-text search is useful, but players often type a category in Chinese, a short phrase,
   // or one misspelled word. If the first page is thin, try related keywords and use the broader result
   // for the whole result set. Paging then stays consistent because the UI reuses effectiveQuery.
-  if (!rawQuery || page !== 0 || first.total >= RELAX_SEARCH_BELOW || first.projects.length >= RELAX_SEARCH_BELOW) return first;
+  const coverage = rawQuery ? projectCoverage(first.projects, rawQuery) : 1;
+  const thin = first.total < RELAX_SEARCH_BELOW || first.projects.length < Math.min(RELAX_SEARCH_BELOW, pageSize);
+  if (!rawQuery || page !== 0 || (!thin && coverage > 0)) return first;
   const alternatives = relaxedSearchQueries(rawQuery);
   if (!alternatives.length) return first;
 
   let best = first;
+  let bestCoverage = coverage;
   let effectiveQuery: string | undefined;
   for (const alternative of alternatives) {
     let candidate: ContentSearchResult;
     try {
-      candidate = await searchContentOnce(deps, { ...query, query: alternative, page: 0 }, 0, pageSize);
+      candidate = await fetchOnce({ ...query, query: alternative, page: 0 }, 0, pageSize);
     } catch {
       // A failed optional lookup must not hide the primary search that already succeeded.
       continue;
     }
-    if (candidate.total > best.total || (candidate.total === best.total && candidate.projects.length > best.projects.length)) {
+    const candidateCoverage = projectCoverage(candidate.projects, alternative);
+    const better =
+      candidateCoverage > bestCoverage ||
+      (candidateCoverage === bestCoverage && candidate.projects.length > best.projects.length) ||
+      (candidateCoverage === bestCoverage && candidate.total > best.total && candidate.projects.length > 0);
+    if (better) {
       best = candidate;
+      bestCoverage = candidateCoverage;
       effectiveQuery = alternative;
     }
-    if (best.total >= RELAX_SEARCH_BELOW) break;
+    if (bestCoverage > 0 && best.total >= RELAX_SEARCH_BELOW) break;
   }
   return effectiveQuery ? { ...best, effectiveQuery, relaxed: true } : first;
 }

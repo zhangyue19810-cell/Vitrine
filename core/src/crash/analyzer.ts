@@ -46,7 +46,14 @@ export interface CrashInput {
   mcVersion?: string;
   loader?: string;
   maxMemoryMb?: number;
-  installedMods?: { id?: string; name?: string; fileName: string; loaders?: string[] }[];
+  installedMods?: { id?: string; name?: string; fileName: string; loaders?: string[]; disabled?: boolean }[];
+}
+
+export interface CrashFirstError {
+  /** The earliest error line that points at a mod: the input is kept raw so the player can search for it. */
+  line: string;
+  /** Mod ids/names recovered from that line and the following stack-trace lines. */
+  mods: string[];
 }
 
 export interface CrashAnalysis {
@@ -56,6 +63,8 @@ export interface CrashAnalysis {
   description?: string;
   /** The root exception line (deepest "Caused by"). */
   rootException?: string;
+  /** The first meaningful error location and the mod names/keywords found around it. */
+  firstError?: CrashFirstError;
   suspectedMods: string[];
   findings: CrashFinding[];
 }
@@ -613,6 +622,80 @@ function parseSuspected(text: string): string[] {
   return uniq(ids.length ? ids : line.split(",").map((part) => part.trim()).filter(Boolean));
 }
 
+const NON_MOD_LOG_NAMES = new Set([
+  "main", "render thread", "server thread", "worker-main", "worker-io", "netty server io", "netty client io",
+  "fabric loader", "mod launcher", "fml", "launchwrapper", "minecraft", "java", "forge", "neoforge",
+  "fabricloader", "fabric-loader", "quilt_loader", "quilt-loader", "javafml", "lowcodefml", "mod_loading",
+]);
+
+const escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** Pull mod ids/names out of an error line and the stack/context lines directly below it. */
+function modHints(text: string, mods: CrashInput["installedMods"] = []): string[] {
+  const hints = new Set<string>();
+  const add = (raw?: string) => {
+    if (!raw) return;
+    const value = raw.trim().replace(/^['"](.+)['"]$/, "$1").replace(/[,;:]+$/, "").trim();
+    if (!value || value.length > 120) return;
+    const lower = value.toLowerCase();
+    const direct = mods.find((mod) => mod.id?.toLowerCase() === lower || mod.name?.toLowerCase() === lower || mod.fileName.toLowerCase() === lower);
+    if (direct?.id) {
+      hints.add(direct.id);
+      return;
+    }
+    if (NON_MOD_LOG_NAMES.has(lower)) return;
+    if (/^[a-z][a-z0-9_.-]{1,80}$/i.test(value)) hints.add(value);
+  };
+
+  for (const match of text.matchAll(/\bMixin apply for mod ([A-Za-z0-9_.-]+) failed/gi)) add(match[1]);
+  for (const match of text.matchAll(/\bfrom mod ([A-Za-z0-9_.-]+)/gi)) add(match[1]);
+  for (const match of text.matchAll(/\bMod ID:\s*'([^']+)'/gi)) add(match[1]);
+  for (const match of text.matchAll(/\bRequested by:\s*'([^']+)'/gi)) add(match[1]);
+  for (const match of text.matchAll(/\bMod\s+'[^']*'\s*\(([^)]+)\)/gi)) add(match[1]);
+  for (const match of text.matchAll(/^\s*\[([A-Za-z0-9_.-]+)\/(?:ERROR|FATAL|SEVERE)\]/gim)) add(match[1]);
+  for (const match of text.matchAll(/\bat\s+(?:[a-z0-9_$]+\.)+([a-z0-9_$]+)\.[A-Z$]/gi)) {
+    const candidate = match[1].toLowerCase();
+    const known = mods.find((mod) => mod.id?.toLowerCase() === candidate || mod.name?.toLowerCase() === candidate);
+    if (known?.id) hints.add(known.id);
+  }
+  const suspected = /Suspected Mods?:\s*([^\r\n]+)/i.exec(text)?.[1];
+  if (suspected && !/^none\b/i.test(suspected.trim())) {
+    for (const part of suspected.split(",")) {
+      add(part.trim());
+      const paren = /\(([^)]+)\)/.exec(part);
+      if (paren) add(paren[1]);
+    }
+  }
+  const lowerText = text.toLowerCase();
+  for (const mod of mods) {
+    if (!mod.id) continue;
+    const id = mod.id.toLowerCase();
+    if (new RegExp(`(^|[^a-z0-9])${escapeRegExp(id)}([^a-z0-9]|$)`, "i").test(lowerText)) hints.add(mod.id);
+    if (mod.name && mod.name.length >= 4 && lowerText.includes(mod.name.toLowerCase())) hints.add(mod.id);
+  }
+  return [...hints].slice(0, 12);
+}
+
+/** Scan log → crash report → hs_err for the first error that can be tied to a mod. */
+function firstErrorWithMods(input: CrashInput): CrashFirstError | undefined {
+  const mods = input.installedMods ?? [];
+  const sources = [input.log ?? "", input.crashReport ?? "", input.hsErr ?? ""];
+  const errorLine = /\b(?:ERROR|FATAL|SEVERE)\b|Exception|Caused by:|\bMixin\b|Suspected Mods?|not installed|which is missing|incompatible/i;
+  let fallback: CrashFirstError | undefined;
+  for (const source of sources) {
+    const lines = source.split(/\r?\n/);
+    for (let index = 0; index < lines.length; index++) {
+      const line = lines[index].trim();
+      if (!line || !errorLine.test(line)) continue;
+      const context = lines.slice(index, index + 20).join("\n");
+      const hints = modHints(context, mods);
+      if (hints.length) return { line: clip(line, 600), mods: hints };
+      if (!fallback) fallback = { line: clip(line, 600), mods: [] };
+    }
+  }
+  return fallback;
+}
+
 export function analyzeCrash(input: CrashInput): CrashAnalysis {
   const crash = (input.crashReport ?? "").slice(0, MAX_TEXT);
   const log = (input.log ?? "").slice(-MAX_TEXT);
@@ -640,6 +723,7 @@ export function analyzeCrash(input: CrashInput): CrashAnalysis {
     const currentGroup = loaderGroup(currentLoader);
     const mismatched = new Map<"fabric" | "quilt" | "forge" | "neoforge" | "liteloader", { names: string[]; ids: string[] }>();
     for (const mod of mods) {
+      if (mod.disabled) continue;
       const loaders = [...new Set(mod.loaders ?? [])].map(normalizeLoader);
       if (!loaders.length || loaders.some((loader) => loaderGroup(loader) === currentGroup)) continue;
       const suggested = (loaders.find((loader) => loader === "fabric") ?? loaders.find((loader) => loader === "quilt") ?? loaders.find((loader) => loader === "neoforge") ?? loaders.find((loader) => loader === "forge") ?? loaders[0]) as "fabric" | "quilt" | "forge" | "neoforge" | "liteloader";
@@ -659,6 +743,29 @@ export function analyzeCrash(input: CrashInput): CrashAnalysis {
         advice: [`新建一个使用 ${loader} 的实例，再把对应模组移过去。`, "不要同时把 Fabric、Forge 和 NeoForge 的模组放进同一个 mods 文件夹。"],
         mods: entry.ids.length ? entry.ids : undefined,
         fix: { kind: "switch-loader", loader },
+      });
+    }
+  }
+
+  const suspectedFromReport = parseSuspected(crash);
+  const locatedFirstError = firstErrorWithMods(input);
+  const firstError = locatedFirstError?.mods.length
+    ? locatedFirstError
+    : suspectedFromReport.length
+      ? { line: firstLine(crash, /Suspected Mods?:/i) ?? "Suspected Mods", mods: suspectedFromReport }
+      : locatedFirstError;
+  if (firstError && locatedFirstError?.mods.length) {
+    const alreadyCovered = findings.some((finding) => finding.fix?.kind === "disable-mods" && finding.mods?.some((id) => firstError.mods.includes(id)));
+    if (!alreadyCovered) {
+      findings.push({
+        id: "first-error-mod",
+        severity: "warn",
+        title: `最先报错涉及：${firstError.mods.slice(0, 6).join("、")}${firstError.mods.length > 6 ? " 等" : ""}`,
+        detail: "这是日志里最早能定位到具体模组的错误；后面的崩溃可能只是它引起的连锁反应。",
+        advice: ["先把这些模组更新到与游戏版本、加载器一致的版本。", "仍然崩溃时，从最先报错的模组开始逐个禁用排查。"],
+        mods: firstError.mods,
+        evidence: firstError.line,
+        fix: { kind: "disable-mods", modIds: firstError.mods },
       });
     }
   }
@@ -688,7 +795,7 @@ export function analyzeCrash(input: CrashInput): CrashAnalysis {
     }
   }
 
-  const suspected = uniq([...parseSuspected(crash), ...findings.flatMap((finding) => finding.mods ?? [])]).slice(0, 12);
+  const suspected = uniq([...suspectedFromReport, ...(firstError?.mods ?? []), ...findings.flatMap((finding) => finding.mods ?? [])]).slice(0, 12);
   const description = /^Description:\s*(.+)$/m.exec(crash)?.[1]?.trim();
   const root = rootException(crash) ?? rootException(log.slice(-60_000)) ?? rootException(hs);
   const order = { error: 0, warn: 1, info: 2 } as const;
@@ -721,6 +828,7 @@ export function analyzeCrash(input: CrashInput): CrashAnalysis {
     summary: best.id === "unknown" ? (root ?? "没有可以识别的崩溃原因") : best.title,
     description,
     rootException: root,
+    firstError,
     suspectedMods: suspected,
     findings,
   };

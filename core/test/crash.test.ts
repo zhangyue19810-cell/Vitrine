@@ -206,11 +206,40 @@ describe("crash analysis rules", () => {
     assert.match(b.detail, /100, 64, 200/);
   });
 
+  it("extracts the first error line and the mod keyword around it", () => {
+    const log = [
+      "[12:00:00] [main/INFO]: Loading 120 mods",
+      "[12:00:01] [main/ERROR]: Mixin apply for mod create failed create.mixins.json:AbstractContraptionEntityMixin from mod create",
+      "java.lang.RuntimeException: critical injection failure",
+      "[12:00:02] [Render thread/ERROR]: java.lang.NullPointerException: later chain reaction",
+    ].join("\n");
+    const analysis = analyzeCrash({ log, installedMods: [{ id: "create", name: "Create", fileName: "create.jar", loaders: ["fabric"] }] });
+    assert.ok(analysis.firstError);
+    assert.match(analysis.firstError.line, /Mixin apply for mod create/);
+    assert.deepEqual(analysis.firstError.mods, ["create"]);
+    assert.ok(analysis.suspectedMods.includes("create"));
+    assert.ok(find(analysis, "mixin-failure"), "the focused Mixin card remains the actionable fix");
+  });
+
+  it("ignores disabled mods when checking for a wrong loader", () => {
+    const analysis = analyzeCrash({
+      log: "Minecraft crashed while starting",
+      loader: "fabric",
+      installedMods: [
+        { id: "create", name: "Create", fileName: "create-forge.jar.disabled", loaders: ["forge"], disabled: true },
+        { id: "sodium", name: "Sodium", fileName: "sodium-fabric.jar", loaders: ["fabric"] },
+      ],
+    });
+    assert.equal(find(analysis, "wrong-installed-loader"), undefined);
+  });
+
   it("falls back to suspected mods, exit codes and an honest 'unknown'", () => {
     const report = "Description: Rendering entity in world\njava.lang.RuntimeException: bad\nSuspected Mods: Create (create), Flywheel (flywheel)\n";
     const a = analyzeCrash({ crashReport: report });
-    assert.equal(a.findings[0].id, "suspected-mods");
+    assert.equal(a.findings[0].id, "first-error-mod");
+    assert.deepEqual(a.firstError?.mods, ["create", "flywheel"]);
     assert.deepEqual(a.suspectedMods, ["create", "flywheel"]);
+    assert.equal(a.findings.some((finding) => finding.id === "first-error-mod"), true);
     assert.equal(a.rootException, "java.lang.RuntimeException: bad");
 
     const none = analyzeCrash({ crashReport: "Description: x\nSuspected Mods: NONE\njava.lang.IllegalStateException: odd" });

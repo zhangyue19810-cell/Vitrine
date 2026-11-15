@@ -244,6 +244,7 @@ export function renderCrash(host: HTMLElement, analysis: CrashAnalysis, instance
     host,
     html`<div class="stack" style="gap:14px">
       <div class="crash-summary"><b>${analysis.summary}</b>${analysis.description ? html`<div class="muted" style="margin-top:6px;font-size:12.5px">当时游戏正在：${analysis.description}</div>` : ""}${analysis.rootException ? html`<div class="mono" style="margin-top:8px;font-size:11.5px;overflow-wrap:anywhere;opacity:.8">${analysis.rootException}</div>` : ""}</div>
+      ${analysis.firstError ? html`<div class="notice warn"><div style="min-width:0"><b>${analysis.firstError.mods.length ? `最先报错的模组：${analysis.firstError.mods.join("、")}` : "最先报错的位置"}</b><div class="mono" style="margin-top:5px;font-size:11px;line-height:1.6;overflow-wrap:anywhere">${analysis.firstError.line}</div></div></div>` : ""}
       ${analysis.suspectedMods.length ? html`<div class="notice warn"><div><b>可疑的模组</b><div style="margin-top:4px">${analysis.suspectedMods.join("、")}</div></div></div>` : ""}
       ${findings.length ? html`<div class="stack" style="gap:10px">${findings.map((finding, index) => findingCard(finding, index))}</div>` : html`<div class="empty"><b>没有匹配到已知的原因</b><div>把日志或下面的诊断信息发给整合包作者或模组作者通常能最快定位。</div></div>`}
       <div class="toolbar"><button class="btn sm soft" data-crash="copy">复制诊断信息</button><button class="btn sm soft" data-crash="folder">打开崩溃报告文件夹</button></div>
@@ -288,6 +289,8 @@ function diagnostics(analysis: CrashAnalysis, instance: InstanceSummary): string
     `结论：${analysis.summary}`,
     analysis.description ? `游戏当时在：${analysis.description}` : "",
     analysis.rootException ? `根异常：${analysis.rootException}` : "",
+    analysis.firstError ? `最先报错：${analysis.firstError.line}` : "",
+    analysis.firstError?.mods.length ? `最先报错的模组：${analysis.firstError.mods.join(", ")}` : "",
     analysis.suspectedMods.length ? `可疑模组：${analysis.suspectedMods.join(", ")}` : "",
     "",
     ...analysis.findings.flatMap((finding) => [`- [${finding.severity}] ${finding.title}`, `  ${finding.detail}`, ...(finding.evidence ? [`  证据：${finding.evidence}`] : [])]),

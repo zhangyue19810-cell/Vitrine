@@ -267,6 +267,25 @@ describe("checking a mod set", () => {
     assert.deepEqual(problems.find((problem) => problem.kind === "duplicate")!.files.sort(), ["dup-1.jar", "dup-2.jar"]);
   });
 
+  it("only reports a declared conflict when the installed version is inside its breaks range", async () => {
+    const outside = join(tmp, "breaks-outside");
+    await jar("good.jar", { "fabric.mod.json": JSON.stringify({ id: "good", name: "Good", version: "2.0.0" }) }, join(outside, "mods"));
+    await jar("picky.jar", { "fabric.mod.json": JSON.stringify({ id: "picky", name: "Picky", version: "1.0.0", breaks: { good: "<2.0.0" } }) }, join(outside, "mods"));
+    assert.equal(analyzeMods(await scanMods(outside)).some((problem) => problem.kind === "incompatible"), false);
+
+    const inside = join(tmp, "breaks-inside");
+    await jar("good.jar", { "fabric.mod.json": JSON.stringify({ id: "good", name: "Good", version: "1.5.0" }) }, join(inside, "mods"));
+    await jar("picky.jar", { "fabric.mod.json": JSON.stringify({ id: "picky", name: "Picky", version: "1.0.0", breaks: { good: ">=1.0.0 <2.0.0" } }) }, join(inside, "mods"));
+    const conflict = analyzeMods(await scanMods(inside)).find((problem) => problem.kind === "incompatible");
+    assert.ok(conflict);
+    assert.match(conflict.message, /冲突范围 >=1\.0\.0 <2\.0\.0/);
+
+    const unknown = join(tmp, "breaks-unknown");
+    await jar("good.jar", { "fabric.mod.json": JSON.stringify({ id: "good", name: "Good" }) }, join(unknown, "mods"));
+    await jar("picky.jar", { "fabric.mod.json": JSON.stringify({ id: "picky", name: "Picky", version: "1.0.0", breaks: { good: ">=1.0.0" } }) }, join(unknown, "mods"));
+    assert.equal(analyzeMods(await scanMods(unknown)).some((problem) => problem.kind === "incompatible"), false, "unknown installed version is not proof of a conflict");
+  });
+
   it("reports a disabled dependency with an enable action and surfaces unreadable jars", async () => {
     const game = join(tmp, "disabled-checks");
     const modsDir = join(game, "mods");

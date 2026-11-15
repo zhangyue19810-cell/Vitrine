@@ -137,6 +137,33 @@ describe("searching", () => {
     assert.equal(queries[1].get("modLoaderType"), null, "resource packs are not loader-specific");
   });
 
+  it("merges Modrinth and CurseForge into one result page", async () => {
+    content = await startContent();
+    content.routes.set("GET /modrinth/v2/search", (_req, res) => {
+      json(res, { hits: [{ project_id: "AANobbMI", slug: "sodium", title: "Sodium", description: "Renderer", author: "jellysquid3", downloads: 99, categories: ["optimization"], versions: ["1.20.1"], project_type: "mod", date_modified: "2024-02-02T00:00:00Z" }], offset: 0, limit: 20, total_hits: 41 });
+    });
+    content.routes.set("GET /curseforge/v1/mods/search", (_req, res) => {
+      json(res, { data: [{ id: 238222, name: "Jei", slug: "jei", summary: "Items", downloadCount: 7, categories: [{ id: 1, name: "Utility" }], classId: 6, links: { websiteUrl: "https://www.curseforge.com/minecraft/mc-mods/jei" }, dateModified: "2024-01-01T00:00:00Z" }], pagination: { index: 0, pageSize: 20, totalCount: 55 } });
+    });
+    const result = await searchContent(deps(content, "key"), { source: "all", kind: "mod", query: "sodium", gameVersion: "1.20.1", loader: "fabric", pageSize: 20 });
+    assert.equal(result.total, 96);
+    assert.deepEqual(result.projects.map((project) => project.source).sort(), ["curseforge", "modrinth"]);
+    assert.equal(result.projects[0]?.title, "Sodium", "a direct title match wins the fused ordering");
+    assert.equal(result.warnings, undefined);
+  });
+
+  it("keeps the healthy source when one side of a fused search is unavailable", async () => {
+    content = await startContent();
+    content.routes.set("GET /modrinth/v2/search", (_req, res) => {
+      json(res, { hits: [{ project_id: "AANobbMI", slug: "sodium", title: "Sodium", description: "Renderer", author: "jellysquid3", downloads: 99, categories: ["optimization"], versions: ["1.20.1"], project_type: "mod", date_modified: "2024-02-02T00:00:00Z" }], offset: 0, limit: 20, total_hits: 1 });
+    });
+    content.routes.set("GET /curseforge/v1/mods/search", (_req, res) => json(res, { error: "temporarily unavailable" }, 503));
+    const result = await searchContent(deps(content, "key"), { source: "all", kind: "mod", query: "sodium", gameVersion: "1.20.1", loader: "fabric", pageSize: 20 });
+    assert.equal(result.projects.length, 1);
+    assert.equal(result.projects[0]?.source, "modrinth");
+    assert.match(result.warnings?.join("\n") ?? "", /CurseForge 暂时不可用/);
+  });
+
   it("reads project details", async () => {
     content = await startContent();
     content.routes.set("GET /modrinth/v2/project/sodium", (_req, res) => json(res, mrProject("AANobbMI", "Sodium", { slug: "sodium", body: "# Long description" })));

@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import { statSync } from "node:fs";
 import { analyzeMods, readModIcon, removeModFile, scanMods, setModEnabled, type ModLoaderType } from "./content/local-mods";
-import { getProject, listContentVersions, searchContent, type ContentFilter, type ContentKind, type ContentSource, type ModUpdate } from "./content/browse";
+import { getProject, listContentVersions, searchContent, type ContentFilter, type ContentKind, type ContentSearchSource, type ContentSource, type ModUpdate } from "./content/browse";
 import type { McmodFilter } from "./content/mcmod";
 import { listResourcePacks, listScreenshots, listShaderPacks, readScreenshot, removePackFile, renamePackFile, type PackFolder } from "./content/packs-local";
 import type { Core } from "./core";
@@ -92,6 +92,7 @@ function oneOf<T extends string>(params: Record<string, unknown>, key: string, a
 }
 
 const SOURCES = ["modrinth", "curseforge"] as const;
+const SEARCH_SOURCES = [...SOURCES, "all"] as const;
 const KINDS = ["mod", "modpack", "resourcepack", "shader", "datapack"] as const;
 const PACK_FOLDERS = ["resourcepacks", "shaderpacks", "screenshots"] as const;
 
@@ -229,7 +230,7 @@ export function buildRpc(core: Core): RpcTable {
   });
   def("content.search", (params, { signal }) =>
     searchContent(core.contentDeps(), {
-      source: oneOf(params, "source", SOURCES) as ContentSource,
+      source: oneOf(params, "source", SEARCH_SOURCES) as ContentSearchSource,
       kind: oneOf(params, "kind", KINDS) as ContentKind,
       query: optStr(params, "query", 200),
       sort: params.sort === undefined ? undefined : oneOf(params, "sort", ["relevance", "downloads", "updated", "newest"] as const),

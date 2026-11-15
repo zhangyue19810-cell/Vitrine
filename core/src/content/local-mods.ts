@@ -3,6 +3,7 @@ import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { mapLimit, throwIfAborted } from "../util/async";
 import { ensureDir, exists, hashFile, readJsonOr, writeJsonAtomic } from "../util/fsx";
+import { versionSatisfies } from "../util/version-range";
 import { ZipReader } from "../util/zip";
 
 export type ModLoaderType = "fabric" | "quilt" | "forge" | "neoforge" | "legacy-forge" | "liteloader";
@@ -594,8 +595,25 @@ export function analyzeMods(mods: LocalMod[], context: ModAnalysisContext = {}):
           });
         }
       } else if (dep.kind === "incompatible" && enabledProviders.has(dep.id)) {
-        const other = enabledProviders.get(dep.id)!.filter((candidate) => candidate !== mod);
-        if (other.length) problems.push({ kind: "incompatible", id: dep.id, files: [mod.file, ...other.map((candidate) => candidate.file)], message: `“${meta.name ?? mod.file}”声明与 ${other[0].meta!.name ?? dep.id} 不兼容。` });
+        const other = enabledProviders.get(dep.id)!.filter((candidate) => {
+          if (candidate === mod) return false;
+          const range = dep.version?.trim();
+          if (!range || range === "*") return true;
+          const installed = candidate.meta?.version?.trim();
+          // A `breaks` entry is conditional: `<2.0` only conflicts with a 1.x install. If the installed version is
+          // missing or non-standard we cannot prove a conflict, so stay silent instead of scaring the player.
+          if (!installed || installed === "unknown" || installed.includes("${")) return false;
+          return versionSatisfies(installed, range) === true;
+        });
+        if (other.length) {
+          const versions = other.map((candidate) => candidate.meta?.version).filter((value): value is string => Boolean(value));
+          problems.push({
+            kind: "incompatible",
+            id: dep.id,
+            files: [mod.file, ...other.map((candidate) => candidate.file)],
+            message: `“${meta.name ?? mod.file}”声明与 ${other[0].meta!.name ?? dep.id}${versions.length ? ` ${versions[0]}` : ""} 不兼容${dep.version && dep.version !== "*" ? `（冲突范围 ${dep.version}）` : ""}。`,
+          });
+        }
       }
     }
   }
