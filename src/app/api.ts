@@ -15,6 +15,7 @@ import type {
   InstanceConfig,
   InstanceSummary,
   JavaInstall,
+  JvmAdvice,
   JvmPresetInfo,
   LatestPack,
   LoaderVersion,
@@ -98,7 +99,7 @@ export interface RpcMap {
   "instances.openFolder": [{ id: string; sub?: string }, { path: string }];
   "instances.launch": [{ id: string; server?: string; world?: string; demo?: boolean; accountId?: string }, { taskId: string }];
   "instances.exportScript": [{ id: string; dest: string; includeToken?: boolean }, { path: string; tokenIncluded: boolean; warnings: string[] }];
-  "instances.memoryAdvice": [{ id: string }, MemoryAdvice & { totalMB: number; freeMB: number; modCount: number }];
+  "instances.memoryAdvice": [{ id: string }, MemoryAdvice & { totalMB: number; freeMB: number; modCount: number; jvm: JvmAdvice & { selected: string } }];
   "instances.analyzeCrash": [{ id: string }, CrashAnalysis];
   "instances.packState": [{ id: string }, PackState | null];
   "games.list": [void, GameSnapshot[]];

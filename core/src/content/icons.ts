@@ -37,7 +37,11 @@ export function sniffImage(data: Uint8Array): string | undefined {
   return undefined;
 }
 
-export type IconFetcher = (url: string, signal?: AbortSignal) => Promise<string | null>;
+export interface IconFetcher {
+  (url: string, signal?: AbortSignal): Promise<string | null>;
+  /** Drop decoded icons before a game starts so the launcher gives the heap back. */
+  clear(): void;
+}
 
 /** A fetcher with a small in-memory cache; concurrent requests for one URL share a single download. */
 export function createIconFetcher(http: Pick<HttpClient, "request">): IconFetcher {
@@ -60,7 +64,7 @@ export function createIconFetcher(http: Pick<HttpClient, "request">): IconFetche
       response.body.destroy();
     }
   };
-  return (url, signal) => {
+  const fetcher = ((url: string, signal?: AbortSignal) => {
     if (!iconUrlAllowed(url)) return Promise.resolve(null);
     const known = cache.get(url);
     if (known) return known;
@@ -72,5 +76,7 @@ export function createIconFetcher(http: Pick<HttpClient, "request">): IconFetche
     });
     if (cache.size > CACHE_LIMIT) cache.delete(cache.keys().next().value as string);
     return job;
-  };
+  }) as IconFetcher;
+  fetcher.clear = () => cache.clear();
+  return fetcher;
 }

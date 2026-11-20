@@ -17,6 +17,8 @@ export interface Settings {
     memory: "auto" | number;
     jvmPreset: JvmPreset;
     jvmArgs: string;
+    /** Release launcher caches and ask the JVM to return unused heap before/while the game runs. */
+    optimize: boolean;
     gameArgs: string;
     width: number;
     height: number;
@@ -62,7 +64,7 @@ export const DEFAULT_SETTINGS: Settings = {
   download: { concurrency: 64, segments: 8, speedLimitKBps: 0, retries: 3 },
   network: { proxy: "system", proxyUrl: "" },
   java: { autoInstall: true, extraPaths: [] },
-  launch: { memory: "auto", jvmPreset: "default", jvmArgs: "", gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
+  launch: { memory: "auto", jvmPreset: "auto", jvmArgs: "", optimize: true, gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
   accounts: { msClientId: DEFAULT_MS_CLIENT_ID, curseforgeKey: "", ownerUuid: DEFAULT_OWNER_UUID },
   ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "auto", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1 },
 };
@@ -159,8 +161,9 @@ export function applySettings(current: Settings, patch: unknown): Settings {
   const launch = section("launch");
   if (launch) {
     if (launch.memory !== undefined) next.launch.memory = launch.memory === "auto" ? "auto" : int("内存", launch.memory, 512, 262_144);
-    if (launch.jvmPreset !== undefined) next.launch.jvmPreset = oneOf("JVM 预设", launch.jvmPreset, ["default", "mojang", "large-modpack", "zgc"] as const);
+    if (launch.jvmPreset !== undefined) next.launch.jvmPreset = oneOf("JVM 预设", launch.jvmPreset, ["auto", "default", "mojang", "large-modpack", "zgc"] as const);
     if (launch.jvmArgs !== undefined) next.launch.jvmArgs = text("JVM 参数", launch.jvmArgs);
+    if (launch.optimize !== undefined) next.launch.optimize = bool("启动优化", launch.optimize);
     if (launch.gameArgs !== undefined) next.launch.gameArgs = text("游戏参数", launch.gameArgs);
     if (launch.width !== undefined) next.launch.width = int("窗口宽度", launch.width, 0, 16384);
     if (launch.height !== undefined) next.launch.height = int("窗口高度", launch.height, 0, 16384);

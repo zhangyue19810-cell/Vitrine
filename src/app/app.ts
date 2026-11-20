@@ -100,6 +100,12 @@ export class App implements PerfApp {
     return this.reduced;
   }
 
+  hardware() {
+    return store.ready
+      ? { totalMemoryMB: store.system.totalMemoryMB, freeMemoryMB: store.system.freeMemoryMB, cpuCount: store.system.cpuCount }
+      : undefined;
+  }
+
   draw(time: number) {
     const scene = this.host.scene;
     const amount = scene ? scene.themeAmount : this.fader.amount;

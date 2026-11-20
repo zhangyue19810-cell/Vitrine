@@ -49,7 +49,9 @@
   inset: 0;
   display: flex;
   flex-direction: column;
-  background: var(--paper);
+  background:
+    radial-gradient(ellipse at 86% 0%, rgba(var(--accent-rgb), 0.055), transparent 46%),
+    linear-gradient(152deg, rgba(var(--paper-rgb), 0.98), rgba(var(--panel-rgb), 0.94));
   animation: sheet-in 0.38s var(--ease) both;
 }
 
@@ -101,7 +103,8 @@
 .scrim {
   position: absolute;
   inset: 0;
-  background: rgba(var(--paper-rgb), 0.72);
+  background: rgba(var(--paper-rgb), 0.62);
+  backdrop-filter: blur(10px) saturate(1.08);
   animation: fade 0.25s both;
 }
 
@@ -119,9 +122,16 @@
   max-height: calc(100% - 64px);
   display: flex;
   flex-direction: column;
-  background: var(--panel);
-  border: 1px solid var(--ink);
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.25);
+  overflow: hidden;
+  border: 1px solid rgba(var(--rim-rgb), 0.55);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(150deg, rgba(var(--glass-strong-rgb), 0.94), rgba(var(--glass-rgb), 0.78)),
+    var(--panel);
+  box-shadow:
+    0 30px 100px rgba(6, 20, 26, 0.28),
+    inset 0 1px 0 rgba(var(--rim-rgb), 0.62);
+  backdrop-filter: var(--glass-blur);
   animation: dialog-in 0.28s var(--ease) both;
 }
 
@@ -890,8 +900,11 @@
   min-height: 0;
   overflow: auto;
   padding: 10px 0;
-  background: var(--field);
-  border: 1px solid var(--line);
+  border: 1px solid rgba(var(--rim-rgb), 0.34);
+  border-radius: 12px;
+  background: rgba(var(--glass-strong-rgb), 0.36);
+  box-shadow: inset 0 1px 0 rgba(var(--rim-rgb), 0.3);
+  backdrop-filter: blur(12px);
   font-family: var(--mono);
   font-size: 12px;
   line-height: 1.6;
@@ -910,6 +923,15 @@
 
 .logline[data-lvl="error"] {
   color: var(--danger);
+}
+
+.logline.log-cap {
+  margin: 8px 14px 2px;
+  padding: 7px 10px;
+  border: 1px solid rgba(var(--rim-rgb), 0.32);
+  border-radius: 8px;
+  background: rgba(var(--glass-strong-rgb), 0.36);
+  color: var(--muted);
 }
 
 .logline[data-lvl="debug"] {
@@ -1171,4 +1193,43 @@
   gap: 12px;
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
+}
+
+/* Readability fallback: translucent glass is an enhancement, not a requirement. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .system-nav,
+  .view-tabs,
+  .callout,
+  .detail-panel,
+  .dl-bar,
+  .dialog,
+  .logview {
+    background: var(--panel);
+    backdrop-filter: none;
+  }
+
+  .callout,
+  .detail-panel,
+  .dl-bar,
+  .dialog,
+  .logview {
+    box-shadow: 0 18px 54px rgba(6, 20, 26, 0.16);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .system-nav,
+  .view-tabs,
+  .callout,
+  .detail-panel,
+  .dl-bar,
+  .dialog,
+  .logview {
+    background: var(--panel);
+    backdrop-filter: none;
+  }
+
+  .scrim {
+    backdrop-filter: none;
+  }
 }

@@ -15,6 +15,9 @@ const PALETTE = {
   paper: ["#eae5e1", "#11181b"],
   panel: ["#edebe4", "#202a2f"],
   field: ["#e7e3d9", "#2a363b"],
+  glass: ["#f6f2eb", "#182226"],
+  "glass-strong": ["#fffdf8", "#223035"],
+  rim: ["#ffffff", "#9fb1b5"],
   accent: ["#1f9e8e", "#4fd8c4"],
   "accent-ink": ["#157060", "#5fe0cc"],
   "on-accent": ["#ffffff", "#06201c"],
@@ -28,7 +31,7 @@ type Rgb = [number, number, number];
 const parse = (hex: string): Rgb => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)) as Rgb;
 const TABLE = Object.entries(PALETTE).map(([name, [light, dark]]) => ({ name, from: parse(light), to: parse(dark) }));
 /** Variables that also get an "-rgb" companion for rgba() use. */
-const WITH_RGB = new Set(["ink", "paper", "panel", "accent"]);
+const WITH_RGB = new Set(["ink", "paper", "panel", "glass", "glass-strong", "rim", "accent"]);
 
 let painted = -1;
 

@@ -23,5 +23,5 @@ export type { ServerStatus } from "../../core/src/net/mc-ping";
 export type { PackPreview, PackInstallResult, PackState } from "../../core/src/pack/install";
 export type { ExportCandidate } from "../../core/src/pack/export";
 export type { LatestPack } from "../../core/src/pack/online";
-export type { JvmPresetInfo, MemoryAdvice } from "../../core/src/mc/jvm";
+export type { JvmPresetInfo, JvmAdvice, MemoryAdvice } from "../../core/src/mc/jvm";
 export type { SourcePolicy } from "../../core/src/net/sources";

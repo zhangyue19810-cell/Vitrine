@@ -15,6 +15,7 @@ import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
 import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
+import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
 import { normalizeQuality, type RenderQuality } from "./render-quality";
 import { applyTextureQuality, resizeQuality } from "./quality-renderer";
@@ -173,6 +174,7 @@ export class ArchiveScene {
   private composer: EffectComposer;
   private ao: SharedDepthAO;
   private bokeh: BokehPass;
+  private bloom: UnrealBloomPass;
   private instances: THREE.InstancedMesh[] = [];
   private matrixUpdates?: InstanceUpdates;
   private themeUpdates?: InstanceUpdates;
@@ -606,6 +608,14 @@ export class ArchiveScene {
       maxblur: 0.011,
     }, () => this.ao);
     this.composer.addPass(this.bokeh);
+    this.bloom = new UnrealBloomPass(
+      new THREE.Vector2(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight)),
+      0.14,
+      0.24,
+      0.91,
+    );
+    this.bloom.enabled = false;
+    this.composer.addPass(this.bloom);
     this.smaa.enabled = false;
     this.composer.addPass(this.smaa);
     this.composer.addPass(new OutputPass());
@@ -636,44 +646,77 @@ export class ArchiveScene {
       const source = mesh.material as THREE.MeshStandardMaterial;
       const name = source.name.replace(/\.\d+$/, "");
       const mat = source.clone() as THREE.MeshPhysicalMaterial;
-      mat.envMapIntensity = 0.6;
+      mat.envMapIntensity = 1.0;
       if (name === "Frosted_Polymer") {
-        mat.color.set("#fffdfa");
-        mat.transmission = 0.9;
-        mat.thickness = 0.12;
-        mat.roughness = 0.21;
-        mat.ior = 1.46;
-        mat.attenuationColor = new THREE.Color("#eee6df");
-        mat.attenuationDistance = 2;
+        mat.color.set("#f5f1e9");
+        mat.transmission = 0.82;
+        mat.thickness = 0.24;
+        mat.roughness = 0.16;
+        mat.ior = 1.47;
+        mat.attenuationColor = new THREE.Color("#e7d9c8");
+        mat.attenuationDistance = 2.6;
+        mat.clearcoat = 0.72;
+        mat.clearcoatRoughness = 0.12;
+        mat.envMapIntensity = 1.18;
       }
       if (name === "Internal_Ceramic") {
-        mat.color.set(this.lightingLook === "refined" ? "#c4baae" : "#c7beb6");
-        mat.roughness = 0.6;
+        mat.color.set(this.lightingLook === "refined" ? "#a49789" : "#b8aa9c");
+        mat.roughness = 0.48;
+        mat.clearcoat = 0.32;
+        mat.clearcoatRoughness = 0.24;
       }
-      if (name === "Printed_Label") mat.color.set("#eae5dc");
+      if (name === "Printed_Label") {
+        mat.color.set("#e8dfd2");
+        mat.roughness = 0.54;
+      }
       if (name === "Ivory_Edges") {
-        mat.color.set("#f0e7df");
-        mat.roughness = 0.31;
-        mat.transmission = 0.65;
-        mat.thickness = 0.04;
+        mat.color.set("#e7dac8");
+        mat.roughness = 0.24;
+        mat.transmission = 0.5;
+        mat.thickness = 0.055;
+        mat.ior = 1.45;
+        mat.clearcoat = 0.75;
+        mat.clearcoatRoughness = 0.15;
+        mat.envMapIntensity = 1.12;
       }
       if (name === "Optical_Diffuser") {
-        mat.color.set("#e2dad4");
+        mat.color.set("#cbbda9");
         mat.transmission = 0;
-        mat.roughness = 0.7;
+        mat.roughness = 0.68;
+        mat.clearcoat = 0.18;
       }
       if (name === "Subsurface_Optics") {
-        mat.color.set(this.lightingLook === "refined" ? "#b9a796" : "#b9aba1");
-        mat.roughness = 0.48;
-        mat.metalness = 0.05;
+        mat.color.set(this.lightingLook === "refined" ? "#b09a84" : "#b4a391");
+        mat.roughness = 0.42;
+        mat.metalness = 0.1;
+        mat.clearcoat = 0.42;
+        mat.clearcoatRoughness = 0.2;
       }
       if (name === "Optical_Edges") {
         // Internal refractive shoulders must be in the opaque capture: WebGL's
         // screen-space transmission cannot recursively sample another glass mesh.
         mat.transmission = 0;
-        mat.color.set(this.lightingLook === "refined" ? "#d8c7b5" : "#d4c7be");
+        mat.color.set(this.lightingLook === "refined" ? "#d0c1b0" : "#d2c4b5");
+        mat.roughness = 0.22;
+        mat.metalness = 0.12;
+        mat.clearcoat = 0.65;
+        mat.clearcoatRoughness = 0.16;
+      }
+      if (name === "Titanium_Fasteners") {
+        mat.color.set("#adb8b8");
+        mat.metalness = 0.9;
+        mat.roughness = 0.2;
+        mat.clearcoat = 0.35;
+        mat.clearcoatRoughness = 0.12;
+        mat.envMapIntensity = 1.4;
+      }
+      if (name === "Index_Inlay") {
+        mat.color.set("#c6a05f");
+        mat.metalness = 0.55;
         mat.roughness = 0.26;
-        mat.metalness = 0.08;
+        mat.clearcoat = 0.62;
+        mat.clearcoatRoughness = 0.16;
+        mat.envMapIntensity = 1.24;
       }
       configureInternalOptics(name, mat);
       if (name === "Carbon_Ink") continue;
@@ -698,16 +741,15 @@ export class ArchiveScene {
       }
       const arrayMat = mat.clone();
       if (name === "Frosted_Polymer") {
-        arrayMat.transmission = 0.78;
-        if (this.lightingLook === "refined") {
-          // Longer oblique paths pick up the warm body tint, while the thin
-          // edges and the extracted clear cover retain a brighter response.
-          arrayMat.thickness = 0.28;
-          arrayMat.attenuationColor.set("#d4c7b4");
-          arrayMat.attenuationDistance = 1.2;
-        }
+        arrayMat.transmission = 0.64;
+        arrayMat.thickness = 0.32;
+        arrayMat.attenuationColor.set("#cdb79e");
+        arrayMat.attenuationDistance = 1.35;
         arrayMat.transparent = false;
-        arrayMat.color.set("#fff7ed");
+        arrayMat.color.set("#e8dfd2");
+        arrayMat.clearcoat = 0.66;
+        arrayMat.clearcoatRoughness = 0.16;
+        arrayMat.envMapIntensity = 1.12;
         arrayMat.onBeforeCompile = (shader) => {
           shader.vertexShader =
             "varying float vPanelHeight;\n" + shader.vertexShader;
@@ -722,21 +764,34 @@ export class ArchiveScene {
             "#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.40, 0.30, 0.20), vec3(1.0, 0.98, 0.94), smoothstep(0.1, 1.0, vPanelHeight));",
           );
         };
-        arrayMat.roughness = 0.28;
-        arrayMat.clearcoat = 0.3;
-        arrayMat.clearcoatRoughness = 0.25;
+        arrayMat.roughness = 0.24;
       }
-      if (name === "Optical_Diffuser") arrayMat.color.set("#806447");
+      if (name === "Optical_Diffuser") arrayMat.color.set("#92775b");
       if (name === "Ivory_Edges") {
-        arrayMat.transmission = 0;
+        arrayMat.transmission = 0.06;
         arrayMat.color.set(
-          this.lightingLook === "refined" ? "#dcc9b0" : "#fff5e9",
+          this.lightingLook === "refined" ? "#d4c1a7" : "#e1d2bf",
         );
-        arrayMat.roughness = 0.38;
+        arrayMat.roughness = 0.3;
+        arrayMat.clearcoat = 0.46;
+        arrayMat.clearcoatRoughness = 0.19;
+        arrayMat.envMapIntensity = 1.08;
       }
       if (name === "Index_Inlay") {
-        arrayMat.color.set("#e4d6c5");
-        arrayMat.metalness = 0.05;
+        arrayMat.color.set("#c6a05f");
+        arrayMat.metalness = 0.52;
+        arrayMat.roughness = 0.28;
+        arrayMat.clearcoat = 0.6;
+        arrayMat.clearcoatRoughness = 0.16;
+        arrayMat.envMapIntensity = 1.2;
+      }
+      if (name === "Titanium_Fasteners") {
+        arrayMat.color.set("#9fa9a8");
+        arrayMat.metalness = 0.9;
+        arrayMat.roughness = 0.2;
+        arrayMat.clearcoat = 0.32;
+        arrayMat.clearcoatRoughness = 0.1;
+        arrayMat.envMapIntensity = 1.36;
       }
       this.appearance.register(name, mat, arrayMat);
       this.themeAttribute ??= new THREE.InstancedBufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage);
@@ -854,6 +909,9 @@ export class ArchiveScene {
     }
     this.ao.enabled = quality.aoSamples > 0;
     this.bokeh.enabled = quality.depthOfField > 0;
+    // A very restrained HDR bloom picks out the warm key reflections and the
+    // fine metal edges. It is intentionally skipped on the software tier.
+    this.bloom.enabled = !this.superPerformance && quality.aoSamples >= 16;
     this.smaa.enabled = quality.antialias === "smaa";
     this.renderer.shadowMap.enabled = quality.shadows > 0;
     const size = Math.min(

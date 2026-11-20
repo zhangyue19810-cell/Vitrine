@@ -31,7 +31,7 @@ import {
   versionJsonPath,
 } from "../src/mc/version-json";
 import { mavenKey, mavenPath, parseMaven } from "../src/mc/maven";
-import { JVM_PRESETS, presetArgs, recommendMemory } from "../src/mc/jvm";
+import { JVM_PRESETS, presetArgs, processOptimizationArgs, recommendJvmPreset, recommendMemory } from "../src/mc/jvm";
 import { detectJava, inspectJava, javaRequirement, parseRegistryHomes, pickJava, probeJava, type JavaInstall } from "../src/java/detect";
 import { startFakeMojang, zipBuffer, type FakeWorld } from "./helpers/fake-mojang";
 
@@ -326,7 +326,26 @@ describe("JVM presets and memory advice", () => {
     assert.ok(presetArgs("zgc", 21).includes("-XX:+ZGenerational"));
     assert.deepEqual(presetArgs("zgc", 25), ["-XX:+UseZGC"]);
     assert.deepEqual(presetArgs("mojang", 21, ["-XX:+UseParallelGC"]), []);
-    assert.equal(JVM_PRESETS.length, 4);
+    assert.equal(JVM_PRESETS.length, 5);
+  });
+
+  it("smart-matches the JVM preset and keeps explicit choices", () => {
+    assert.equal(recommendJvmPreset({ javaMajor: 21, modCount: 0, maxMemoryMB: 3072 }).preset, "default");
+    assert.equal(recommendJvmPreset({ javaMajor: 21, modCount: 32, maxMemoryMB: 4096 }).preset, "mojang");
+    assert.equal(recommendJvmPreset({ javaMajor: 21, modCount: 120, maxMemoryMB: 8192 }).preset, "large-modpack");
+    assert.equal(recommendJvmPreset({ javaMajor: 21, modCount: 220, maxMemoryMB: 12288 }).preset, "zgc");
+    assert.equal(recommendJvmPreset({ javaMajor: 17, modCount: 220, maxMemoryMB: 12288 }).preset, "large-modpack");
+    assert.ok(presetArgs("auto", 21, [], { javaMajor: 21, modCount: 220, maxMemoryMB: 12288 }).includes("-XX:+UseZGC"));
+    assert.deepEqual(presetArgs("zgc", 17), []);
+  });
+
+  it("adds conservative process-memory flags only when compatible", () => {
+    const flags = processOptimizationArgs(21, "default", [], { javaMajor: 21, modCount: 120, maxMemoryMB: 8192 });
+    assert.ok(flags.includes("-XX:+UseG1GC"));
+    assert.ok(flags.includes("-XX:+UseStringDeduplication"));
+    assert.ok(flags.includes("-XX:MinHeapFreeRatio=10"));
+    assert.deepEqual(processOptimizationArgs(21, "auto", ["-XX:+UseZGC"], { javaMajor: 21, modCount: 220, maxMemoryMB: 12288 }), []);
+    assert.deepEqual(processOptimizationArgs(8, "auto", [], { javaMajor: 8, modCount: 0, maxMemoryMB: 3072 }), ["-XX:+UseG1GC", "-XX:+ParallelRefProcEnabled", "-XX:MinHeapFreeRatio=10", "-XX:MaxHeapFreeRatio=30"]);
   });
 
   it("scales memory with the mod count and machine size", () => {
@@ -334,6 +353,7 @@ describe("JVM presets and memory advice", () => {
     assert.equal(recommendMemory({ totalMB: 32768, freeMB: 20000, modCount: 230, is64: true }).maxMB, 12288);
     assert.equal(recommendMemory({ totalMB: 16384, freeMB: 9000, modCount: 230, is64: true }).maxMB, 9728, "capped to 60% of RAM");
     assert.equal(recommendMemory({ totalMB: 8192, freeMB: 3000, modCount: 90, is64: true }).maxMB, 4864);
+    assert.equal(recommendMemory({ totalMB: 32768, freeMB: 1024, modCount: 300, is64: true }).maxMB, 10752, "uses live free memory under pressure");
     assert.equal(recommendMemory({ totalMB: 32768, freeMB: 1, modCount: 300, is64: false }).maxMB, 1280);
   });
 });

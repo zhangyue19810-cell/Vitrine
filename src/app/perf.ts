@@ -25,6 +25,8 @@ export interface PerfApp {
   reducedMotion(): boolean;
   /** Draw one frame of the scene and what follows it (palette, inspection overlay, detail shade). */
   draw(time: number): void;
+  /** Physical machine information used to choose the initial GPU tier. */
+  hardware?(): { totalMemoryMB: number; freeMemoryMB: number; cpuCount: number } | undefined;
   /** The scene was handed back to the GPU. */
   released(): void;
   /** The scene is needed again; resolves when it has been rebuilt. */
@@ -49,7 +51,7 @@ export class Perf {
     private readonly app: PerfApp,
     private readonly rendererName: string,
   ) {
-    this.governor = new QualityGovernor(initialTier("auto", rendererName));
+    this.governor = new QualityGovernor(initialTier("auto", rendererName, this.app.hardware?.()));
     this.scheduler = new RenderScheduler({
       frame: (time) => this.frame(time),
       inputs: () => {
@@ -93,7 +95,7 @@ export class Perf {
     const setting = this.app.settings()?.ui.quality ?? "auto";
     if (setting === this.qualitySetting) return;
     this.qualitySetting = setting;
-    const tier = initialTier(setting, this.rendererName);
+    const tier = initialTier(setting, this.rendererName, this.app.hardware?.());
     this.governor = new QualityGovernor(tier);
     this.app.host.setTier(tier);
   }

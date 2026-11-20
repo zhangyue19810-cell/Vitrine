@@ -92,15 +92,15 @@ export class DownloadView {
       <div class="dl-bar">
         <div class="dl-count" data-f="count" aria-live="polite"></div>
         <div class="dl-controls">
-          <label class="dl-search"><span class="glyph" aria-hidden="true">⌕</span><input class="input" data-f="query" placeholder="搜索名称、作者或关键词（支持中文和模糊匹配）" autocomplete="off" spellcheck="false" /></label>
+          <label class="dl-search"><span class="glyph" aria-hidden="true">⌕</span><input class="input" data-f="query" placeholder="搜索名称、作者或关键词" autocomplete="off" spellcheck="false" /></label>
           <div class="row-flex" data-f="sources" aria-label="搜索来源"></div>
           <select class="select dl-sort" data-f="sort" aria-label="排序"></select>
           <button class="btn sm soft" data-mcmod-open title="在 MC百科搜索中文资料">MC百科</button>
         </div>
         <div class="dl-filters" data-f="filter-bar"></div>
+        <div class="dl-hint" data-f="hint"></div>
       </div>
-      <div class="dl-state" data-f="state" role="status"></div>
-      <div class="dl-hint" data-f="hint"><kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 点击档案抽出 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页</div>`;
+      <div class="dl-state" data-f="state" role="status"></div>`;
     this.flat = new FlatDownloadStage(root, {
       select: (index) => this.onSelect(index),
       activate: (index) => this.handleAction("install", index),
@@ -610,8 +610,8 @@ export class DownloadView {
     setHtml(
       this.f("hint"),
       this.flatMode
-        ? html`<span class="chip" title="WebGL 不可用，已自动使用同布局的 DOM 卡片视图">兼容视图</span> <kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 双击卡片安装 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页`
-        : html`<kbd>滚轮</kbd><kbd>←</kbd><kbd>→</kbd>切换 · 点击档案抽出 · <kbd>Enter</kbd>安装 · <kbd>/</kbd>搜索 · <kbd>Esc</kbd>回到首页`,
+        ? html`<span class="chip" title="WebGL 不可用，已自动使用同布局的 DOM 卡片视图">兼容视图</span> 滚轮切换 · 双击卡片安装 · <kbd>Enter</kbd> 安装 · <kbd>/</kbd> 搜索`
+        : html`滚轮切换 · 点击档案抽出 · <kbd>Enter</kbd> 安装 · <kbd>/</kbd> 搜索 · <kbd>Esc</kbd> 返回`,
     );
     this.renderCount();
   }

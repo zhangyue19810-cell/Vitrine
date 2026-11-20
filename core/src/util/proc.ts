@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import { basename, dirname } from "node:path";
 import { AbortError } from "./async";
+import type { OsInfo } from "./os";
 
 export interface RunResult {
   code: number | null;
@@ -116,5 +117,48 @@ export function runProcess(command: string, args: string[], options: RunOptions 
       if (options.signal?.aborted) reject(new AbortError());
       else resolve({ code, signal, tail });
     });
+  });
+}
+
+
+/**
+ * Best-effort priority bump for the game process.
+ *
+ * The launcher must never make a game unlaunchable because a platform refuses
+ * this request. Windows uses the documented PowerShell PriorityClass; POSIX
+ * uses renice and returns false when the user lacks permission. The promise is
+ * always resolved, never rejected.
+ */
+export function boostGameProcessPriority(pid: number | undefined, os: OsInfo): Promise<boolean> {
+  if (!pid || !Number.isInteger(pid) || pid <= 0) return Promise.resolve(false);
+  const command = os.name === "windows" ? "powershell.exe" : "renice";
+  const args =
+    os.name === "windows"
+      ? ["-NoProfile", "-NonInteractive", "-Command", `try { $p = Get-Process -Id ${pid} -ErrorAction Stop; $p.PriorityClass = 'High'; exit 0 } catch { exit 1 }`]
+      : ["-n", "-5", "-p", String(pid)];
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (value: boolean) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    let child;
+    try {
+      child = spawn(command, args, { windowsHide: true, stdio: "ignore" });
+    } catch {
+      return resolve(false);
+    }
+    const timer = setTimeout(() => {
+      try {
+        child?.kill("SIGKILL");
+      } catch {
+        /* already gone */
+      }
+      done(false);
+    }, 3500);
+    child.once("error", () => done(false));
+    child.once("close", (code) => done(code === 0));
   });
 }

@@ -58,6 +58,7 @@ export const STAGE_LABELS: Record<string, string> = {
   account: "准备账号",
   natives: "准备本地库",
   prelaunch: "运行启动前命令",
+  optimize: "释放内存并优化进程",
   arguments: "生成启动参数",
   start: "启动游戏",
   repair: "校验并修复文件",
@@ -86,4 +87,4 @@ export function modpackPlan(loader?: string, online = false): { id: string; labe
   return [...(online ? ["pack-download"] : []), "pack-read", "pack-resolve", ...install, "pack-files", "pack-overrides", "pack-finish"].map(stage);
 }
 
-export const launchPlan = (): { id: string; label: string }[] => ["account", "java", "files", "assets", "natives", "prelaunch", "arguments", "start"].map(stage);
+export const launchPlan = (): { id: string; label: string }[] => ["account", "java", "files", "assets", "natives", "arguments", "prelaunch", "optimize", "start"].map(stage);

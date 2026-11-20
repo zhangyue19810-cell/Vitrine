@@ -48,13 +48,13 @@ function sections(javaMajor: number | undefined): Section[] {
       title: "运行环境",
       rows: [
         { key: "java", name: "Java", kind: "java", desc: `留空自动选择（这个版本需要 Java ${javaMajor ?? "?"}）；也可以指定某个已安装的 Java。` },
-        { key: "memory", name: "最大内存", kind: "memory", desc: "“自动”会按电脑内存和模组数量估算。" },
+        { key: "memory", name: "最大内存", kind: "memory", desc: "“自动”会按电脑内存、空闲内存和模组数量估算。" },
         {
           key: "jvmPreset",
           name: "JVM 参数预设",
           kind: "select",
           options: [["", "跟随默认"], ...store.jvmPresets.map((preset): Opt => [preset.id, preset.label + (preset.minJava > (javaMajor ?? 99) ? `（需要 Java ${preset.minJava}+）` : "")])],
-          desc: "大型整合包建议用“大型整合包”预设。你自己写了 GC 参数时，预设会自动让位。",
+          desc: "“智能匹配”会按 Java 版本、模组数量和内存自动选择；手动写入 GC 参数时预设会自动让位。",
         },
         { key: "jvmArgs", name: "额外 JVM 参数", kind: "area", rows: 2, block: true, mono: true, placeholder: "-Dfile.encoding=UTF-8 -XX:+UseG1GC …", desc: "用空格分隔。内存请用上面的“最大内存”设置，不要写 -Xmx。" },
       ],

@@ -97,8 +97,11 @@ describe("the core over the development transport", () => {
       assert.equal(boot.settings.ui.whenUnfocused, "pause");
       assert.equal(boot.settings.ui.releaseGpuWhenGameRuns, true);
       assert.equal(boot.settings.ui.theme, "auto");
+      assert.equal(boot.settings.launch.jvmPreset, "auto");
+      assert.equal(boot.settings.launch.optimize, true);
       assert.ok(Array.isArray(boot.instances) && Array.isArray(boot.accounts) && Array.isArray(boot.tasks));
       assert.ok(boot.jvmPresets.length >= 3);
+      assert.ok(boot.jvmPresets.some((preset: { id: string }) => preset.id === "auto"));
     });
 
     it("validates updates, persists them and announces the change", async () => {
@@ -107,6 +110,8 @@ describe("the core over the development transport", () => {
       await assert.rejects(client.call("settings.update", { patch: { ui: { fps: 144 } } }), /帧率上限/);
       await assert.rejects(client.call("settings.update", { patch: { ui: { theme: "sepia" } } }), /界面配色/);
       await assert.rejects(client.call("settings.update", { patch: { ui: { releaseGpuWhenGameRuns: "yes" } } }), /开\/关/);
+      await assert.rejects(client.call("settings.update", { patch: { launch: { jvmPreset: "turbo" } } }), /JVM 预设/);
+      await assert.rejects(client.call("settings.update", { patch: { launch: { optimize: "yes" } } }), /开\/关/);
       const updated = await client.call("settings.update", { patch: { ui: { fps: 60, whenUnfocused: "throttle" }, download: { concurrency: 500 } } });
       assert.equal(updated.ui.fps, 60);
       assert.equal(updated.download.concurrency, 128, "numbers are clamped, not rejected");
@@ -167,7 +172,10 @@ describe("the core over the development transport", () => {
       assert.equal(info.config.modpack, undefined);
       assert.equal((info.config as any).bogus, undefined);
       await assert.rejects(client.call("instances.setConfig", { id: "fake", patch: { isolation: "sometimes" } }), /隔离模式/);
-      await client.call("instances.setConfig", { id: "fake", patch: { memory: "auto", width: 0, note: null } });
+      await assert.rejects(client.call("instances.setConfig", { id: "fake", patch: { jvmPreset: "turbo" } }), /JVM 预设/);
+      const autoJvm = await client.call("instances.setConfig", { id: "fake", patch: { jvmPreset: "auto" } });
+      assert.equal(autoJvm.config.jvmPreset, "auto");
+      await client.call("instances.setConfig", { id: "fake", patch: { jvmPreset: null, memory: "auto", width: 0, note: null } });
     });
 
     it("uses the configured owner UUID as the default offline account", async () => {

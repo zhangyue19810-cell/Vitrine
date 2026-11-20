@@ -9,7 +9,7 @@ import { launchPlan } from "./events";
 import { inspectJava, javaRequirement } from "./java/detect";
 import { materializeLegacyAssets } from "./mc/assets";
 import { completeVersion } from "./mc/files";
-import { presetArgs, recommendMemory } from "./mc/jvm";
+import { presetArgs, processOptimizationArgs, recommendJvmPreset, recommendMemory, resolveJvmPreset } from "./mc/jvm";
 import { buildLaunch, formatCommand, splitArgs, splitHostPort, type BuiltLaunch, type LaunchAccount } from "./mc/launch-args";
 import { spawnGame, type GameLine, type GameProcess } from "./mc/launcher";
 import { prepareNatives } from "./mc/natives";
@@ -22,7 +22,7 @@ import type { TaskContext } from "./tasks";
 import { throwIfAborted } from "./util/async";
 import { ensureDir, writeFileAtomic } from "./util/fsx";
 import { freeMemoryMB, totalMemoryMB } from "./util/os";
-import { cleanJavaEnv, runProcess } from "./util/proc";
+import { boostGameProcessPriority, cleanJavaEnv, runProcess } from "./util/proc";
 import { fallbackJavaMajor } from "./util/version";
 import type { Core } from "./core";
 
@@ -55,6 +55,9 @@ export interface LaunchPlan {
   gameDir: string;
   account: PreparedAccount;
   maxMemoryMB: number;
+  /** The JVM preset chosen for this launch (after smart resolution). */
+  jvmPreset: string;
+  jvmPresetReason?: string;
   env: Record<string, string>;
   wrapper: string[];
   preLaunch?: string;
@@ -146,7 +149,17 @@ export async function planLaunch(core: Core, id: string, reporter: PlanReporter,
     if (prepared.authlib.prefetched) accountJvm.push(`-Dauthlibinjector.yggdrasil.prefetched=${prepared.authlib.prefetched}`);
   }
   const userJvm = [...splitArgs(settings.launch.jvmArgs), ...splitArgs(config.jvmArgs)];
-  const jvmArgs = [...presetArgs(config.jvmPreset ?? settings.launch.jvmPreset, java.major, userJvm), ...userJvm];
+  const requestedJvmPreset = config.jvmPreset ?? settings.launch.jvmPreset;
+  const jvmContext = { javaMajor: java.major, modCount, maxMemoryMB: maxMB };
+  const resolvedJvmPreset = resolveJvmPreset(requestedJvmPreset, jvmContext);
+  const smartJvm = !requestedJvmPreset || requestedJvmPreset === "auto";
+  const jvmAdvice = smartJvm ? recommendJvmPreset(jvmContext) : undefined;
+  const optimize = settings.launch.optimize !== false;
+  const jvmArgs = [
+    ...presetArgs(requestedJvmPreset, java.major, userJvm, jvmContext),
+    ...(optimize ? processOptimizationArgs(java.major, requestedJvmPreset, userJvm, jvmContext) : []),
+    ...userJvm,
+  ];
 
   const width = config.width ?? settings.launch.width;
   const height = config.height ?? settings.launch.height;
@@ -190,6 +203,8 @@ export async function planLaunch(core: Core, id: string, reporter: PlanReporter,
     gameDir: info.gameDir,
     account: prepared,
     maxMemoryMB: maxMB,
+    jvmPreset: resolvedJvmPreset,
+    jvmPresetReason: jvmAdvice?.reason ?? "手动选择",
     env: config.env ?? {},
     wrapper: splitArgs(config.wrapper),
     preLaunch: config.preLaunch?.trim() || undefined,
@@ -288,6 +303,7 @@ export class GameManager {
   /** Start the process for a finished plan. */
   async spawn(plan: LaunchPlan, reporter: PlanReporter = silentReporter): Promise<GameSnapshot> {
     const { core } = this;
+    const optimize = core.settings.peek().launch.optimize !== false;
     if (plan.preLaunch) {
       reporter.stage("prelaunch");
       const windows = core.os.name === "windows";
@@ -299,6 +315,15 @@ export class GameManager {
         onLine: (line) => reporter.log(`[启动前命令] ${line}`),
       });
       if (result.code !== 0) throw new Error(`启动前命令失败（退出码 ${result.code}）。最后输出：${result.tail.slice(-3).join(" ")}`);
+    }
+    throwIfAborted(reporter.signal);
+    if (optimize) {
+      reporter.stage("optimize");
+      const before = freeMemoryMB();
+      core.releaseLauncherMemory();
+      const after = freeMemoryMB();
+      const recovered = Math.max(0, after - before);
+      reporter.log(`启动优化：已清理启动器缓存并请求 GC${recovered >= 64 ? `，系统空闲内存约 +${recovered} MB` : ""}。`);
     }
     throwIfAborted(reporter.signal);
     reporter.stage("start");
@@ -313,6 +338,11 @@ export class GameManager {
       argFilePath: join(core.paths.argFilesDir, `${id}.args`),
       wrapper: plan.wrapper.length ? plan.wrapper : undefined,
     });
+    if (optimize && child.pid) {
+      void boostGameProcessPriority(child.pid, core.os).then((ok) => {
+        if (ok) reporter.log("启动优化：游戏进程优先级已提升。");
+      }).catch(() => undefined);
+    }
     const snapshot: GameSnapshot = { id, instanceId: plan.info.id, instanceName: plan.info.name, state: child.state, pid: child.pid, startedAt: child.startedAt, lineCount: 0 };
     const session: Session = { snapshot, process: child, plan, pending: [], afterLaunchSent: false };
     this.sessions.set(id, session);
@@ -431,9 +461,10 @@ export async function startLaunch(core: Core, id: string, options: LaunchOptions
     lane: "launch",
     run: async (ctx: TaskContext) => {
       const config = await core.instances.loadConfig(id);
-      ctx.plan(launchPlan().filter((stage) => stage.id !== "prelaunch" || Boolean(config.preLaunch?.trim())));
+      ctx.plan(launchPlan().filter((stage) => (stage.id !== "prelaunch" || Boolean(config.preLaunch?.trim())) && (stage.id !== "optimize" || core.settings.peek().launch.optimize !== false)));
       const plan = await planLaunch(core, id, ctx, options);
       ctx.log(`Java ${plan.javaMajor}（${plan.javaPath}）· 最大内存 ${plan.maxMemoryMB} MB${plan.memoryReason ? `（${plan.memoryReason}）` : ""}`);
+      ctx.log(`JVM 预设：${plan.jvmPreset}${plan.jvmPresetReason ? `（${plan.jvmPresetReason}）` : ""}`);
       const game = await core.games.spawn(plan, ctx);
       return { gameId: game.id };
     },

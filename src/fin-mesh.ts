@@ -61,8 +61,8 @@ export class FinMesh {
   readonly material: THREE.MeshPhysicalMaterial;
   private readonly path = new BandPath();
   private readonly count: number;
-  private readonly light = new THREE.Color("#f3eee5");
-  private readonly dark = new THREE.Color("#3b4348");
+  private readonly light = new THREE.Color("#d9d5cc");
+  private readonly dark = new THREE.Color("#47575b");
   private signature = "";
 
   private readonly a: PlateFrame = newPlate();
@@ -86,11 +86,12 @@ export class FinMesh {
     this.count = count;
     this.material = new THREE.MeshPhysicalMaterial({
       color: this.light.clone(),
-      roughness: 0.5,
-      metalness: 0,
-      clearcoat: 0.12,
-      clearcoatRoughness: 0.45,
-      envMapIntensity: 0.9,
+      roughness: 0.3,
+      metalness: 0.035,
+      specularIntensity: 0.92,
+      clearcoat: 0.48,
+      clearcoatRoughness: 0.16,
+      envMapIntensity: 1.15,
     });
     this.mesh = new THREE.InstancedMesh(plateGeometry(), this.material, count);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
@@ -101,9 +102,9 @@ export class FinMesh {
     const tint = new THREE.Color();
     for (let i = 0; i < count; i++) {
       // A little variation from plate to plate: a warm or cool cast and a touch of lightness, like glazed ceramic.
-      const lightness = 0.955 + 0.045 * hash(i, 1);
-      const warm = (hash(i, 2) - 0.5) * 0.035;
-      tint.setRGB(lightness + warm, lightness + warm * 0.4, lightness - warm);
+      const lightness = 0.91 + 0.09 * hash(i, 1);
+      const warm = (hash(i, 2) - 0.5) * 0.055;
+      tint.setRGB(lightness + warm, lightness + warm * 0.25, lightness - warm * 0.7);
       this.mesh.setColorAt(i, tint);
     }
   }

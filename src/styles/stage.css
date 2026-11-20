@@ -8,11 +8,17 @@
 .view-tabs {
   position: absolute;
   left: 46px;
-  top: 98px;
+  top: 94px;
   z-index: 7;
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+  padding: 4px;
+  border: 1px solid rgba(var(--rim-rgb), 0.5);
+  border-radius: 999px;
+  background: linear-gradient(135deg, rgba(var(--glass-strong-rgb), 0.62), rgba(var(--glass-rgb), 0.32));
+  box-shadow: 0 12px 32px rgba(24, 56, 69, 0.1), inset 0 1px 0 rgba(var(--rim-rgb), 0.62);
+  backdrop-filter: var(--glass-blur);
   transition: opacity 0.4s var(--ease), transform 0.5s var(--ease);
 }
 
@@ -24,37 +30,28 @@
 
 .view-tab {
   position: relative;
-  padding: 9px 16px 12px;
-  font-size: 13px;
-  letter-spacing: 1.6px;
+  padding: 7px 14px 8px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  letter-spacing: 1.35px;
   color: var(--muted);
-  transition: color 0.2s;
+  transition: color 0.2s, background 0.2s;
 }
 
 .view-tab:hover {
   color: var(--ink);
 }
 
+.view-tab:hover {
+  color: var(--ink);
+  background: rgba(var(--glass-strong-rgb), 0.52);
+}
+
 .view-tab[aria-current="page"] {
   color: var(--ink);
   font-weight: 700;
-}
-
-.view-tab::after {
-  content: "";
-  position: absolute;
-  left: 16px;
-  right: 16px;
-  bottom: 4px;
-  height: 2px;
-  background: var(--accent-ink);
-  transform: scaleX(0);
-  transform-origin: left center;
-  transition: transform 0.4s var(--ease);
-}
-
-.view-tab[aria-current="page"]::after {
-  transform: scaleX(1);
+  background: rgba(var(--accent-rgb), 0.12);
+  box-shadow: inset 0 1px 0 rgba(var(--rim-rgb), 0.52);
 }
 
 /* ------------------------------------------------------------------------------------------ home HUD while the row is up */
@@ -106,15 +103,23 @@
 
 .dl-bar {
   position: absolute;
-  left: 52px;
-  right: 52px;
-  bottom: 64px;
+  left: 50px;
+  right: 50px;
+  bottom: 58px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 10px 22px;
-  padding-top: 14px;
-  border-top: 1px solid var(--line);
+  gap: 10px 20px;
+  padding: 15px 18px 12px;
+  border: 1px solid rgba(var(--rim-rgb), 0.54);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(135deg, rgba(var(--glass-strong-rgb), 0.72), rgba(var(--glass-rgb), 0.35)),
+    radial-gradient(ellipse at 92% 0%, rgba(var(--accent-rgb), 0.08), transparent 52%);
+  box-shadow:
+    0 22px 64px rgba(22, 55, 68, 0.13),
+    inset 0 1px 0 rgba(var(--rim-rgb), 0.7);
+  backdrop-filter: var(--glass-blur);
 }
 
 .dl-count {
@@ -162,6 +167,7 @@
 .dl-search .input {
   min-height: 34px;
   padding-left: 32px;
+  background: rgba(var(--glass-strong-rgb), 0.5);
 }
 
 .dl-controls .seg button {
@@ -230,12 +236,16 @@
 }
 
 .dl-hint {
-  position: absolute;
-  left: 50%;
-  bottom: 36px;
-  transform: translateX(-50%);
-  font-size: 10.5px;
-  letter-spacing: 1.2px;
+  flex-basis: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  margin-top: 2px;
+  padding: 7px 2px 0;
+  border-top: 1px solid rgba(var(--rim-rgb), 0.22);
+  font-size: 9.5px;
+  letter-spacing: 0.85px;
   color: var(--muted);
   white-space: nowrap;
   pointer-events: none !important;

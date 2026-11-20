@@ -33,9 +33,19 @@
 
 .callout {
   position: absolute;
-  right: 64px;
-  top: 35%;
-  width: min(540px, 42%);
+  right: 58px;
+  top: 28%;
+  width: min(540px, 43%);
+  padding: 24px 26px 25px;
+  border: 1px solid rgba(var(--rim-rgb), 0.58);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(145deg, rgba(var(--glass-strong-rgb), 0.82), rgba(var(--glass-rgb), 0.48)),
+    radial-gradient(ellipse at 100% 0%, rgba(var(--accent-rgb), 0.1), transparent 58%);
+  box-shadow:
+    0 28px 76px rgba(24, 56, 69, 0.16),
+    inset 0 1px 0 rgba(var(--rim-rgb), 0.78);
+  backdrop-filter: var(--glass-blur);
 }
 
 .callout-eyebrow {
@@ -229,6 +239,9 @@
   align-items: flex-end;
   gap: 20px;
   height: 36px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(var(--glass-strong-rgb), 0.24);
 }
 
 .ticks .marks i {
@@ -245,11 +258,16 @@
 
 .lane-nav {
   position: absolute;
-  right: 64px;
-  bottom: 80px;
+  right: 58px;
+  bottom: 72px;
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 18px;
+  padding: 6px 10px;
+  border: 1px solid rgba(var(--rim-rgb), 0.42);
+  border-radius: 999px;
+  background: rgba(var(--glass-strong-rgb), 0.3);
+  backdrop-filter: blur(14px);
 }
 
 .lane-nav .name {
@@ -276,8 +294,13 @@
   left: 50%;
   bottom: 52px;
   transform: translateX(-50%);
+  padding: 4px 11px;
+  border: 1px solid rgba(var(--rim-rgb), 0.24);
+  border-radius: 999px;
+  background: rgba(var(--glass-strong-rgb), 0.24);
+  backdrop-filter: blur(10px);
   font-size: 10.5px;
-  letter-spacing: 1.4px;
+  letter-spacing: 1.2px;
   color: var(--muted);
   white-space: nowrap;
   pointer-events: none !important;
@@ -324,15 +347,19 @@
 .back-button {
   position: absolute;
   left: 52px;
-  top: 118px;
+  top: 112px;
   display: inline-flex;
   align-items: center;
   gap: 10px;
+  padding: 7px 12px;
+  border: 1px solid rgba(var(--rim-rgb), 0.36);
+  border-radius: 999px;
+  background: rgba(var(--glass-strong-rgb), 0.32);
+  backdrop-filter: blur(12px);
   font-size: 12px;
   letter-spacing: 1.4px;
-  padding: 8px 0;
   color: var(--muted);
-  transition: color 0.2s;
+  transition: color 0.2s, background 0.2s;
 }
 
 .back-button:hover {
@@ -352,12 +379,22 @@
 .detail-panel {
   position: absolute;
   left: 45%;
-  right: 52px;
-  top: 104px;
-  bottom: 64px;
+  right: 48px;
+  top: 96px;
+  bottom: 52px;
   display: flex;
   flex-direction: column;
   min-width: 0;
+  padding: 22px 24px 20px;
+  border: 1px solid rgba(var(--rim-rgb), 0.52);
+  border-radius: var(--radius-panel);
+  background:
+    linear-gradient(148deg, rgba(var(--glass-strong-rgb), 0.8), rgba(var(--glass-rgb), 0.46)),
+    radial-gradient(ellipse at 96% 0%, rgba(var(--accent-rgb), 0.07), transparent 52%);
+  box-shadow:
+    0 26px 74px rgba(22, 55, 68, 0.14),
+    inset 0 1px 0 rgba(var(--rim-rgb), 0.7);
+  backdrop-filter: var(--glass-blur);
 }
 
 .detail-head {

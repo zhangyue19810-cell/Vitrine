@@ -286,6 +286,8 @@ function createWindow() {
     minHeight: 600,
     show: false,
     frame: false,
+    roundedCorners: true,
+    hasShadow: true,
     title: "Vitrine 琉匣",
     backgroundColor: nativeTheme.shouldUseDarkColors ? "#11181b" : "#eae5e1",
     ...(icon ? { icon } : {}),

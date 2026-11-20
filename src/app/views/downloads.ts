@@ -3,6 +3,7 @@ import { guard, openLink } from "../actions";
 import { $, $$, html, onAll, setHtml } from "../dom";
 import { formatBytes, formatDuration, formatSpeed, relativeTime } from "../format";
 import { type ModalHandle, openSheet, toast } from "../modal";
+import { capErrorText } from "../log-limit";
 import { store } from "../store";
 import type { InstallContentResult, LaneState, PackInstallResult, TaskSnapshot } from "../types";
 

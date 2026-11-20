@@ -7,7 +7,7 @@ import { listResourcePacks, listScreenshots, listShaderPacks, readScreenshot, re
 import type { Core } from "./core";
 import { exportLaunchScript } from "./launch";
 import { inspectJava } from "./java/detect";
-import { JVM_PRESETS, recommendMemory } from "./mc/jvm";
+import { JVM_PRESETS, recommendJvmPreset, recommendMemory, resolveJvmPreset } from "./mc/jvm";
 import { pingServer } from "./net/mc-ping";
 import { listExportCandidates } from "./pack/export";
 import { previewPack, readPackState } from "./pack/install";
@@ -187,9 +187,22 @@ export function buildRpc(core: Core): RpcTable {
     exportLaunchScript(core, str(params, "id", 200), str(params, "dest", 1000), { includeToken: optBool(params, "includeToken"), signal }),
   );
   def("instances.memoryAdvice", async (params) => {
+    const instance = await core.instances.get(str(params, "id", 200));
     const dir = await gameDir({ instanceId: params.id });
     const mods = await scanMods(dir).catch(() => []);
-    return { ...recommendMemory({ totalMB: totalMemoryMB(), freeMB: freeMemoryMB(), modCount: mods.length, is64: true }), totalMB: totalMemoryMB(), freeMB: freeMemoryMB(), modCount: mods.length };
+    const totalMB = totalMemoryMB();
+    const freeMB = freeMemoryMB();
+    const memory = recommendMemory({ totalMB, freeMB, modCount: mods.length, is64: true });
+    const context = { javaMajor: instance?.javaMajor ?? 21, modCount: mods.length, maxMemoryMB: memory.maxMB };
+    const selected = instance?.config.jvmPreset ?? core.settings.peek().launch.jvmPreset;
+    const advice = recommendJvmPreset(context);
+    return {
+      ...memory,
+      totalMB,
+      freeMB,
+      modCount: mods.length,
+      jvm: { ...advice, preset: resolveJvmPreset(selected, context), selected },
+    };
   });
   def("instances.analyzeCrash", (params) => core.games.analyze(str(params, "id", 200)));
   def("instances.packState", async (params) => (await readPackState(core.root, str(params, "id", 200))) ?? null);

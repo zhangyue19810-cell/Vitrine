@@ -12,7 +12,7 @@ import { openDownloads } from "./downloads";
 
 const ORIGIN_LABEL: Record<string, string> = { modrinth: "Modrinth", curseforge: "CurseForge", mrpack: "本地 .mrpack", "curseforge-zip": "CurseForge 整合包文件", multimc: "MultiMC / Prism", mcbbs: "MCBBS", vitrine: "Vitrine" };
 
-type Advice = { maxMB: number; minMB: number; reason: string; totalMB: number; freeMB: number; modCount: number };
+type Advice = { maxMB: number; minMB: number; reason: string; totalMB: number; freeMB: number; modCount: number; jvm: { preset: string; label: string; reason: string; selected: string } };
 
 export function mount(ctx: TabContext): TabHandle {
   const { body, signal } = ctx;
@@ -54,20 +54,24 @@ export function mount(ctx: TabContext): TabHandle {
     const memory = instance.config.memory;
     const current = memory === undefined || memory === "auto" ? "auto" : memory;
     if (!advice) return;
-    const wanted = advice.maxMB;
+    const snapshot = advice;
+    const wanted = snapshot.maxMB;
     const effective = current === "auto" ? wanted : current;
-    const tooBig = effective > advice.totalMB * 0.85;
-    const tooSmall = advice.modCount > 0 && effective < wanted * 0.7;
+    const tooBig = effective > snapshot.totalMB * 0.85;
+    const tooSmall = snapshot.modCount > 0 && effective < wanted * 0.7;
+    const selectedJvm = store.jvmPresets.find((preset) => preset.id === snapshot.jvm.selected)?.label ?? snapshot.jvm.selected;
     setHtml(
       f("memory"),
       html`<div class="card" style="display:grid;gap:14px">
         <dl class="kv">
           <dt>当前设置</dt><dd>${current === "auto" ? `自动 → ${(wanted / 1024).toFixed(wanted % 1024 ? 1 : 0)} GB` : `${(current / 1024).toFixed(current % 1024 ? 2 : 0).replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "")} GB（${current} MB）`}</dd>
-          <dt>推荐</dt><dd>${(wanted / 1024).toFixed(wanted % 1024 ? 1 : 0)} GB · ${advice.reason}</dd>
-          <dt>这台电脑</dt><dd>共 ${(advice.totalMB / 1024).toFixed(1)} GB，现在空闲 ${(advice.freeMB / 1024).toFixed(1)} GB</dd>
+          <dt>推荐</dt><dd>${(wanted / 1024).toFixed(wanted % 1024 ? 1 : 0)} GB · ${snapshot.reason}</dd>
+          <dt>这台电脑</dt><dd>共 ${(snapshot.totalMB / 1024).toFixed(1)} GB，现在空闲 ${(snapshot.freeMB / 1024).toFixed(1)} GB</dd>
+          <dt>JVM 智能建议</dt><dd>${snapshot.jvm.label} · ${snapshot.jvm.reason}</dd>
+          <dt>当前 JVM 预设</dt><dd>${selectedJvm}</dd>
         </dl>
         ${tooBig ? html`<div class="notice warn">设置的内存超过电脑内存的 85%，游戏可能起不来或让系统变卡。</div>` : ""}
-        ${tooSmall ? html`<div class="notice warn">这个实例有 ${advice.modCount} 个模组，内存可能偏小，容易卡顿或崩溃（OutOfMemory）。</div>` : ""}
+        ${tooSmall ? html`<div class="notice warn">这个实例有 ${snapshot.modCount} 个模组，内存可能偏小，容易卡顿或崩溃（OutOfMemory）。</div>` : ""}
         <div class="toolbar"><select class="select" data-memory style="min-width:230px">${memoryOptions(current).map(([value, label]) => html`<option value="${value}" ${String(value) === String(current) ? "selected" : ""}>${label}</option>`)}</select>${current !== "auto" ? html`<button class="btn sm soft" data-act="ov-auto-memory">改回自动</button>` : ""}</div>
       </div>`,
     );

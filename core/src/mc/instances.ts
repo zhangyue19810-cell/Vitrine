@@ -40,7 +40,7 @@ export interface InstanceConfig {
   javaPath?: string;
   /** "auto" picks from the machine and the modpack size; a number is a fixed heap in MB. */
   memory?: "auto" | number;
-  jvmPreset?: "default" | "mojang" | "large-modpack" | "zgc";
+  jvmPreset?: "auto" | "default" | "mojang" | "large-modpack" | "zgc";
   jvmArgs?: string;
   gameArgs?: string;
   width?: number;

@@ -152,9 +152,31 @@ export class QualityGovernor {
   }
 }
 
-/** A software rasteriser (no GPU) cannot run the glass materials at all: start at the lowest tier. */
-export function initialTier(setting: "auto" | "high" | "medium" | "low", rendererName: string): QualityTier {
+export interface QualityHardware {
+  totalMemoryMB?: number;
+  freeMemoryMB?: number;
+  cpuCount?: number;
+}
+
+/**
+ * A software rasteriser cannot run the glass materials at all: start at the
+ * lowest tier. "Auto" also looks at the physical memory and core count so an
+ * 8 GB laptop does not receive the same expensive pipeline as a 32 GB desktop.
+ * An explicit high/medium/low choice is always respected on real GPUs.
+ */
+export function initialTier(
+  setting: "auto" | "high" | "medium" | "low",
+  rendererName: string,
+  hardware?: QualityHardware,
+): QualityTier {
   if (/swiftshader|llvmpipe|software|basic render|softpipe/i.test(rendererName)) return "minimal";
-  if (setting === "auto") return "medium";
-  return setting;
+  if (setting !== "auto") return setting;
+  const memory = hardware?.totalMemoryMB ?? 0;
+  const cores = hardware?.cpuCount ?? 0;
+  if (memory > 0 && memory < 6 * 1024) return "minimal";
+  if (memory > 0 && memory < 8 * 1024) return "low";
+  if (memory > 0 && memory < 12 * 1024) return "medium";
+  const dedicated = /nvidia|geforce|rtx|gtx|radeon|rx\s*\d|arc\s*a/i.test(rendererName);
+  if (dedicated && memory >= 16 * 1024 && (cores === 0 || cores >= 8)) return "high";
+  return "medium";
 }

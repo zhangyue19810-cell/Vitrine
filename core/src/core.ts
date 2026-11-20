@@ -160,7 +160,7 @@ export function sanitizeInstanceConfig(patch: unknown): Partial<InstanceConfig> 
         out[key] = value === "auto" || value === null ? undefined : whole(key, value, 512, 262_144);
         break;
       case "jvmPreset":
-        if (value !== null && !["default", "mojang", "large-modpack", "zgc"].includes(value as string)) throw new Error("“JVM 预设”无效");
+        if (value !== null && !["auto", "default", "mojang", "large-modpack", "zgc"].includes(value as string)) throw new Error("“JVM 预设”无效");
         out[key] = value ?? undefined;
         break;
       case "width":
@@ -898,5 +898,17 @@ export class Core {
   async clearCache(): Promise<void> {
     await removeRecursive(this.paths.workDir);
     await ensureDir(this.paths.workDir);
+  }
+
+  /**
+   * Drop launcher-owned in-memory data right before a game starts. The renderer
+   * already gives back the 3D scene; this releases the main process's icon cache
+   * and Java detection cache, then asks V8 for a collection when the runtime
+   * exposes the optional gc hook.
+   */
+  releaseLauncherMemory(): void {
+    this.icons.clear();
+    this.javaCache = undefined;
+    (globalThis as typeof globalThis & { gc?: () => void }).gc?.();
   }
 }

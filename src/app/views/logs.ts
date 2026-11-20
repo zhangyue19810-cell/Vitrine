@@ -2,6 +2,7 @@ import { rpc, tryRpc } from "../api";
 import { guard, openFolder, openLink, repairInstance } from "../actions";
 import { $, debounce, html, onAll, setHtml } from "../dom";
 import { errorMessage, formatBytes } from "../format";
+import { MAX_LOG_ERRORS } from "../log-limit";
 import { openSheet, toast } from "../modal";
 import { displayName } from "../records";
 import { store } from "../store";
@@ -13,6 +14,8 @@ import type { CrashAnalysis, CrashFinding, CrashFix, GameLine, GameSnapshot, Ins
  */
 
 const MAX_ROWS = 2000;
+/** Keep the console scannable: at most six failing lines are shown at once. */
+const MAX_ERROR_ROWS = MAX_LOG_ERRORS;
 
 type Level = "error" | "warn" | "debug" | "info";
 
@@ -69,6 +72,22 @@ export function mountLogViewer(host: HTMLElement, instanceId: string): LogViewer
     return row;
   };
 
+  /** The log is a diagnostic surface, not a wall of red. Keep the first six
+   *  error lines and explain where the rest can be inspected. */
+  const capErrors = () => {
+    const errors = [...view.querySelectorAll<HTMLElement>(".logline[data-lvl='error']")];
+    view.querySelector("[data-error-cap]")?.remove();
+    const hidden = Math.max(0, errors.length - MAX_ERROR_ROWS);
+    for (const row of errors.slice(MAX_ERROR_ROWS)) row.remove();
+    if (!hidden) return;
+    const note = document.createElement("div");
+    note.className = "logline log-cap";
+    note.dataset.errorCap = "";
+    note.dataset.lvl = "debug";
+    note.textContent = `为保持可读性，控制台只显示前 ${MAX_ERROR_ROWS} 条报错；其余内容请用“复制全部”或打开日志文件夹查看。`;
+    view.append(note);
+  };
+
   const paintState = () => {
     game = gameFor(instanceId);
     const text = !game
@@ -100,6 +119,7 @@ export function mountLogViewer(host: HTMLElement, instanceId: string): LogViewer
     }
     view.append(fragment);
     if (!all.length) view.innerHTML = `<div class="logline" data-lvl="debug">${gameId ? "还没有输出。" : "启动游戏后，控制台输出会实时显示在这里。"}</div>`;
+    capErrors();
     if (follow) view.scrollTop = view.scrollHeight;
   };
 
@@ -118,6 +138,7 @@ export function mountLogViewer(host: HTMLElement, instanceId: string): LogViewer
     last = fresh[fresh.length - 1];
     view.append(fragment);
     while (view.childElementCount > MAX_ROWS) view.firstElementChild!.remove();
+    capErrors();
     if (follow) view.scrollTop = view.scrollHeight;
   };
 

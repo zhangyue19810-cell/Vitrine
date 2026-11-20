@@ -168,5 +168,9 @@ describe("quality governor", () => {
     assert.equal(initialTier("auto", "NVIDIA GeForce RTX 5070"), "medium");
     assert.equal(initialTier("high", "NVIDIA GeForce RTX 5070"), "high");
     assert.equal(initialTier("low", "AMD Radeon"), "low");
+    assert.equal(initialTier("auto", "NVIDIA GeForce RTX 5070", { totalMemoryMB: 4096, cpuCount: 4 }), "minimal");
+    assert.equal(initialTier("auto", "NVIDIA GeForce RTX 5070", { totalMemoryMB: 8192, cpuCount: 8 }), "medium");
+    assert.equal(initialTier("auto", "NVIDIA GeForce RTX 5070", { totalMemoryMB: 32768, cpuCount: 16 }), "high");
+    assert.equal(initialTier("high", "NVIDIA GeForce RTX 5070", { totalMemoryMB: 4096, cpuCount: 4 }), "high");
   });
 });
