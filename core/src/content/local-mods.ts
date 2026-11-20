@@ -246,6 +246,28 @@ async function implementationVersion(zip: ZipReader): Promise<string | undefined
   return /^Implementation-Version:\s*(.+?)\s*$/m.exec(text.replace(/\r?\n /g, ""))?.[1];
 }
 
+/** Sinytra Connector ships as a loader implementation jar without a mods.toml/fabric.mod.json. */
+function parseSinytraConnectorManifest(text: string): ModMeta | undefined {
+  const normalized = text.replace(/\r?\n /g, "");
+  const title = /^Specification-Title:\s*(.+?)\s*$/im.exec(normalized)?.[1]?.trim().toLowerCase();
+  const vendor = /^Implementation-Vendor:\s*(.+?)\s*$/im.exec(normalized)?.[1]?.trim() ?? "";
+  const module = /^Automatic-Module-Name:\s*org\.sinytra\.connector\s*$/im.test(normalized);
+  if (title !== "connector" && !module) return undefined;
+  if (!module && !/sinytra/i.test(vendor)) return undefined;
+  return {
+    loaders: ["forge", "neoforge"],
+    id: "connector",
+    name: "Sinytra Connector",
+    version: /^Implementation-Version:\s*(.+?)\s*$/im.exec(normalized)?.[1],
+    description: "让 Fabric 模组运行在 NeoForge / Forge 上的兼容层",
+    authors: ["Sinytra"],
+    dependencies: [],
+    provides: ["fabricloader"],
+    extra: [],
+    environment: "*",
+  };
+}
+
 const MAX_NESTED = 48;
 const MAX_NESTED_BYTES = 48 * 1024 * 1024;
 
@@ -306,6 +328,10 @@ export async function readModFile(path: string, prefer?: ModLoaderType): Promise
     if (tomlName) await attempt(tomlName, async () => parseModsToml(await zip.readText(tomlName), { jarVersion: await implementationVersion(zip), neoforgeFile: neo }));
     if (!tomlName && zip.has("mcmod.info")) await attempt("mcmod.info", async () => parseMcmodInfo(await zip.readText("mcmod.info")));
     if (zip.has("litemod.json")) await attempt("litemod.json", async () => [parseLiteMod(await zip.readJson("litemod.json"))]);
+    if (!found.length && zip.has("META-INF/MANIFEST.MF")) {
+      const connector = parseSinytraConnectorManifest(await zip.readText("META-INF/MANIFEST.MF").catch(() => ""));
+      if (connector) found.push(connector);
+    }
 
     if (!found.length) throw new Error(errors.length ? errors.slice(0, 2).join("；") : "没有找到模组描述文件");
     const primary = (prefer && found.find((meta) => meta.loaders.includes(prefer))) || found[0];
@@ -393,7 +419,8 @@ interface CacheEntry {
 }
 
 interface CacheFile {
-  version: 1;
+  /** Bumped when descriptor parsing changes, so old "unreadable" answers are re-evaluated. */
+  version: 2;
   entries: Record<string, CacheEntry>;
 }
 
@@ -414,8 +441,8 @@ export async function scanMods(gameDir: string, options: ScanOptions = {}): Prom
   const dir = join(gameDir, folder);
   const dirents = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const files = dirents.filter((entry) => entry.isFile() && MOD_FILE.test(entry.name)).map((entry) => entry.name);
-  const cache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 1, entries: {} });
-  const entries = cache.version === 1 ? cache.entries : {};
+  const cache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 2, entries: {} });
+  const entries = cache.version === 2 ? cache.entries : {};
   const next: Record<string, CacheEntry> = {};
   let done = 0;
   const mods = await mapLimit(
@@ -443,7 +470,7 @@ export async function scanMods(gameDir: string, options: ScanOptions = {}): Prom
   throwIfAborted(options.signal);
   if (JSON.stringify(Object.keys(next).sort()) !== JSON.stringify(Object.keys(entries).sort()) || files.some((file) => entries[file] !== next[file])) {
     await ensureDir(join(gameDir, ".vitrine"));
-    await writeJsonAtomic(cachePath(gameDir, folder), { version: 1, entries: next } satisfies CacheFile, false).catch(() => {});
+    await writeJsonAtomic(cachePath(gameDir, folder), { version: 2, entries: next } satisfies CacheFile, false).catch(() => {});
   }
   return mods.sort((a, b) => (a.meta?.name ?? a.file).toLowerCase().localeCompare((b.meta?.name ?? b.file).toLowerCase()));
 }
@@ -451,7 +478,8 @@ export async function scanMods(gameDir: string, options: ScanOptions = {}): Prom
 /** Compute (and cache) SHA-1 for every mod: needed to look them up on Modrinth. */
 export async function hashMods(gameDir: string, mods: LocalMod[], options: { folder?: string; signal?: AbortSignal; concurrency?: number } = {}): Promise<LocalMod[]> {
   const folder = options.folder ?? "mods";
-  const cache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 1, entries: {} });
+  const storedCache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 2, entries: {} });
+  const cache: CacheFile = storedCache.version === 2 ? storedCache : { version: 2, entries: {} };
   let changed = false;
   const out = await mapLimit(
     mods,
@@ -528,6 +556,18 @@ export function analyzeMods(mods: LocalMod[], context: ModAnalysisContext = {}):
   const enabled = known.filter((mod) => !mod.disabled);
   const disabled = known.filter((mod) => mod.disabled);
   const instanceLoaders = [...new Set((context.loaders ?? []).map(normalizeLoaderKind))].filter((kind) => kind !== "none" && kind !== "optifine");
+  const hasSinytraConnector = mods.some((mod) => {
+    if (mod.disabled) return false;
+    const ids = [mod.meta?.id, ...(mod.meta?.provides ?? []), ...(mod.meta?.extra ?? []).map((entry) => entry.id)]
+      .filter((id): id is string => Boolean(id))
+      .map((id) => id.toLowerCase());
+    return ids.some((id) => id === "connector" || id === "sinytra_connector" || id === "sinytra-connector")
+      || /^connector[-_.].*\.jar(?:\.disabled|\.old)?$/i.test(mod.file);
+  });
+  // Sinytra Connector exposes Fabric mods through NeoForge/Forge. When it is
+  // installed and enabled, a Fabric mod is expected and must not be reported as
+  // the wrong loader.
+  const connectorBridgesFabric = hasSinytraConnector && instanceLoaders.some((kind) => kind === "forge" || kind === "neoforge");
   const addProviders = (target: Map<string, LocalMod[]>, mod: LocalMod) => {
     const add = (id: string | undefined) => {
       if (!id) return;
@@ -563,7 +603,8 @@ export function analyzeMods(mods: LocalMod[], context: ModAnalysisContext = {}):
       const needed = [...new Set(meta.loaders.map(normalizeLoaderKind))];
       const groups = new Set(instanceLoaders.map(loaderGroup));
       const compatible = needed.some((kind) => instanceLoaders.includes(kind) || groups.has(loaderGroup(kind)));
-      if (needed.length && !compatible) {
+      const bridged = connectorBridgesFabric && needed.some((kind) => loaderGroup(kind) === "fabric");
+      if (needed.length && !compatible && !bridged) {
         const suggested = (needed.find((kind) => kind === "fabric") ?? needed.find((kind) => kind === "quilt") ?? needed.find((kind) => kind === "neoforge") ?? needed.find((kind) => kind === "forge") ?? needed[0]) as "fabric" | "quilt" | "forge" | "neoforge" | "liteloader";
         if (suggested) {
           const entry = wrongLoader.get(suggested) ?? { files: [], names: [] };

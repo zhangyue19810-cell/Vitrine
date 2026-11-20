@@ -3,7 +3,7 @@ import { awaitTask, guard, openFolder, openLink, withBusy } from "../actions";
 import { $, $$, Latest, html, onAll, setHtml } from "../dom";
 import { formatBytes } from "../format";
 import { openMenu } from "../menu";
-import { confirmDialog, toast } from "../modal";
+import { confirmDialog, openDialog, toast } from "../modal";
 import type { LocalMod, ModProblem, ModUpdate } from "../types";
 import { loaderLabel } from "../format";
 import type { TabContext, TabHandle } from "./detail-types";
@@ -118,8 +118,7 @@ export function mount(ctx: TabContext): TabHandle {
       <div class="search-input grow"><input class="input" data-q placeholder="搜索模组名称、ID、作者…（支持模糊和中文关键词）" autocomplete="off" /></div>
       <div class="seg" data-filter><button data-v="all" aria-pressed="true">全部</button><button data-v="enabled" aria-pressed="false">已启用</button><button data-v="disabled" aria-pressed="false">已禁用</button><button data-v="problem" aria-pressed="false">有问题</button></div>
     </div>
-    <div class="toolbar"><button class="btn sm accent" data-act="mods-install">＋ 安装模组</button><button class="btn sm" data-act="mods-check">检查更新</button><button class="btn sm soft" data-act="mods-folder">打开 mods 文件夹</button><span class="muted grow" data-f="summary" style="font-size:12px;text-align:right"></span></div>
-    <div data-f="updates"></div>
+    <div class="toolbar"><button class="btn sm accent" data-act="mods-install">＋ 安装模组</button><button class="btn sm" data-act="mods-check" data-updates="0">检查更新</button><button class="btn sm soft" data-act="mods-folder">打开 mods 文件夹</button><span class="muted grow" data-f="summary" style="font-size:12px;text-align:right"></span></div>
     <div data-f="problems"></div>
     <div data-f="list"><div class="skeleton" style="height:58px;margin-bottom:6px"></div><div class="skeleton" style="height:58px;margin-bottom:6px"></div><div class="skeleton" style="height:58px"></div></div>
   </div>`;
@@ -138,6 +137,14 @@ export function mount(ctx: TabContext): TabHandle {
   let inflight = 0;
 
   const problemFiles = () => new Set(problems.flatMap((problem) => problem.files));
+  const hasConnectorBridge = () => mods.some((mod) => {
+    if (mod.disabled) return false;
+    const ids = [mod.meta?.id, ...(mod.meta?.provides ?? []), ...(mod.meta?.extra ?? []).map((entry) => entry.id)]
+      .filter((id): id is string => Boolean(id))
+      .map((id) => id.toLowerCase());
+    return ids.some((id) => id === "connector" || id === "sinytra_connector" || id === "sinytra-connector")
+      || /^connector[-_.].*\.jar(?:\.disabled|\.old)?$/i.test(mod.file);
+  });
 
   // ------------------------------------------------------------------------------------------ list
   async function load(keepScroll = false) {
@@ -246,7 +253,8 @@ export function mount(ctx: TabContext): TabHandle {
   function updateSummary(shown = mods.length) {
     const disabled = mods.filter((mod) => mod.disabled).length;
     const suffix = shown !== mods.length ? ` · 显示 ${shown}` : "";
-    f("summary").textContent = mods.length ? `共 ${mods.length} 个${disabled ? `（${disabled} 个已禁用）` : ""}${suffix}${query && shown ? " · 按相关度排序" : ""}` : "";
+    const bridge = hasConnectorBridge() ? " · 信雅互联兼容已启用" : "";
+    f("summary").textContent = mods.length ? `共 ${mods.length} 个${disabled ? `（${disabled} 个已禁用）` : ""}${suffix}${bridge}${query && shown ? " · 按相关度排序" : ""}` : "";
   }
 
   // ------------------------------------------------------------------------------------------ icons (only for rows that scroll into view)
@@ -396,6 +404,52 @@ export function mount(ctx: TabContext): TabHandle {
     }
   }
 
+  function syncUpdateButton() {
+    const button = body.querySelector<HTMLButtonElement>('[data-act="mods-check"]');
+    if (!button) return;
+    button.dataset.updates = String(updates.length);
+    button.textContent = updates.length ? `更新 ${updates.length}` : "检查更新";
+    button.title = updates.length ? `${updates.length} 个模组可以更新` : "检查 Modrinth 上的模组更新";
+  }
+
+  function openUpdatesDialog() {
+    if (!updates.length) return;
+    const rows = updates.map(
+      (update, index) => html`<label class="mod-update-row">
+        <input type="checkbox" data-u="${index}" checked />
+        <span class="thumb" aria-hidden="true">${(update.title || "?").slice(0, 1).toUpperCase()}</span>
+        <span class="mod-update-copy"><b>${update.title}</b><small>${update.currentVersion ?? "当前版本"} <span class="arrow">→</span> ${update.latest.versionNumber}</small></span>
+        <span class="chip accent">可更新</span>
+      </label>`,
+    );
+    const dialog = openDialog({
+      eyebrow: "MOD UPDATES",
+      title: `${updates.length} 个模组可以更新`,
+      size: "wide",
+      body: html`<div class="mod-update-list">${rows}</div><div class="muted mod-update-note">只显示 Modrinth 能通过文件哈希识别，并且与当前游戏版本和加载器兼容的更新。更新会下载新文件并替换旧文件。</div>`,
+      buttons: [
+        { id: "later", label: "稍后处理" },
+        { id: "apply", label: "更新所选", kind: "accent" },
+      ],
+      onButton: async (id, handle) => {
+        if (id !== "apply") return true;
+        const chosen = updates.filter((_, index) => handle.body.querySelector<HTMLInputElement>(`[data-u="${index}"]`)?.checked);
+        if (!chosen.length) {
+          toast("没有选择任何模组", "info");
+          return false;
+        }
+        const started = await withBusy(handle.button("apply") ?? handle.body, () => guard(() => rpc("content.applyUpdates", { instanceId: ctx.instance().id, updates: chosen })));
+        if (!started) return false;
+        updates = updates.filter((update) => !chosen.includes(update));
+        syncUpdateButton();
+        openDownloads(started.taskId);
+        void awaitTask(started.taskId, signal).then(() => void load(true), () => undefined);
+        return true;
+      },
+    });
+    dialog.root.classList.add("mod-update-dialog");
+  }
+
   async function checkUpdates(button: HTMLElement) {
     const instance = ctx.instance();
     const started = await guard(() => rpc("content.checkUpdates", { instanceId: instance.id }));
@@ -404,34 +458,13 @@ export function mount(ctx: TabContext): TabHandle {
       try {
         const task = await awaitTask(started.taskId, signal);
         updates = Array.isArray(task.result) ? (task.result as ModUpdate[]) : [];
-        paintUpdates();
-        toast(updates.length ? `${updates.length} 个模组可以更新` : "所有模组都是最新的", updates.length ? "info" : "ok");
+        syncUpdateButton();
+        toast(updates.length ? `发现 ${updates.length} 个模组可以更新` : "所有模组都是最新的", updates.length ? "info" : "ok");
+        if (updates.length) openUpdatesDialog();
       } catch (error) {
         if ((error as { code?: string }).code !== "cancelled") toast(`检查更新失败：${(error as Error).message}`, "error");
       }
     });
-  }
-
-  function paintUpdates() {
-    const host = f("updates");
-    if (!updates.length) return setHtml(host, html``);
-    setHtml(
-      host,
-      html`<div><div class="section-title">可更新（${updates.length}）<span class="actions"><button class="btn sm accent" data-act="mods-apply">更新所选</button></span></div><div class="list">${updates.map(
-        (update, index) => html`<label class="item" style="cursor:pointer"><input type="checkbox" data-u="${index}" checked /><div style="min-width:0"><div class="title">${update.title}</div><div class="sub">${update.currentVersion ?? "当前版本"} → ${update.latest.versionNumber}</div></div></label>`,
-      )}</div></div>`,
-    );
-  }
-
-  async function applyUpdates(button: HTMLElement) {
-    const chosen = updates.filter((_, index) => body.querySelector<HTMLInputElement>(`[data-u="${index}"]`)?.checked);
-    if (!chosen.length) return toast("没有选择任何模组", "info");
-    const started = await withBusy(button, () => guard(() => rpc("content.applyUpdates", { instanceId: ctx.instance().id, updates: chosen })));
-    if (!started) return;
-    updates = updates.filter((update) => !chosen.includes(update));
-    paintUpdates();
-    openDownloads(started.taskId);
-    void awaitTask(started.taskId, signal).then(() => void load(true), () => undefined);
   }
 
   // ------------------------------------------------------------------------------------------ wiring
@@ -461,9 +494,7 @@ export function mount(ctx: TabContext): TabHandle {
       case "mods-install":
         return void import("../content-browse").then(({ browseContent }) => browseContent({ kind: "mod", instanceId: ctx.instance().id }));
       case "mods-check":
-        return void checkUpdates(element);
-      case "mods-apply":
-        return void applyUpdates(element);
+        return updates.length ? openUpdatesDialog() : void checkUpdates(element);
       case "mods-folder":
         return void openFolder(ctx.instance().id, "mods");
       case "mods-reload":

@@ -16,7 +16,7 @@ import { RpcClient } from "./helpers/ws-client";
 describe("settings migration", () => {
   it("upgrades untouched version 1 download defaults but keeps custom choices", () => {
     const oldDefaults = normalizeSettings({ version: 1, download: { concurrency: 32, segments: 4, speedLimitKBps: 0 }, sources: { contentPolicy: "official-first" } });
-    assert.equal(oldDefaults.version, 2);
+    assert.equal(oldDefaults.version, 3);
     assert.equal(oldDefaults.download.concurrency, 64);
     assert.equal(oldDefaults.download.segments, 8);
     assert.equal(oldDefaults.sources.contentPolicy, "mirror-first");
@@ -25,7 +25,12 @@ describe("settings migration", () => {
     assert.equal(custom.download.concurrency, 32);
     assert.equal(custom.download.segments, 4);
     assert.equal(custom.sources.contentPolicy, "official-first");
-    assert.equal(DEFAULT_SETTINGS.version, 2);
+    assert.equal(custom.ui.theme, "dark", "legacy auto follows the dark-first release, while explicit colours remain untouched");
+    const explicitLight = normalizeSettings({ version: 2, ui: { theme: "light" } });
+    assert.equal(explicitLight.ui.theme, "light");
+    const legacyAuto = normalizeSettings({ version: 2, ui: { theme: "auto" } });
+    assert.equal(legacyAuto.ui.theme, "dark");
+    assert.equal(DEFAULT_SETTINGS.version, 3);
   });
 });
 
@@ -96,7 +101,7 @@ describe("the core over the development transport", () => {
       assert.equal(boot.settings.ui.pauseWhenGameRuns, true);
       assert.equal(boot.settings.ui.whenUnfocused, "pause");
       assert.equal(boot.settings.ui.releaseGpuWhenGameRuns, true);
-      assert.equal(boot.settings.ui.theme, "auto");
+      assert.equal(boot.settings.ui.theme, "dark");
       assert.equal(boot.settings.launch.jvmPreset, "auto");
       assert.equal(boot.settings.launch.optimize, true);
       assert.ok(Array.isArray(boot.instances) && Array.isArray(boot.accounts) && Array.isArray(boot.tasks));

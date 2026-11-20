@@ -316,4 +316,30 @@ describe("checking a mod set", () => {
     assert.deepEqual(wrong[0].files.sort(), ["one.jar", "two.jar"]);
     assert.match(wrong[0].message, /当前实例是 forge/);
   });
+
+  it("does not report Fabric mods as wrong-loader when Sinytra Connector bridges NeoForge", async () => {
+    const game = join(tmp, "sinytra-checks");
+    const modsDir = join(game, "mods");
+    await jar(
+      "connector-2.0.0+1.21.1.jar",
+      {
+        "META-INF/MANIFEST.MF": [
+          "Manifest-Version: 1.0",
+          "Specification-Title: connector",
+          "Implementation-Vendor: Sinytra",
+          "Implementation-Version: 2.0.0",
+          "Automatic-Module-Name: org.sinytra.connector",
+          "",
+        ].join("\n"),
+      },
+      modsDir,
+    );
+    await jar("sodium.jar", { "fabric.mod.json": JSON.stringify({ id: "sodium", name: "Sodium" }) }, modsDir);
+    const mods = await scanMods(game);
+    const connector = mods.find((mod) => mod.meta?.id === "connector");
+    assert.ok(connector, "Connector's manifest should be recognized");
+    assert.deepEqual(connector!.meta!.loaders, ["forge", "neoforge"]);
+    const problems = analyzeMods(mods, { loaders: ["neoforge"] });
+    assert.equal(problems.some((problem) => problem.kind === "wrong-loader"), false);
+  });
 });

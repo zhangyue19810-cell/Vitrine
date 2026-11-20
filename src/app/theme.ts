@@ -9,29 +9,29 @@
 export type ThemeSetting = "auto" | "light" | "dark";
 
 const PALETTE = {
-  ink: ["#080a08", "#e0e3dc"],
-  muted: ["#77756d", "#a6b0b1"],
-  line: ["#aaa59a", "#536166"],
-  paper: ["#eae5e1", "#11181b"],
-  panel: ["#edebe4", "#202a2f"],
-  field: ["#e7e3d9", "#2a363b"],
-  glass: ["#f6f2eb", "#182226"],
-  "glass-strong": ["#fffdf8", "#223035"],
-  rim: ["#ffffff", "#9fb1b5"],
-  accent: ["#1f9e8e", "#4fd8c4"],
-  "accent-ink": ["#157060", "#5fe0cc"],
-  "on-accent": ["#ffffff", "#06201c"],
-  danger: ["#b03a2e", "#ff8173"],
+  ink: ["#080a08", "#f0f4f0"],
+  muted: ["#77756d", "#a2b7b8"],
+  line: ["#aaa59a", "#34484b"],
+  paper: ["#eae5e1", "#060b0d"],
+  panel: ["#edebe4", "#111a1d"],
+  field: ["#e7e3d9", "#18262a"],
+  glass: ["#f6f2eb", "#0d181b"],
+  "glass-strong": ["#fffdf8", "#1b2c30"],
+  rim: ["#ffffff", "#bce3dc"],
+  accent: ["#1f9e8e", "#58f1d3"],
+  "accent-ink": ["#157060", "#86f7e2"],
+  "on-accent": ["#ffffff", "#031411"],
+  danger: ["#b03a2e", "#ff877b"],
   "on-danger": ["#ffffff", "#2a0c08"],
-  warn: ["#b27618", "#e0a84a"],
-  ok: ["#288254", "#5ccf8f"],
+  warn: ["#b27618", "#ffc15f"],
+  ok: ["#288254", "#6fe0a2"],
 } as const;
 
 type Rgb = [number, number, number];
 const parse = (hex: string): Rgb => [1, 3, 5].map((i) => Number.parseInt(hex.slice(i, i + 2), 16)) as Rgb;
 const TABLE = Object.entries(PALETTE).map(([name, [light, dark]]) => ({ name, from: parse(light), to: parse(dark) }));
 /** Variables that also get an "-rgb" companion for rgba() use. */
-const WITH_RGB = new Set(["ink", "paper", "panel", "glass", "glass-strong", "rim", "accent"]);
+const WITH_RGB = new Set(["ink", "paper", "panel", "glass", "glass-strong", "rim", "accent", "danger", "warn", "ok"]);
 
 let painted = -1;
 

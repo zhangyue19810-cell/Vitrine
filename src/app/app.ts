@@ -10,6 +10,7 @@ import { browseContent } from "./content-browse";
 import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
+import { installLiquidGlass } from "./liquid-glass";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { Perf, type PerfApp } from "./perf";
@@ -147,6 +148,7 @@ export class App implements PerfApp {
     const stage = this.stage;
     stage.innerHTML = STAGE_TEMPLATE;
     document.title = `${PRODUCT.name} ${PRODUCT.nameCn}`;
+    installLiquidGlass(stage);
     wireModals();
     this.layout = new Layout(this.viewport, stage);
 

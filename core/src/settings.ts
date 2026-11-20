@@ -6,7 +6,7 @@ import type { JvmPreset } from "./mc/jvm";
 export type AfterLaunch = "keep" | "minimize" | "hide" | "close";
 
 export interface Settings {
-  version: 2;
+  version: 3;
   /** Folder holding versions/, libraries/ and assets/. Empty = `<data>/minecraft`. */
   gameRoot: string;
   sources: SourceSettings;
@@ -58,7 +58,7 @@ export const DEFAULT_MS_CLIENT_ID = "7d584720-c4ba-42f5-bcc7-0ec98897fb2b";
 export const DEFAULT_OWNER_UUID = "";
 
 export const DEFAULT_SETTINGS: Settings = {
-  version: 2,
+  version: 3,
   gameRoot: "",
   sources: { ...DEFAULT_SOURCES },
   download: { concurrency: 64, segments: 8, speedLimitKBps: 0, retries: 3 },
@@ -66,7 +66,7 @@ export const DEFAULT_SETTINGS: Settings = {
   java: { autoInstall: true, extraPaths: [] },
   launch: { memory: "auto", jvmPreset: "auto", jvmArgs: "", optimize: true, gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
   accounts: { msClientId: DEFAULT_MS_CLIENT_ID, curseforgeKey: "", ownerUuid: DEFAULT_OWNER_UUID },
-  ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "auto", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1 },
+  ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "dark", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1 },
 };
 
 type Json = Record<string, unknown>;
@@ -232,6 +232,9 @@ export function normalizeSettings(stored: unknown): Settings {
       if (result.sources.contentPolicy === "official-first") result.sources.contentPolicy = DEFAULT_SETTINGS.sources.contentPolicy;
     }
   }
+  // This release makes the liquid-glass dark palette the primary look. Existing
+  // "auto" users move to dark once; an explicit light/dark choice is preserved.
+  if (storedVersion < 3 && result.ui.theme === "auto") result.ui.theme = "dark";
   return result;
 }
 

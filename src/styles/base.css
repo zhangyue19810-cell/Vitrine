@@ -29,8 +29,11 @@
   --on-accent: rgb(255, 255, 255);
   --on-danger: rgb(255, 255, 255);
   --danger: rgb(176, 58, 46);
+  --danger-rgb: 176, 58, 46;
   --warn: rgb(178, 118, 24);
+  --warn-rgb: 178, 118, 24;
   --ok: rgb(40, 130, 84);
+  --ok-rgb: 40, 130, 84;
   --font: "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, "Microsoft YaHei", monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
