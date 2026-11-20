@@ -280,7 +280,7 @@ function patchDetail(detail: HTMLElement, task: TaskSnapshot) {
   const log = detail.querySelector<HTMLElement>("[data-f='log']");
   if (log) {
     const lines = store.taskLogs.get(task.id) ?? [];
-    const text = lines.slice(-200).join("\n");
+    const text = capErrorText(lines.slice(-200).join("\n")).text;
     if (log.textContent !== text) {
       const stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 24;
       log.textContent = text || "（暂无日志）";
