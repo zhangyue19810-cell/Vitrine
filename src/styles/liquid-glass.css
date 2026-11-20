@@ -795,3 +795,197 @@
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------------------------------ mod warning popover */
+
+.mod-problem-trigger {
+  color: var(--warn);
+  border-color: rgba(var(--warn-rgb), 0.36);
+  background:
+    linear-gradient(145deg, rgba(255, 193, 95, 0.15), rgba(var(--glass-strong-rgb), 0.22)),
+    radial-gradient(ellipse at 100% 0%, rgba(255, 193, 95, 0.16), transparent 62%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 225, 168, 0.3),
+    0 6px 16px rgba(0, 0, 0, 0.08);
+}
+
+.mod-problem-trigger[hidden] {
+  display: none;
+}
+
+.mod-problem-trigger::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--warn);
+  box-shadow: 0 0 0 3px rgba(var(--warn-rgb), 0.12), 0 0 12px rgba(var(--warn-rgb), 0.55);
+  animation: problem-beacon 2.2s ease-in-out infinite;
+}
+
+.mod-problem-trigger b {
+  color: var(--warn);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-problem-trigger:hover {
+  border-color: rgba(var(--warn-rgb), 0.62);
+  background:
+    linear-gradient(145deg, rgba(255, 193, 95, 0.24), rgba(var(--glass-strong-rgb), 0.32)),
+    radial-gradient(ellipse at 100% 0%, rgba(255, 193, 95, 0.22), transparent 62%);
+}
+
+.mod-problem-popover {
+  position: absolute;
+  z-index: 46;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: min(68vh, 520px);
+  padding: 14px;
+  border: 1px solid rgba(var(--warn-rgb), 0.32);
+  border-radius: 16px;
+  background:
+    radial-gradient(ellipse at 100% 0%, rgba(var(--warn-rgb), 0.14), transparent 46%),
+    radial-gradient(ellipse at 0% 100%, rgba(var(--accent-rgb), 0.1), transparent 56%),
+    linear-gradient(145deg, rgba(var(--glass-strong-rgb), 0.93), rgba(var(--glass-rgb), 0.72));
+  box-shadow:
+    0 30px 85px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(var(--rim-rgb), 0.12),
+    inset 0 1px 0 rgba(var(--rim-rgb), 0.48),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(30px) saturate(1.45);
+  -webkit-backdrop-filter: blur(30px) saturate(1.45);
+  transform-origin: 82% 0;
+  animation: mod-problem-pop 0.44s cubic-bezier(0.2, 1.32, 0.3, 1) both;
+}
+
+.mod-problem-popover.leaving {
+  animation: mod-problem-out 0.16s ease both;
+}
+
+.mod-problem-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(var(--warn-rgb), 0.2);
+}
+
+.mod-problem-head > div:first-child {
+  display: grid;
+  gap: 4px;
+}
+
+.mod-problem-head b {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink);
+}
+
+.mod-problem-head .micro {
+  color: var(--warn);
+}
+
+.mod-problem-list {
+  display: grid;
+  gap: 7px;
+  min-height: 0;
+  overflow: auto;
+  padding: 1px 4px 1px 1px;
+  overscroll-behavior: contain;
+}
+
+.mod-problem-list .problem {
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 10px 11px;
+  border-color: rgba(var(--warn-rgb), 0.36);
+  border-radius: 11px;
+  background:
+    linear-gradient(145deg, rgba(var(--glass-strong-rgb), 0.34), rgba(var(--glass-rgb), 0.12)),
+    radial-gradient(ellipse at 100% 0%, rgba(255, 193, 95, 0.1), transparent 62%);
+  box-shadow: inset 0 1px 0 rgba(255, 225, 168, 0.2);
+}
+
+.mod-problem-list .problem + .problem {
+  margin-top: 0;
+}
+
+.mod-problem-list .problem .btn {
+  flex: none;
+  white-space: nowrap;
+}
+
+.mod-problem-note {
+  padding-top: 9px;
+  border-top: 1px solid rgba(var(--rim-rgb), 0.14);
+  color: var(--muted);
+  font-size: 11.5px;
+  line-height: 1.65;
+}
+
+@keyframes mod-problem-pop {
+  0% {
+    opacity: 0;
+    transform: translateY(10px) scale(0.94);
+  }
+  66% {
+    opacity: 1;
+    transform: translateY(-2px) scale(1.012);
+  }
+  84% {
+    transform: translateY(1px) scale(0.998);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes mod-problem-out {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0;
+    transform: translateY(6px) scale(0.97);
+  }
+}
+
+@keyframes problem-beacon {
+  0%, 100% {
+    opacity: 0.58;
+    transform: scale(0.88);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mod-problem-popover,
+  .mod-problem-popover.leaving,
+  .mod-problem-trigger::before {
+    animation: none;
+  }
+}
+
+#stage.reduce-motion .mod-problem-popover,
+#stage.reduce-motion .mod-problem-popover.leaving,
+#stage.reduce-motion .mod-problem-trigger::before {
+  animation: none;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .mod-problem-popover {
+    background: var(--panel);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}

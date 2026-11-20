@@ -298,9 +298,81 @@ async function nestedFabricIds(zip: ZipReader, paths: string[], depth: number): 
 }
 
 /**
+ * Some NeoForge / Forge distributions bundle their modules as jar-in-jar. Connector-friendly
+ * Fabric jars may also hide nested dependencies behind a loader-specific metadata path. Scan
+ * the nested jars themselves (not just Fabric's `jars` array) so a required module such as
+ * `simulated` / `foundation` is seen as provided by the parent jar.
+ */
+async function nestedJarIds(zip: ZipReader, depth = 0): Promise<string[]> {
+  if (depth > 2) return [];
+  const entries = zip.entries
+    .filter((entry) => !entry.isDirectory && /\.jar$/i.test(entry.name) && entry.size <= MAX_NESTED_BYTES)
+    .slice(0, MAX_NESTED);
+  const ids = new Set<string>();
+  // NeoForge jar-in-jar metadata can name a bundled artifact even when the
+  // nested bytes are unavailable to this parser. Keep the artifact id too.
+  if (zip.has("META-INF/jarjar/metadata.json")) {
+    const metadata = asObject(await zip.readJson("META-INF/jarjar/metadata.json").catch(() => undefined));
+    for (const entry of asArray(metadata?.jars)) {
+      const artifact = asString(asObject(asObject(entry)?.identifier)?.artifact);
+      if (artifact) ids.add(artifact);
+    }
+  }
+  for (const entry of entries) {
+    // Even if the nested descriptor is missing, a bundled `simulated-1.3.2.jar`
+    // is strong enough evidence that the module is present.
+    const inferredId = inferIdFromFilename(entry.name);
+    if (inferredId) ids.add(inferredId);
+    let inner: ZipReader | undefined;
+    try {
+      inner = await ZipReader.fromBuffer(await zip.read(entry, MAX_NESTED_BYTES));
+      if (inner.has("fabric.mod.json")) {
+        const meta = parseFabricMod(await inner.readJson("fabric.mod.json"));
+        if (meta.id) ids.add(meta.id);
+        for (const id of meta.provides) ids.add(id);
+      }
+      if (inner.has("quilt.mod.json")) {
+        const meta = parseQuiltMod(await inner.readJson("quilt.mod.json"));
+        if (meta.id) ids.add(meta.id);
+        for (const id of meta.provides) ids.add(id);
+      }
+      for (const toml of ["META-INF/neoforge.mods.toml", "META-INF/mods.toml"]) {
+        if (!inner.has(toml)) continue;
+        for (const meta of parseModsToml(await inner.readText(toml), { neoforgeFile: toml.includes("neoforge") })) {
+          if (meta.id) ids.add(meta.id);
+          for (const id of meta.provides) ids.add(id);
+        }
+        break;
+      }
+      if (inner.has("mcmod.info")) {
+        for (const meta of parseMcmodInfo(await inner.readText("mcmod.info"))) if (meta.id) ids.add(meta.id);
+      }
+      if (inner.has("litemod.json")) {
+        const meta = parseLiteMod(await inner.readJson("litemod.json"));
+        if (meta.id) ids.add(meta.id);
+      }
+      if (depth < 2) for (const id of await nestedJarIds(inner, depth + 1)) ids.add(id);
+    } catch {
+      /* a damaged nested jar only costs us its ids */
+    } finally {
+      inner?.close();
+    }
+  }
+  return [...ids];
+}
+
+/**
  * Read the metadata of a mod file. When a jar carries several loaders' descriptors (multi-loader mods),
  * `prefer` decides which one becomes the primary entry.
  */
+/** Best-effort module id from a jar filename (`simulated-1.3.2.jar` → `simulated`). */
+function inferIdFromFilename(name: string): string | undefined {
+  const stem = (name.split(/[\\/]/).pop() ?? name).replace(/\.(?:disabled|old)$/i, "").replace(/\.jar$/i, "");
+  const inferred = stem.match(/^(.+?)[-_]v?\d/i)?.[1] ?? stem;
+  const id = inferred.replace(/[-_](?:forge|neoforge|fabric|quilt|common)$/i, "").toLowerCase();
+  return /^[a-z][a-z0-9_]{1,64}$/.test(id) ? id : undefined;
+}
+
 export async function readModFile(path: string, prefer?: ModLoaderType): Promise<ModMeta> {
   const zip = await ZipReader.open(path);
   try {
@@ -333,10 +405,18 @@ export async function readModFile(path: string, prefer?: ModLoaderType): Promise
       if (connector) found.push(connector);
     }
 
+    const nested = await nestedJarIds(zip);
+    if (!found.length && nested.length) {
+      // A bundle jar (notably some Create / Connector distributions) can carry
+      // modules without declaring a top-level descriptor of its own.
+      const id = inferIdFromFilename(path);
+      found.push({ id, name: id, authors: [], dependencies: [], loaders: [], provides: nested, extra: [] });
+    }
     if (!found.length) throw new Error(errors.length ? errors.slice(0, 2).join("；") : "没有找到模组描述文件");
     const primary = (prefer && found.find((meta) => meta.loaders.includes(prefer))) || found[0];
     const rest = found.filter((meta) => meta !== primary);
     const loaders = [...new Set(found.flatMap((meta) => meta.loaders))];
+    if (nested.length) primary.provides = [...new Set([...primary.provides, ...nested])];
     const sameFile = (meta: ModMeta) => (meta.id && meta.id !== primary.id ? [{ id: meta.id, name: meta.name, version: meta.version }] : []);
     return {
       ...primary,
@@ -420,7 +500,7 @@ interface CacheEntry {
 
 interface CacheFile {
   /** Bumped when descriptor parsing changes, so old "unreadable" answers are re-evaluated. */
-  version: 2;
+  version: 3;
   entries: Record<string, CacheEntry>;
 }
 
@@ -441,8 +521,8 @@ export async function scanMods(gameDir: string, options: ScanOptions = {}): Prom
   const dir = join(gameDir, folder);
   const dirents = await readdir(dir, { withFileTypes: true }).catch(() => []);
   const files = dirents.filter((entry) => entry.isFile() && MOD_FILE.test(entry.name)).map((entry) => entry.name);
-  const cache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 2, entries: {} });
-  const entries = cache.version === 2 ? cache.entries : {};
+  const cache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 3, entries: {} });
+  const entries = cache.version === 3 ? cache.entries : {};
   const next: Record<string, CacheEntry> = {};
   let done = 0;
   const mods = await mapLimit(
@@ -470,7 +550,7 @@ export async function scanMods(gameDir: string, options: ScanOptions = {}): Prom
   throwIfAborted(options.signal);
   if (JSON.stringify(Object.keys(next).sort()) !== JSON.stringify(Object.keys(entries).sort()) || files.some((file) => entries[file] !== next[file])) {
     await ensureDir(join(gameDir, ".vitrine"));
-    await writeJsonAtomic(cachePath(gameDir, folder), { version: 2, entries: next } satisfies CacheFile, false).catch(() => {});
+    await writeJsonAtomic(cachePath(gameDir, folder), { version: 3, entries: next } satisfies CacheFile, false).catch(() => {});
   }
   return mods.sort((a, b) => (a.meta?.name ?? a.file).toLowerCase().localeCompare((b.meta?.name ?? b.file).toLowerCase()));
 }
@@ -478,8 +558,8 @@ export async function scanMods(gameDir: string, options: ScanOptions = {}): Prom
 /** Compute (and cache) SHA-1 for every mod: needed to look them up on Modrinth. */
 export async function hashMods(gameDir: string, mods: LocalMod[], options: { folder?: string; signal?: AbortSignal; concurrency?: number } = {}): Promise<LocalMod[]> {
   const folder = options.folder ?? "mods";
-  const storedCache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 2, entries: {} });
-  const cache: CacheFile = storedCache.version === 2 ? storedCache : { version: 2, entries: {} };
+  const storedCache = await readJsonOr<CacheFile>(cachePath(gameDir, folder), { version: 3, entries: {} });
+  const cache: CacheFile = storedCache.version === 3 ? storedCache : { version: 3, entries: {} };
   let changed = false;
   const out = await mapLimit(
     mods,

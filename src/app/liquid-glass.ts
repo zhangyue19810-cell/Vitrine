@@ -20,6 +20,8 @@ const LIQUID_TARGET = [
   ".problem",
   ".mod-row",
   ".mod-update-row",
+  ".mod-problem-trigger",
+  ".mod-problem-popover",
   ".item",
   ".empty",
   ".logview",

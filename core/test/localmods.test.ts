@@ -157,6 +157,16 @@ describe("reading mod files", () => {
     assert.deepEqual([...meta.provides].sort(), ["fabric-api-base", "fabric-resource-loader-v0", "fabric-resources-v0"]);
   });
 
+  it("reads provider ids from a bundled jar without a top-level descriptor", async () => {
+    const dir = join(tmp, "bundled-only", "mods");
+    const inner = await zipBuffer({
+      "META-INF/neoforge.mods.toml": 'modLoader="javafml"\nloaderVersion="[1,)"\nlicense="MIT"\n[[mods]]\nmodId="simulated"\nversion="1.3.2"\n',
+    });
+    const outer = await jar("create-aeronautics-bundled-1.21.1-1.3.3.jar", { "META-INF/jarjar/simulated-1.3.2.jar": inner }, dir);
+    const meta = await readModFile(outer);
+    assert.ok(meta.provides.includes("simulated"));
+  });
+
   it("handles multi-loader jars and descriptors that cannot be read", async () => {
     const both = await jar("multi.jar", {
       "fabric.mod.json": JSON.stringify({ id: "multi", name: "Multi", version: "1" }),
@@ -315,6 +325,29 @@ describe("checking a mod set", () => {
     assert.deepEqual(wrong[0].fix, { kind: "switch-loader", loader: "fabric" });
     assert.deepEqual(wrong[0].files.sort(), ["one.jar", "two.jar"]);
     assert.match(wrong[0].message, /当前实例是 forge/);
+  });
+
+  it("sees NeoForge jar-in-jar providers such as simulated in a bundled mod", async () => {
+    const game = join(tmp, "nested-neoforge");
+    const modsDir = join(game, "mods");
+    const nested = await zipBuffer({
+      "META-INF/neoforge.mods.toml": 'modLoader="javafml"\nloaderVersion="[1,)"\nlicense="MIT"\n[[mods]]\nmodId="simulated"\nversion="1.3.2"\n',
+    });
+    await jar(
+      "AeroEngine-1.3.0.jar",
+      {
+        "META-INF/neoforge.mods.toml": 'modLoader="javafml"\nloaderVersion="[1,)"\nlicense="MIT"\n[[mods]]\nmodId="aeroengineering"\nversion="1.3.0"\n[[dependencies.aeroengineering]]\nmodId="simulated"\ntype="required"\nversionRange="[1.2.1,1.4)"\n',
+        "META-INF/jarjar/simulated-1.3.2.jar": nested,
+        "META-INF/jarjar/foundation-1.0.6.jar": await zipBuffer({ "README.txt": "descriptor-free bundled library" }),
+      },
+      modsDir,
+    );
+    const mods = await scanMods(game);
+    const outer = mods.find((mod) => mod.meta?.id === "aeroengineering");
+    assert.ok(outer);
+    assert.ok(outer!.meta!.provides.includes("simulated"), "nested provider id should be exposed");
+    assert.ok(outer!.meta!.provides.includes("foundation"), "descriptor-free nested jar should fall back to its filename");
+    assert.equal(analyzeMods(mods).some((problem) => problem.kind === "missing-dependency" && problem.id === "simulated"), false);
   });
 
   it("does not report Fabric mods as wrong-loader when Sinytra Connector bridges NeoForge", async () => {

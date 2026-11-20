@@ -118,11 +118,11 @@ export function mount(ctx: TabContext): TabHandle {
       <div class="search-input grow"><input class="input" data-q placeholder="搜索模组名称、ID、作者…（支持模糊和中文关键词）" autocomplete="off" /></div>
       <div class="seg" data-filter><button data-v="all" aria-pressed="true">全部</button><button data-v="enabled" aria-pressed="false">已启用</button><button data-v="disabled" aria-pressed="false">已禁用</button><button data-v="problem" aria-pressed="false">有问题</button></div>
     </div>
-    <div class="toolbar"><button class="btn sm accent" data-act="mods-install">＋ 安装模组</button><button class="btn sm" data-act="mods-check" data-updates="0">检查更新</button><button class="btn sm soft" data-act="mods-folder">打开 mods 文件夹</button><span class="muted grow" data-f="summary" style="font-size:12px;text-align:right"></span></div>
-    <div data-f="problems"></div>
+    <div class="toolbar"><button class="btn sm accent" data-act="mods-install">＋ 安装模组</button><button class="btn sm" data-act="mods-check" data-updates="0">检查更新</button><button class="btn sm soft" data-act="mods-folder">打开 mods 文件夹</button><button class="btn sm mod-problem-trigger" data-act="mods-problems" data-problems="0" aria-haspopup="dialog" aria-expanded="false" title="悬停或点击查看注意事项" hidden>注意 <b data-f="problem-count">0</b></button><span class="muted grow" data-f="summary" style="font-size:12px;text-align:right"></span></div>
     <div data-f="list"><div class="skeleton" style="height:58px;margin-bottom:6px"></div><div class="skeleton" style="height:58px;margin-bottom:6px"></div><div class="skeleton" style="height:58px"></div></div>
   </div>`;
   const f = (name: string) => $(`[data-f="${name}"]`, body);
+  const problemTrigger = body.querySelector<HTMLButtonElement>('[data-act="mods-problems"]')!;
   const latest = new Latest();
   let mods: LocalMod[] = [];
   let problems: ModProblem[] = [];
@@ -135,16 +135,14 @@ export function mount(ctx: TabContext): TabHandle {
   const icons = new Map<string, string | null>();
   const queue: HTMLElement[] = [];
   let inflight = 0;
+  let problemPopover: HTMLElement | undefined;
+  let problemCloseTimer: ReturnType<typeof setTimeout> | undefined;
+  let problemPinned = false;
+  let problemFocusGuard = false;
+  let problemOutsideListener: ((event: PointerEvent) => void) | undefined;
+  let problemKeyListener: ((event: KeyboardEvent) => void) | undefined;
 
   const problemFiles = () => new Set(problems.flatMap((problem) => problem.files));
-  const hasConnectorBridge = () => mods.some((mod) => {
-    if (mod.disabled) return false;
-    const ids = [mod.meta?.id, ...(mod.meta?.provides ?? []), ...(mod.meta?.extra ?? []).map((entry) => entry.id)]
-      .filter((id): id is string => Boolean(id))
-      .map((id) => id.toLowerCase());
-    return ids.some((id) => id === "connector" || id === "sinytra_connector" || id === "sinytra-connector")
-      || /^connector[-_.].*\.jar(?:\.disabled|\.old)?$/i.test(mod.file);
-  });
 
   // ------------------------------------------------------------------------------------------ list
   async function load(keepScroll = false) {
@@ -253,8 +251,7 @@ export function mount(ctx: TabContext): TabHandle {
   function updateSummary(shown = mods.length) {
     const disabled = mods.filter((mod) => mod.disabled).length;
     const suffix = shown !== mods.length ? ` · 显示 ${shown}` : "";
-    const bridge = hasConnectorBridge() ? " · 信雅互联兼容已启用" : "";
-    f("summary").textContent = mods.length ? `共 ${mods.length} 个${disabled ? `（${disabled} 个已禁用）` : ""}${suffix}${bridge}${query && shown ? " · 按相关度排序" : ""}` : "";
+    f("summary").textContent = mods.length ? `共 ${mods.length} 个${disabled ? `（${disabled} 个已禁用）` : ""}${suffix}${query && shown ? " · 按相关度排序" : ""}` : "";
   }
 
   // ------------------------------------------------------------------------------------------ icons (only for rows that scroll into view)
@@ -309,24 +306,139 @@ export function mount(ctx: TabContext): TabHandle {
   }
 
   // ------------------------------------------------------------------------------------------ problems
+  function problemAction(problem: ModProblem) {
+    if (problem.kind === "duplicate") return { how: "dedupe", label: "只留最新的" };
+    if (problem.fix?.kind === "install-dependency") return { how: "dependency", label: "一键补齐" };
+    if (problem.fix?.kind === "enable-mod") return { how: "enable", label: "启用前置" };
+    if (problem.fix?.kind === "switch-loader") return { how: "loader", label: "更换加载器" };
+    return undefined;
+  }
+
+  function problemRow(problem: ModProblem, index: number) {
+    const action = problemAction(problem);
+    return html`<div class="problem"><span class="chip warn" style="flex:none">${KIND_LABEL[problem.kind]}</span><div style="flex:1;min-width:0"><div>${problem.message}</div><div class="muted" style="font-size:11.5px;margin-top:3px;overflow-wrap:anywhere">${problem.files.join("、")}</div></div>${action ? html`<button class="btn sm" data-problem="${index}" data-fix="${action.how}">${action.label}</button>` : ""}</div>`;
+  }
+
+  function problemPopoverMarkup() {
+    return html`<header class="mod-problem-head"><div><div class="micro">MOD CHECKS</div><b>需要注意 ${problems.length} 项</b></div><button class="btn icon ghost sm" data-problem-close aria-label="关闭" title="关闭">✕</button></header><div class="mod-problem-list">${problems.map((problem, index) => problemRow(problem, index))}</div><div class="mod-problem-note">这些是结构检查，不会自动修改文件。缺少的前置可以点右侧按钮处理。</div>`;
+  }
+
   function paintProblems() {
-    const host = f("problems");
-    if (!problems.length) return setHtml(host, html``);
-    setHtml(
-      host,
-      html`<div><div class="section-title">需要注意（${problems.length}）</div>${problems.map((problem, index) => {
-        const action = problem.kind === "duplicate"
-          ? { how: "dedupe", label: "只留最新的" }
-          : problem.fix?.kind === "install-dependency"
-            ? { how: "dependency", label: "一键补齐" }
-            : problem.fix?.kind === "enable-mod"
-              ? { how: "enable", label: "启用前置" }
-              : problem.fix?.kind === "switch-loader"
-                ? { how: "loader", label: "更换加载器" }
-                : undefined;
-        return html`<div class="problem"><span class="chip warn" style="flex:none">${KIND_LABEL[problem.kind]}</span><div style="flex:1;min-width:0"><div>${problem.message}</div><div class="muted" style="font-size:11.5px;margin-top:3px;overflow-wrap:anywhere">${problem.files.join("、")}</div></div>${action ? html`<button class="btn sm" data-problem="${index}" data-fix="${action.how}">${action.label}</button>` : ""}</div>`;
-      })}</div>`,
-    );
+    problemTrigger.hidden = problems.length === 0;
+    problemTrigger.dataset.problems = String(problems.length);
+    if (!problems.length) closeProblemPopover(true);
+    problemTrigger.setAttribute("aria-expanded", String(Boolean(problemPopover)));
+    const count = problemTrigger.querySelector<HTMLElement>("[data-f='problem-count']");
+    if (count) count.textContent = String(problems.length);
+    if (problemPopover?.isConnected) {
+      const title = problemPopover.querySelector<HTMLElement>(".mod-problem-head b");
+      const list = problemPopover.querySelector<HTMLElement>(".mod-problem-list");
+      const note = problemPopover.querySelector<HTMLElement>(".mod-problem-note");
+      if (title) title.textContent = `需要注意 ${problems.length} 项`;
+      if (list) list.innerHTML = problems.map((problem, index) => problemRow(problem, index).value).join("");
+      if (note) note.textContent = `这些是结构检查，不会自动修改文件。${problems.length ? "缺少的前置可以点右侧按钮处理。" : ""}`;
+    }
+  }
+
+  function closeProblemPopover(immediate = false) {
+    clearTimeout(problemCloseTimer);
+    problemPinned = false;
+    problemTrigger.setAttribute("aria-expanded", "false");
+    if (!problemPopover) return;
+    const panel = problemPopover;
+    problemPopover = undefined;
+    if (problemOutsideListener) document.removeEventListener("pointerdown", problemOutsideListener, true);
+    if (problemKeyListener) document.removeEventListener("keydown", problemKeyListener, true);
+    problemOutsideListener = undefined;
+    problemKeyListener = undefined;
+    if (immediate) {
+      panel.remove();
+      return;
+    }
+    panel.classList.add("leaving");
+    setTimeout(() => panel.remove(), 180);
+  }
+
+  function showProblemPopover(pin = false) {
+    if (!problems.length) return;
+    clearTimeout(problemCloseTimer);
+    if (pin) problemPinned = true;
+    if (problemPopover) {
+      problemTrigger.setAttribute("aria-expanded", "true");
+      return;
+    }
+    const stage = document.querySelector<HTMLElement>("#stage");
+    if (!stage) return;
+    const panel = document.createElement("section");
+    panel.className = "mod-problem-popover";
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", "模组注意事项");
+    panel.innerHTML = problemPopoverMarkup().value;
+    stage.append(panel);
+    problemPopover = panel;
+    problemTrigger.setAttribute("aria-expanded", "true");
+    const stageRect = stage.getBoundingClientRect();
+    const scale = stageRect.width / stage.offsetWidth || 1;
+    const triggerRect = problemTrigger.getBoundingClientRect();
+    panel.style.width = `${Math.min(560, Math.max(360, stage.offsetWidth - 32))}px`;
+    panel.style.left = "0px";
+    panel.style.top = "0px";
+    panel.style.visibility = "hidden";
+    const panelWidth = panel.offsetWidth;
+    const panelHeight = panel.offsetHeight;
+    const triggerRight = (triggerRect.right - stageRect.left) / scale;
+    const triggerTop = (triggerRect.top - stageRect.top) / scale;
+    const triggerBottom = (triggerRect.bottom - stageRect.top) / scale;
+    const left = Math.max(8, Math.min(stage.offsetWidth - panelWidth - 8, triggerRight - panelWidth));
+    let top = triggerBottom + 8;
+    if (top + panelHeight > stage.offsetHeight - 8) top = Math.max(8, triggerTop - panelHeight - 8);
+    panel.style.left = `${left}px`;
+    panel.style.top = `${top}px`;
+    panel.style.visibility = "visible";
+
+    const keepOpen = () => clearTimeout(problemCloseTimer);
+    const closeSoon = () => {
+      clearTimeout(problemCloseTimer);
+      problemCloseTimer = setTimeout(() => {
+        if (problemPinned || panel.matches(":hover") || panel.contains(document.activeElement) || problemTrigger.contains(document.activeElement)) return;
+        closeProblemPopover();
+      }, 120);
+    };
+    panel.addEventListener("pointerenter", keepOpen);
+    panel.addEventListener("pointerleave", closeSoon);
+    panel.addEventListener("click", (event) => {
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-problem-close]")) return closeProblemPopover();
+      const button = target.closest<HTMLElement>("[data-problem]");
+      if (!button) return;
+      const problem = problems[Number(button.dataset.problem)];
+      if (!problem) return;
+      void fixProblem(problem, button.dataset.fix ?? "", button);
+      closeProblemPopover();
+    });
+    problemOutsideListener = (event) => {
+      if (!problemPopover || problemPopover.contains(event.target as Node) || problemTrigger.contains(event.target as Node)) return;
+      closeProblemPopover(true);
+    };
+    problemKeyListener = (event) => {
+      if (event.key !== "Escape" || !problemPopover) return;
+      event.preventDefault();
+      problemFocusGuard = true;
+      closeProblemPopover(true);
+      problemTrigger.focus({ preventScroll: true });
+      setTimeout(() => { problemFocusGuard = false; }, 0);
+    };
+    document.addEventListener("pointerdown", problemOutsideListener, true);
+    document.addEventListener("keydown", problemKeyListener, true);
+  }
+
+  function scheduleProblemClose() {
+    if (!problemPopover) return;
+    clearTimeout(problemCloseTimer);
+    problemCloseTimer = setTimeout(() => {
+      if (problemPinned || problemPopover?.matches(":hover") || problemPopover?.contains(document.activeElement) || problemTrigger.contains(document.activeElement)) return;
+      closeProblemPopover();
+    }, 120);
   }
 
   async function fixProblem(problem: ModProblem, how: string, button?: HTMLElement) {
@@ -467,6 +579,18 @@ export function mount(ctx: TabContext): TabHandle {
     });
   }
 
+  problemTrigger.addEventListener("pointerenter", () => showProblemPopover(false));
+  problemTrigger.addEventListener("pointerleave", scheduleProblemClose);
+  problemTrigger.addEventListener("focusin", () => {
+    if (!problemFocusGuard) showProblemPopover(false);
+  });
+  problemTrigger.addEventListener("focusout", scheduleProblemClose);
+  problemTrigger.addEventListener("click", (event) => {
+    event.preventDefault();
+    if (problemPopover && problemPinned) return closeProblemPopover();
+    showProblemPopover(true);
+  });
+
   // ------------------------------------------------------------------------------------------ wiring
   onAll(body, "input", "[data-q]", (element) => {
     query = (element as HTMLInputElement).value.trim().toLowerCase();
@@ -512,6 +636,8 @@ export function mount(ctx: TabContext): TabHandle {
       clearTimeout(reloadTimer);
       observer?.disconnect();
       queue.length = 0;
+      clearTimeout(problemCloseTimer);
+      closeProblemPopover(true);
     },
   };
 }
