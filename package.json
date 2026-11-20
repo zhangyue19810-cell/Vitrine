@@ -21,6 +21,7 @@
     "build": "npm run build:web && npm run build:electron",
     "start": "npm run build && electron .",
     "dist:win": "node scripts/package-win.mjs",
+    "dist:win:setup": "node scripts/package-win.mjs && node scripts/package-win-setup.mjs",
     "dev:demo": "tsx scripts/dev-demo.ts"
   },
   "dependencies": {

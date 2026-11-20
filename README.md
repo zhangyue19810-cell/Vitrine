@@ -67,6 +67,7 @@ npm test              # 后端测试
 npm run typecheck     # 检查界面、核心和 Electron
 npm run build
 npm run dist:win      # 生成 release/Vitrine-<版本>-win-x64.zip
+npm run dist:win:setup # 同时生成 NSIS 安装器（需要系统已安装 makensis）
 ```
 
 `dist:win` 在 Linux、macOS 和 Windows 上都能运行。它会下载固定版本的 Electron Windows 运行时，把应用写进 `resources/app.asar`，再处理图标、版本号和语言包。国内网络慢时可以设置 `ELECTRON_MIRROR`，或者用 `ELECTRON_ZIP` 指向已经下载好的 `electron-v<版本>-win32-x64.zip`。
