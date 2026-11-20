@@ -477,14 +477,9 @@
   font-weight: 600;
 }
 
-.detail-tabs button[aria-selected="true"]::after {
-  content: "";
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: -1px;
-  height: 2px;
-  background: var(--accent);
+.detail-tabs .tab-label {
+  position: relative;
+  z-index: 1;
 }
 
 .detail-tabs .count {

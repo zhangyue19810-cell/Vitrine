@@ -598,7 +598,7 @@ export class ArchiveScene {
       container.clientWidth,
       container.clientHeight,
     );
-    this.ao.kernelRadius = lightingLook === "refined" ? 0.44 : 0.38;
+    this.ao.kernelRadius = lightingLook === "refined" ? 0.5 : 0.42;
     this.ao.minDistance = 0.001;
     this.ao.maxDistance = 0.09;
     this.composer.addPass(this.ao);
@@ -610,9 +610,9 @@ export class ArchiveScene {
     this.composer.addPass(this.bokeh);
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight)),
-      0.14,
-      0.24,
-      0.91,
+      0.22,
+      0.3,
+      0.88,
     );
     this.bloom.enabled = false;
     this.composer.addPass(this.bloom);

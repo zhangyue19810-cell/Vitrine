@@ -1,5 +1,6 @@
 import { rpc, tryRpc } from "../api";
 import { guard, openLink, pickPath, withBusy } from "../actions";
+import { CapsuleTabs } from "../capsule-tabs";
 import { $, $$, html, raw, setHtml, type Raw } from "../dom";
 import { formatBytes } from "../format";
 import { confirmDialog, openSheet, promptDialog, toast, type ModalHandle } from "../modal";
@@ -194,6 +195,7 @@ function rowHtml(row: Row, index: number): Raw {
 // ---------------------------------------------------------------------------------------------- the sheet
 
 let open: ModalHandle | undefined;
+const sectionCapsules = new WeakMap<HTMLElement, CapsuleTabs>();
 
 export function openSettings(sectionId = "general") {
   if (open) {
@@ -215,6 +217,7 @@ export function openSettings(sectionId = "general") {
       if (row.custom) row.custom($("[data-custom-host]", $$(".setting", panel)[i]));
     });
   });
+  sectionCapsules.set(sheet.body, new CapsuleTabs($(".settings-nav", sheet.body), { axis: "y", itemSelector: "button[data-section]", activeSelector: '[aria-selected="true"]' }));
   const queue = new Map<string, unknown>();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const touched = new Set<string>();
@@ -313,7 +316,12 @@ export function openSettings(sectionId = "general") {
   });
 
   const off = store.on("settings", () => syncControls(sheet.body, false));
-  void sheet.closed.then(off);
+  void sheet.closed.then(() => {
+    off();
+    const capsule = sectionCapsules.get(sheet.body);
+    capsule?.destroy();
+    sectionCapsules.delete(sheet.body);
+  });
   selectSection(sheet.body, sectionId);
   syncControls(sheet.body, true);
 }
@@ -334,6 +342,8 @@ function selectSection(root: HTMLElement, id: string) {
   $$("[data-panel]", root).forEach((p) => (p.hidden = p.dataset.panel !== id));
   const body = root.querySelector<HTMLElement>("[data-f='body']");
   if (body) body.scrollTop = 0;
+  const active = root.querySelector<HTMLElement>(`[data-section="${id}"]`);
+  sectionCapsules.get(root)?.setActive(active ?? undefined, true);
 }
 
 function updateRangeLabel(input: HTMLInputElement) {

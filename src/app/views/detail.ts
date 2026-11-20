@@ -1,4 +1,5 @@
 import { rpc } from "../api";
+import { CapsuleTabs } from "../capsule-tabs";
 import { action, $, html, setHtml, type Raw } from "../dom";
 import { deleteInstance, duplicateInstance, guard, launchInstance, pickPath, renameInstance, repairInstance, stopGame, toggleFavorite, openFolder } from "../actions";
 import { errorMessage } from "../format";
@@ -47,6 +48,7 @@ export class DetailView {
   private tab: TabId = "overview";
   private controller?: AbortController;
   private handle?: TabHandle;
+  private capsule?: CapsuleTabs;
   private readonly counts = new Map<TabId, number>();
   private readonly off: (() => void)[] = [];
   private shown = "";
@@ -102,6 +104,8 @@ export class DetailView {
   close() {
     this.mountToken++;
     this.disposeTab();
+    this.capsule?.destroy();
+    this.capsule = undefined;
     for (const off of this.off.splice(0)) off();
     this.instanceId = undefined;
     this.root.textContent = "";
@@ -164,15 +168,24 @@ export class DetailView {
   private paintTabs() {
     const instance = this.instance;
     const tabs = this.f("tabs");
-    const parts = TABS.map((tab) => {
-      const count = tab.id === "mods" ? (this.counts.get("mods") ?? instance?.modCount) : this.counts.get(tab.id);
-      return html`<button role="tab" id="tab-${tab.id}" data-tab="${tab.id}" aria-selected="${tab.id === this.tab ? "true" : "false"}" tabindex="${tab.id === this.tab ? 0 : -1}">${tab.label}${count ? html`<span class="count">${count}</span>` : ""}</button>`;
-    });
-    const markup = html`${parts}`.value;
-    if (tabs.dataset.markup !== markup) {
-      tabs.dataset.markup = markup;
-      tabs.innerHTML = markup;
+    if (!tabs.querySelector("[data-tab]")) {
+      tabs.innerHTML = TABS.map((tab) => html`<button role="tab" id="tab-${tab.id}" data-tab="${tab.id}" aria-selected="false" tabindex="-1"><span class="tab-label">${tab.label}</span><span class="count" hidden></span></button>`).join("");
+      this.capsule?.destroy();
+      this.capsule = new CapsuleTabs(tabs, { itemSelector: "[data-tab]", activeSelector: '[aria-selected="true"]' });
     }
+    for (const tab of TABS) {
+      const button = tabs.querySelector<HTMLElement>(`[data-tab="${tab.id}"]`);
+      if (!button) continue;
+      const count = tab.id === "mods" ? (this.counts.get("mods") ?? instance?.modCount) : this.counts.get(tab.id);
+      const countElement = button.querySelector<HTMLElement>(".count");
+      button.setAttribute("aria-selected", String(tab.id === this.tab));
+      button.tabIndex = tab.id === this.tab ? 0 : -1;
+      if (countElement) {
+        countElement.hidden = !count;
+        countElement.textContent = count ? String(count) : "";
+      }
+    }
+    this.capsule?.setActive(tabs.querySelector<HTMLElement>(`[data-tab="${this.tab}"]`) ?? undefined, true);
     this.f("body").setAttribute("aria-labelledby", `tab-${this.tab}`);
   }
 

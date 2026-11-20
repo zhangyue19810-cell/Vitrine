@@ -184,10 +184,10 @@ kbd {
   z-index: 1;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 44% 46% at 78% 8%, rgba(255, 239, 202, 0.34), transparent 68%),
-    linear-gradient(113deg, transparent 38%, rgba(255, 244, 217, 0.13) 49%, rgba(255, 252, 240, 0.035) 57%, transparent 68%),
-    linear-gradient(180deg, rgba(var(--paper-rgb), 0.1), transparent 20%, transparent 76%, rgba(var(--ink-rgb), 0.075)),
-    radial-gradient(ellipse at 48% 45%, transparent 48%, rgba(var(--ink-rgb), 0.065) 100%);
+    radial-gradient(ellipse 44% 46% at 78% 8%, rgba(255, 239, 202, 0.42), transparent 68%),
+    linear-gradient(113deg, transparent 38%, rgba(255, 244, 217, 0.19) 49%, rgba(255, 252, 240, 0.05) 57%, transparent 68%),
+    linear-gradient(180deg, rgba(var(--paper-rgb), 0.1), transparent 20%, transparent 76%, rgba(var(--ink-rgb), 0.095)),
+    radial-gradient(ellipse at 48% 45%, transparent 48%, rgba(var(--ink-rgb), 0.085) 100%);
 }
 
 /* A broad, soft window light crossing the room. It is deliberately beneath
@@ -197,9 +197,9 @@ kbd {
   content: "";
   position: absolute;
   inset: -12%;
-  background: linear-gradient(116deg, transparent 42%, rgba(255, 249, 226, 0.28) 52%, rgba(255, 244, 214, 0.055) 62%, transparent 72%);
+  background: linear-gradient(116deg, transparent 42%, rgba(255, 249, 226, 0.34) 52%, rgba(255, 244, 214, 0.075) 62%, transparent 72%);
   mix-blend-mode: screen;
-  opacity: 0.82;
+  opacity: 0.9;
 }
 
 .scene-atmosphere::after {
@@ -318,6 +318,7 @@ kbd {
 }
 
 .nav-button:hover {
+  transform: translateY(-1px);
   border-color: rgba(var(--ink-rgb), 0.1);
   background: rgba(var(--glass-strong-rgb), 0.62);
 }
@@ -358,13 +359,112 @@ kbd {
   display: none;
 }
 
-.nav-account {
-  max-width: 220px;
-  padding-inline: 13px;
+.nav-master {
+  order: 2;
+  padding-inline: 13px 11px;
   border-color: var(--ink);
   background: var(--ink);
   color: var(--paper);
   box-shadow: 0 7px 20px rgba(9, 22, 26, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.nav-master-chevron {
+  display: inline-block;
+  margin-left: 1px;
+  font-size: 13px;
+  line-height: 1;
+  opacity: 0.7;
+  transform-origin: center;
+  transition: transform 0.32s var(--ease), opacity 0.2s;
+}
+
+.system-nav.is-open .nav-master-chevron {
+  opacity: 1;
+  transform: rotate(180deg);
+}
+
+.system-nav.is-open .nav-master {
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.3),
+    0 8px 26px rgba(9, 22, 26, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+
+.nav-reveal {
+  order: 1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: none;
+  gap: 2px;
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: width 0.46s var(--ease), opacity 0.18s ease, visibility 0s linear 0.46s;
+}
+
+.system-nav.is-open .nav-reveal {
+  width: var(--nav-reveal-width, 420px);
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transition-delay: 0s;
+}
+
+.nav-reveal .nav-button {
+  flex: none;
+  opacity: 0;
+  transform: translateX(14px) scale(0.92);
+  transition: opacity 0.18s ease, transform 0.4s var(--ease), border-color 0.2s, background 0.2s, color 0.2s;
+}
+
+.system-nav.is-open .nav-reveal .nav-button {
+  opacity: 1;
+  transform: none;
+}
+
+.system-nav.is-open .nav-reveal .nav-button:hover {
+  transform: translateY(-1px);
+}
+
+.system-nav.is-open .nav-reveal .nav-button:nth-child(1) {
+  transition-delay: 0.02s;
+}
+
+.system-nav.is-open .nav-reveal .nav-button:nth-child(2) {
+  transition-delay: 0.055s;
+}
+
+.system-nav.is-open .nav-reveal .nav-button:nth-child(3) {
+  transition-delay: 0.09s;
+}
+
+.system-nav.is-open .nav-reveal .nav-button:nth-child(4) {
+  transition-delay: 0.125s;
+}
+
+.window-controls {
+  order: 3;
+}
+
+@media (hover: none), (pointer: coarse) {
+  .nav-reveal {
+    width: max-content;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .nav-reveal .nav-button {
+    opacity: 1;
+    transform: none;
+  }
+
+  .nav-master-chevron {
+    display: none;
+  }
 }
 
 .nav-account:hover {
@@ -373,14 +473,14 @@ kbd {
   color: var(--on-accent);
 }
 
-:root[data-dark-surface="true"] .nav-account {
+:root[data-dark-surface="true"] .nav-master {
   border-color: rgba(var(--accent-rgb), 0.34);
   background: rgba(var(--glass-strong-rgb), 0.7);
   color: var(--ink);
   box-shadow: 0 7px 20px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(var(--rim-rgb), 0.18);
 }
 
-:root[data-dark-surface="true"] .nav-account:hover {
+:root[data-dark-surface="true"] .nav-master:hover {
   border-color: rgba(var(--accent-rgb), 0.55);
   background: rgba(var(--accent-rgb), 0.2);
   color: var(--ink);

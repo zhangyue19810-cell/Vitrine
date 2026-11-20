@@ -77,6 +77,7 @@ export class HomeView {
   private readonly nav = $("#nav");
   private readonly home = $("#home");
   private readonly footer = $("#footer");
+  private navCloseTimer?: ReturnType<typeof setTimeout>;
   private rollTitle!: Rolling;
   private rollLane!: Rolling;
   private rollCounter!: RollingNumber;
@@ -95,6 +96,7 @@ export class HomeView {
     const numberOptions = { duration: 460, motionBlur: true, animated: false, locales: "en-US", format: { minimumIntegerDigits: 2, useGrouping: false } };
     this.rollCounter = createRollingNumber(this.f("counter"), { ...numberOptions, value: 0 });
     this.rollTotal = createRollingNumber(this.f("total"), { ...numberOptions, value: 0 });
+    this.wireNav();
     this.renderNav();
     this.renderFooter();
   }
@@ -201,12 +203,59 @@ export class HomeView {
     if (this.nav.dataset.signature === signature) return;
     this.nav.dataset.signature = signature;
     this.nav.innerHTML = html`
-      <button class="nav-button" data-act="open-search" title="搜索实例 (/)"><span class="glyph">⌕</span><span>搜索</span><span class="key">/</span></button>
-      <button class="nav-button" data-act="open-favorites" title="收藏的实例"><span class="glyph">★</span><span>收藏</span><span class="count">${favorites}</span></button>
-      <button class="nav-button" data-act="open-downloads" title="${first?.stageLabel ?? "下载与任务"}${first?.progress ? ` · ${formatSpeed(first.progress.speed)}` : ""} (D)"><span class="glyph">⇩</span><span>下载</span><span class="count">${downloads.length ? `${progress ? `${progress} · ` : ""}${formatSpeed(speed)}` : ""}</span><i class="dot" data-busy="${downloads.length > 0}"></i></button>
-      <button class="nav-button nav-account" data-act="open-accounts" title="账号">${avatar(account)}<span class="name">${account?.name ?? "添加账号"}</span></button>
-      <button class="nav-button" data-act="open-settings" title="设置 (Ctrl+,)"><span class="glyph">⚙</span><span>设置</span></button>
+      <button class="nav-button nav-account nav-master" data-act="open-accounts" title="账号与导航 · 悬停展开" aria-expanded="${this.nav.classList.contains("is-open") ? "true" : "false"}" aria-controls="nav-reveal">${avatar(account)}<span class="name">${account?.name ?? "添加账号"}</span><span class="nav-master-chevron" aria-hidden="true">⌄</span></button>
+      <div class="nav-reveal" id="nav-reveal">
+        <button class="nav-button" data-act="open-search" title="搜索实例 (/)"><span class="glyph">⌕</span><span>搜索</span><span class="key">/</span></button>
+        <button class="nav-button" data-act="open-favorites" title="收藏的实例"><span class="glyph">★</span><span>收藏</span><span class="count">${favorites}</span></button>
+        <button class="nav-button" data-act="open-downloads" title="${first?.stageLabel ?? "下载与任务"}${first?.progress ? ` · ${formatSpeed(first.progress.speed)}` : ""} (D)"><span class="glyph">⇩</span><span>下载</span><span class="count">${downloads.length ? `${progress ? `${progress} · ` : ""}${formatSpeed(speed)}` : ""}</span><i class="dot" data-busy="${downloads.length > 0}"></i></button>
+        <button class="nav-button" data-act="open-settings" title="设置 (Ctrl+,)"><span class="glyph">⚙</span><span>设置</span></button>
+      </div>
       ${options.windowControls ? html`<div class="window-controls"><button data-act="win-minimize" aria-label="最小化">–</button><button data-act="win-maximize" aria-label="最大化">▢</button><button data-act="win-close" aria-label="关闭">✕</button></div>` : ""}`.value;
+    requestAnimationFrame(() => this.measureNavReveal());
+  }
+
+  private wireNav() {
+    const setOpen = (open: boolean) => {
+      this.nav.classList.toggle("is-open", open);
+      this.nav.querySelector<HTMLElement>(".nav-master")?.setAttribute("aria-expanded", String(open));
+    };
+    const keepOpen = () => {
+      clearTimeout(this.navCloseTimer);
+      setOpen(true);
+    };
+    const closeSoon = () => {
+      clearTimeout(this.navCloseTimer);
+      this.navCloseTimer = setTimeout(() => {
+        if (this.nav.matches(":hover") || this.nav.contains(document.activeElement)) return;
+        setOpen(false);
+      }, 110);
+    };
+    this.nav.addEventListener("pointerover", (event) => {
+      if ((event.target as Element | null)?.closest(".nav-master")) keepOpen();
+    });
+    this.nav.addEventListener("pointerleave", closeSoon);
+    this.nav.addEventListener("focusin", (event) => {
+      if ((event.target as Element | null)?.closest(".nav-master, .nav-reveal")) keepOpen();
+    });
+    this.nav.addEventListener("focusout", () => requestAnimationFrame(closeSoon));
+    this.nav.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape" || !this.nav.classList.contains("is-open")) return;
+      event.preventDefault();
+      clearTimeout(this.navCloseTimer);
+      setOpen(false);
+      this.nav.querySelector<HTMLElement>(".nav-master")?.focus({ preventScroll: true });
+    });
+    if (matchMedia("(hover: none) and (pointer: coarse)").matches) setOpen(true);
+  }
+
+  private measureNavReveal() {
+    const reveal = this.nav.querySelector<HTMLElement>(".nav-reveal");
+    if (!reveal) return;
+    let width = 0;
+    const buttons = [...reveal.querySelectorAll<HTMLElement>(".nav-button")];
+    for (const button of buttons) width += button.offsetWidth;
+    width += Math.max(0, buttons.length - 1) * 2;
+    this.nav.style.setProperty("--nav-reveal-width", `${Math.ceil(width)}px`);
   }
 
   renderFooter() {

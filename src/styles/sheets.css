@@ -192,30 +192,33 @@
 .settings-nav {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
   padding-right: 14px;
   border-right: 1px solid var(--line);
 }
 
 .settings-nav button {
-  padding: 11px 14px;
+  padding: 10px 14px;
+  border-radius: 12px;
   text-align: left;
   font-size: 13.5px;
   color: var(--muted);
-  border-left: 2px solid transparent;
-  transition: color 0.18s, background 0.18s;
+  transition: color 0.18s, transform 0.18s var(--ease), background 0.18s;
 }
 
 .settings-nav button:hover {
   color: var(--ink);
-  background: rgba(var(--ink-rgb), 0.04);
+  background: rgba(var(--ink-rgb), 0.035);
 }
 
 .settings-nav button[aria-selected="true"] {
   color: var(--ink);
   font-weight: 600;
-  border-left-color: var(--accent);
-  background: rgba(var(--ink-rgb), 0.05);
+  background: transparent;
+}
+
+.settings-nav[data-capsule-axis="y"] .capsule-indicator {
+  border-radius: 12px;
 }
 
 .settings-body {
@@ -1203,7 +1206,8 @@
   .detail-panel,
   .dl-bar,
   .dialog,
-  .logview {
+  .logview,
+  .capsule-indicator {
     background: var(--panel);
     backdrop-filter: none;
   }
@@ -1224,12 +1228,65 @@
   .detail-panel,
   .dl-bar,
   .dialog,
-  .logview {
+  .logview,
+  .capsule-indicator {
     background: var(--panel);
     backdrop-filter: none;
   }
 
   .scrim {
     backdrop-filter: none;
+  }
+}
+
+
+/* Motion is a finish, never a prerequisite for reading or operating the UI. */
+#stage.reduce-motion .nav-reveal,
+#stage.reduce-motion .nav-reveal .nav-button,
+#stage.reduce-motion .nav-master-chevron,
+#stage.reduce-motion .view-tab,
+#stage.reduce-motion .detail-tabs button,
+#stage.reduce-motion .settings-nav button,
+#stage.reduce-motion .tabs button,
+#stage.reduce-motion .btn,
+#stage.reduce-motion .nav-button {
+  transition-duration: 0s !important;
+  transition-delay: 0s !important;
+}
+
+#stage.reduce-motion .btn:hover:not(:disabled),
+#stage.reduce-motion .btn:active:not(:disabled),
+#stage.reduce-motion .nav-button:hover,
+#stage.reduce-motion .system-nav.is-open .nav-reveal .nav-button:hover,
+#stage.reduce-motion .view-tab:active,
+#stage.reduce-motion .detail-tabs button:active,
+#stage.reduce-motion .settings-nav button:active,
+#stage.reduce-motion .tabs button:active {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nav-reveal,
+  .nav-reveal .nav-button,
+  .nav-master-chevron,
+  .view-tab,
+  .detail-tabs button,
+  .settings-nav button,
+  .tabs button,
+  .btn,
+  .nav-button {
+    transition-duration: 0s !important;
+    transition-delay: 0s !important;
+  }
+
+  .btn:hover:not(:disabled),
+  .btn:active:not(:disabled),
+  .nav-button:hover,
+  .system-nav.is-open .nav-reveal .nav-button:hover,
+  .view-tab:active,
+  .detail-tabs button:active,
+  .settings-nav button:active,
+  .tabs button:active {
+    transform: none;
   }
 }

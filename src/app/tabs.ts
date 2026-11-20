@@ -1,3 +1,4 @@
+import { CapsuleTabs } from "./capsule-tabs";
 import { html, setHtml } from "./dom";
 import type { ContentKind } from "./types";
 
@@ -17,9 +18,20 @@ export const VIEW_TABS: { id: ViewId; label: string }[] = [
   { id: "shader", label: "光影" },
 ];
 
+const controllers = new WeakMap<HTMLElement, CapsuleTabs>();
+
 export function renderTabs(root: HTMLElement, active: ViewId) {
-  setHtml(
-    root,
-    html`${VIEW_TABS.map((tab) => html`<button class="view-tab" data-act="view-tab" data-view="${tab.id}" aria-current="${tab.id === active ? "page" : "false"}">${tab.label}</button>`)}`,
-  );
+  if (!root.querySelector(".view-tab")) {
+    setHtml(
+      root,
+      html`${VIEW_TABS.map((tab) => html`<button class="view-tab" data-act="view-tab" data-view="${tab.id}" aria-current="false">${tab.label}</button>`)}`,
+    );
+    root.classList.add("view-tabs-capsule");
+    controllers.set(root, new CapsuleTabs(root, { itemSelector: ".view-tab", activeSelector: '[aria-current="page"]' }));
+  }
+  for (const button of root.querySelectorAll<HTMLElement>(".view-tab")) {
+    button.setAttribute("aria-current", button.dataset.view === active ? "page" : "false");
+  }
+  const selected = root.querySelector<HTMLElement>(`.view-tab[data-view="${active}"]`);
+  controllers.get(root)?.setActive(selected ?? undefined, true);
 }

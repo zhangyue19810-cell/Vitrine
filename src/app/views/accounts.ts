@@ -1,4 +1,5 @@
 import { rpc } from "../api";
+import { CapsuleTabs } from "../capsule-tabs";
 import { guard, openLink, withBusy } from "../actions";
 import { $, html, onAll, setHtml } from "../dom";
 import { formatDuration, relativeTime } from "../format";
@@ -41,11 +42,22 @@ export function openAccounts(tab: Tab = "microsoft") {
       html`<div class="section-title">已添加的账号</div><div class="list">${accounts.map((account) => accountRow(account, account.id === store.account?.id))}</div>`,
     );
   };
-  const renderTabs = () => {
-    setHtml(
-      tabs,
-      html`${(["microsoft", "offline", "authlib"] as Tab[]).map((id) => html`<button role="tab" data-tab="${id}" aria-selected="${id === current}">${{ microsoft: "微软账号", offline: "离线账号", authlib: "外置登录" }[id]}</button>`)}`,
-    );
+  let capsule: CapsuleTabs | undefined;
+  const renderTabs = (animate = false) => {
+    if (!tabs.querySelector("[data-tab]")) {
+      setHtml(
+        tabs,
+        html`${(["microsoft", "offline", "authlib"] as Tab[]).map((id) => html`<button role="tab" data-tab="${id}" aria-selected="false">${{ microsoft: "微软账号", offline: "离线账号", authlib: "外置登录" }[id]}</button>`)}`,
+      );
+    }
+    for (const button of tabs.querySelectorAll<HTMLElement>("[data-tab]")) button.setAttribute("aria-selected", String(button.dataset.tab === current));
+    const selected = tabs.querySelector<HTMLElement>(`[data-tab="${current}"]`) ?? undefined;
+    if (!capsule) {
+      capsule = new CapsuleTabs(tabs, { itemSelector: "button[data-tab]", activeSelector: '[aria-selected="true"]' });
+      capsule.setActive(selected, false);
+    } else {
+      capsule.setActive(selected, animate);
+    }
   };
   const renderPanel = () => {
     panel.textContent = "";
@@ -59,7 +71,7 @@ export function openAccounts(tab: Tab = "microsoft") {
 
   onAll(sheet.body, "click", "[data-tab]", (element) => {
     current = element.dataset.tab as Tab;
-    renderTabs();
+    renderTabs(true);
     renderPanel();
   });
   onAll(list, "click", "[data-use]", async (element) => {
@@ -72,7 +84,10 @@ export function openAccounts(tab: Tab = "microsoft") {
     if (await confirmDialog({ title: `移除账号“${account.name}”？`, message: "只会从启动器里移除这个账号的登录信息，不会删除游戏存档。", confirm: "移除", danger: true })) await guard(() => rpc("accounts.remove", { id: account.id }));
   });
   const off = [store.on("accounts", renderList), store.on("settings", () => current === "microsoft" && renderPanel())];
-  void sheet.closed.then(() => off.forEach((fn) => fn()));
+  void sheet.closed.then(() => {
+    off.forEach((fn) => fn());
+    capsule?.destroy();
+  });
 }
 
 function accountRow(account: PublicAccount, selected: boolean) {

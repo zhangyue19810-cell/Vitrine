@@ -1,5 +1,6 @@
 import { rpc, tryRpc } from "../api";
 import { guard, openFolder, openLink, repairInstance } from "../actions";
+import { CapsuleTabs } from "../capsule-tabs";
 import { $, debounce, html, onAll, setHtml } from "../dom";
 import { errorMessage, formatBytes } from "../format";
 import { MAX_LOG_ERRORS } from "../log-limit";
@@ -447,11 +448,14 @@ export function openLogs(instanceId: string, options: { crash?: boolean } = {}) 
   </div>`;
   const logHost = $<HTMLElement>("[data-f='log']", sheet.body);
   const crashHost = $<HTMLElement>("[data-f='crash']", sheet.body);
+  const tabbar = $<HTMLElement>(".tabs", sheet.body);
+  const tabsCapsule = new CapsuleTabs(tabbar, { itemSelector: "button[data-t]", activeSelector: '[aria-selected="true"]' });
   const viewer = mountLogViewer(logHost, instanceId);
   let crashLoaded = false;
   const controller = new AbortController();
   const select = (tab: "log" | "crash") => {
     for (const button of sheet.body.querySelectorAll<HTMLElement>("[data-t]")) button.setAttribute("aria-selected", String(button.dataset.t === tab));
+    tabsCapsule.setActive(sheet.body.querySelector<HTMLElement>(`[data-t="${tab}"]`) ?? undefined, true);
     logHost.hidden = tab !== "log";
     crashHost.hidden = tab !== "crash";
     if (tab === "crash" && !crashLoaded) {
@@ -464,6 +468,7 @@ export function openLogs(instanceId: string, options: { crash?: boolean } = {}) 
   void sheet.closed.then(() => {
     controller.abort();
     viewer.dispose();
+    tabsCapsule.destroy();
   });
-  if (options.crash) select("crash");
+  select(options.crash ? "crash" : "log");
 }
