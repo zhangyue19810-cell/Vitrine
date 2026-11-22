@@ -436,7 +436,7 @@
   inset: 0;
   border-radius: inherit;
   padding: 1px;
-  background: conic-gradient(from 210deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.88) 20%, rgba(100, 232, 210, 0.5) 37%, rgba(255, 210, 164, 0.46) 58%, rgba(255, 255, 255, 0.08) 76%);
+  background: conic-gradient(from 210deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.88) 20%, rgba(255, 207, 120, 0.5) 37%, rgba(255, 210, 164, 0.46) 58%, rgba(255, 255, 255, 0.08) 76%);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);

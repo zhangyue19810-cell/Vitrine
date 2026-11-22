@@ -8,7 +8,7 @@ import type { HttpClient } from "../net/http";
  * timeouts and retry behaviour as every other download. Only known CDN hosts are fetched, and only small images.
  */
 
-const ALLOWED_SUFFIXES = [".modrinth.com", ".forgecdn.net", ".curseforge.com", ".mcimirror.top", ".githubusercontent.com"];
+const ALLOWED_SUFFIXES = [".modrinth.com", ".forgecdn.net", ".curseforge.com", ".mcimirror.top", ".githubusercontent.com", ".music.126.net"];
 const LOOPBACK = new Set(["127.0.0.1", "localhost", "[::1]", "::1"]);
 export const ICON_MAX_BYTES = 600_000;
 const CACHE_LIMIT = 500;

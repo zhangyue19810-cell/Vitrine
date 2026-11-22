@@ -331,11 +331,11 @@
 .btn.accent {
   border-color: rgba(var(--accent-ink), 0.62);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent 46%),
-    linear-gradient(135deg, #1aa58f, #0b685d);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.26), transparent 46%),
+    linear-gradient(135deg, var(--accent), var(--accent-ink));
   color: var(--on-accent);
   box-shadow:
-    0 10px 26px rgba(7, 72, 63, 0.28),
+    0 10px 26px rgba(var(--accent-rgb), 0.22),
     inset 0 1px 0 rgba(var(--rim-rgb), 0.42),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   backdrop-filter: blur(16px) saturate(1.45);
@@ -345,31 +345,31 @@
 .btn.accent:hover:not(:disabled) {
   border-color: rgba(var(--accent-rgb), 0.72);
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 46%),
-    linear-gradient(135deg, #24bca5, #0f8071);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.32), transparent 46%),
+    linear-gradient(135deg, var(--accent-ink), var(--accent));
   color: var(--on-accent);
   box-shadow:
-    0 14px 34px rgba(7, 72, 63, 0.34),
+    0 14px 34px rgba(var(--accent-rgb), 0.28),
     inset 0 1px 0 rgba(var(--rim-rgb), 0.5),
     inset 0 -1px 0 rgba(0, 0, 0, 0.16);
 }
 
 :root[data-dark-surface="true"] .btn.accent {
   background:
-    linear-gradient(180deg, rgba(200, 255, 243, 0.34), transparent 46%),
-    linear-gradient(135deg, #66f1d7, #169888);
-  color: #021512;
+    linear-gradient(180deg, rgba(255, 247, 222, 0.38), transparent 46%),
+    linear-gradient(135deg, var(--accent), var(--accent-ink));
+  color: var(--on-accent);
   box-shadow:
-    0 12px 32px rgba(80, 240, 211, 0.18),
-    0 0 20px rgba(var(--accent-rgb), 0.1),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+    0 12px 32px rgba(var(--accent-rgb), 0.24),
+    0 0 22px rgba(var(--accent-rgb), 0.14),
+    inset 0 1px 0 rgba(255, 248, 225, 0.58);
 }
 
 :root[data-dark-surface="true"] .btn.accent:hover:not(:disabled) {
   background:
-    linear-gradient(180deg, rgba(210, 255, 246, 0.42), transparent 46%),
-    linear-gradient(135deg, #82ffe8, #20b6a1);
-  color: #021512;
+    linear-gradient(180deg, rgba(255, 249, 230, 0.48), transparent 46%),
+    linear-gradient(135deg, var(--accent-ink), var(--accent));
+  color: var(--on-accent);
 }
 
 .nav-button,
@@ -421,7 +421,7 @@
 }
 
 .toggle[aria-checked="true"]::after {
-  background: #f4fffb;
+  background: #fff6e1;
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.26),
     0 0 0 1px rgba(255, 255, 255, 0.28);
@@ -623,7 +623,7 @@
 
 :root[data-dark-surface="true"] .system-nav .nav-master:hover {
   background:
-    linear-gradient(145deg, rgba(160, 255, 237, 0.22), transparent 48%),
+    linear-gradient(145deg, rgba(255, 222, 158, 0.22), transparent 48%),
     linear-gradient(150deg, rgba(var(--accent-rgb), 0.24), rgba(var(--glass-strong-rgb), 0.68));
   color: var(--ink);
 }
@@ -697,8 +697,8 @@
 :root[data-dark-surface="true"] .liquid-sheen {
   background:
     var(--liquid-grain),
-    radial-gradient(260px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(175, 255, 239, 0.24), transparent 58%),
-    linear-gradient(118deg, transparent 14%, rgba(var(--accent-rgb), 0.14) 48%, transparent 80%);
+    radial-gradient(260px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 235, 190, 0.28), transparent 58%),
+    linear-gradient(118deg, transparent 14%, rgba(var(--accent-rgb), 0.18) 48%, transparent 80%);
   background-size: 160px 160px, auto, auto;
   background-blend-mode: soft-light, screen, normal;
 }
@@ -988,4 +988,11 @@
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
+}
+
+/* The music package's rail is used for the stage controls, but our HTML view
+ * capsule remains the one navigation strip. */
+#stage[data-rail="on"] .view-tabs {
+  visibility: visible;
+  pointer-events: auto;
 }

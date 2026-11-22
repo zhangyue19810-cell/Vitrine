@@ -7,7 +7,7 @@ import type { ContentKind } from "./types";
  * leaves the Möbius ring and regroups its archives into the single row of the download view.
  */
 
-export type ViewId = "home" | ContentKind;
+export type ViewId = "home" | ContentKind | "music";
 
 export const VIEW_TABS: { id: ViewId; label: string }[] = [
   { id: "home", label: "首页" },
@@ -16,6 +16,7 @@ export const VIEW_TABS: { id: ViewId; label: string }[] = [
   { id: "resourcepack", label: "资源包" },
   { id: "datapack", label: "数据包" },
   { id: "shader", label: "光影" },
+  { id: "music", label: "音乐" },
 ];
 
 const controllers = new WeakMap<HTMLElement, CapsuleTabs>();

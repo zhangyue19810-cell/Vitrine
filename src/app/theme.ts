@@ -1,6 +1,7 @@
 /**
  * Light / dark palette, painted onto the document's CSS variables.
  *
+ * The dark palette is the deep-space look of the launcher: near-black paper, warm white ink, gold accent.
  * The 3D scene runs its own per-cassette wave (ThemeWave) when the theme flips; `paint(amount)` is fed the scene's
  * background amount every frame, so the interface and the glass cross-fade together. Without a scene the page runs a
  * short transition of its own.
@@ -9,22 +10,22 @@
 export type ThemeSetting = "auto" | "light" | "dark";
 
 const PALETTE = {
-  ink: ["#080a08", "#f0f4f0"],
-  muted: ["#77756d", "#a2b7b8"],
-  line: ["#aaa59a", "#34484b"],
-  paper: ["#eae5e1", "#060b0d"],
-  panel: ["#edebe4", "#111a1d"],
-  field: ["#e7e3d9", "#18262a"],
-  glass: ["#f6f2eb", "#0d181b"],
-  "glass-strong": ["#fffdf8", "#1b2c30"],
-  rim: ["#ffffff", "#bce3dc"],
-  accent: ["#1f9e8e", "#58f1d3"],
-  "accent-ink": ["#157060", "#86f7e2"],
-  "on-accent": ["#ffffff", "#031411"],
-  danger: ["#b03a2e", "#ff877b"],
+  ink: ["#080a08", "#ece5d6"],
+  muted: ["#77756d", "#8f897c"],
+  line: ["#aaa59a", "#3e392f"],
+  paper: ["#eae5e1", "#050507"],
+  panel: ["#edebe4", "#0e0e11"],
+  field: ["#e7e3d9", "#17171b"],
+  glass: ["#f7f1e5", "#14120e"],
+  "glass-strong": ["#fff9ee", "#201a11"],
+  rim: ["#ffffff", "#f4dfb5"],
+  accent: ["#b27a22", "#e8b967"],
+  "accent-ink": ["#80530f", "#f4d08f"],
+  "on-accent": ["#ffffff", "#1a1205"],
+  danger: ["#b03a2e", "#ff8d78"],
   "on-danger": ["#ffffff", "#2a0c08"],
-  warn: ["#b27618", "#ffc15f"],
-  ok: ["#288254", "#6fe0a2"],
+  warn: ["#b27618", "#e9b45a"],
+  ok: ["#288254", "#7fd3a0"],
 } as const;
 
 type Rgb = [number, number, number];

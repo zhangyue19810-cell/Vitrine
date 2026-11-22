@@ -21,6 +21,28 @@ describe("HTTP redirect safety", () => {
     assert.equal(unsafeRedirectReason("https://github.com/a", "https://cdn.modrinth.com/b"), undefined);
   });
 
+  it("allows a same-origin loopback redirect for local mirrors and the music stand-in", async () => {
+    const server = await startMock((req, res) => {
+      if (req.url === "/redirect") {
+        res.writeHead(302, { location: "/local" });
+        res.end();
+        return;
+      }
+      res.writeHead(200, { "content-type": "text/plain" });
+      res.end("ok");
+    });
+    const http = new HttpClient({ userAgent: "vitrine-test" });
+    try {
+      const response = await http.request(`${server.url}/redirect`);
+      assert.equal(response.status, 200);
+      assert.equal(response.url, `${server.url}/local`);
+      response.body.destroy();
+    } finally {
+      http.destroy();
+      await server.close();
+    }
+  });
+
   it("does not follow a redirect into the local machine", async () => {
     const server = await startMock((_req, res) => {
       res.writeHead(302, { location: "https://127.0.0.1/secret" });

@@ -13,6 +13,9 @@
  *   Fabric 轻量 1.21.1  Fabric + 14 mods, dies with OutOfMemoryError (shows crash analysis with a one-click fix)
  *   机械动力·天空岛     NeoForge-style pack with 64 mods, incomplete (repair), exits with code 3
  *   1.8.9 PVP         needs Java 8, which this machine lacks (shows the "no suitable Java" path)
+ *
+ * The music tab talks to a local stand-in of NetEase Cloud Music (invented songs, synthesised audio, a QR login that
+ * confirms itself after a few seconds).
  */
 import { createHash } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
@@ -28,6 +31,7 @@ import { startWsServer } from "../core/src/ws-server";
 import { buildFakeGameJar } from "../core/test/helpers/fake-game";
 import { startFakeMojang, zipBuffer, type FakeVersionSpec } from "../core/test/helpers/fake-mojang";
 import { bytes, serveBytes, sha1, startMock } from "../core/test/helpers/mock-server";
+import { startMockNetease } from "../core/test/helpers/mock-netease";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const sha512 = (data: Buffer) => createHash("sha512").update(data).digest("hex");
@@ -456,10 +460,15 @@ const status = await startStatusServer({
 
 // ------------------------------------------------------------------------------------------------ the core
 
+// A stand-in for NetEase Cloud Music: an invented catalogue with synthesised tunes, and a QR login that confirms itself
+// a few seconds after it was shown (so the whole login can be seen without a phone).
+const netease = await startMockNetease({ audioSeconds: 45, autoQr: { scanAfterMs: 4000, confirmAfterMs: 8000 } });
+
 const core = await Core.create({
   dataDir: join(dir, "data"),
   version: "0.1.0-demo",
   defaultRoot: join(dir, "minecraft"),
+  music: { base: netease.url, publicKey: netease.publicKey },
   host: {
     openExternal: (url) => void console.log(`[host] openExternal ${url}`),
     openPath: (path) => void console.log(`[host] openPath ${path}`),

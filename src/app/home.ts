@@ -22,7 +22,7 @@ export const STAGE_TEMPLATE = `
   <div id="inspection-text" aria-hidden="true"><span></span><strong></strong></div>
 
   <div class="drag-strip" aria-hidden="true"></div>
-  <header class="brand" aria-label="${PRODUCT.name}"><span class="brand-mark">${markSvg({ label: PRODUCT.name })}</span><div class="brand-text">${brandHeading}</div></header>
+  <header class="brand" aria-label="${PRODUCT.name}"><span class="brand-mark">${markSvg({ label: PRODUCT.name, tight: true })}</span><div class="brand-text">${brandHeading}</div></header>
   <nav class="system-nav" id="nav" aria-label="主导航"></nav>
   <nav class="view-tabs" id="view-tabs" aria-label="视图"></nav>
 

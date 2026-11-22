@@ -1,10 +1,14 @@
-import type { ArchiveStage, StageItem, StageLayout } from "../archive-stage";
+import type { ArchiveStage, CardSize, StageItem, StageLayout } from "../archive-stage";
 import type { ArchiveCell, ArchiveNavigation } from "../archive-loop";
+import type { DiscSpec, RailEvents } from "../control-rail";
 import { records, setArchive } from "../data";
 import { fullMotion, reducedMotion } from "../motion-preferences";
 import { normalizeQuality, qualityPresets, type RenderQuality } from "../render-quality";
+import type { PlateGroup } from "../rail/model";
 import { ArchiveScene } from "../scene";
+import type { SpectrumField } from "../spectrum";
 import { createFacePainter } from "./faces";
+import { withMusicFaces } from "./music/faces";
 import { labelFontSample, paintLabel } from "./label";
 import type { QualityTier } from "./perf-policy";
 import { buildArchive, reselect } from "./records";
@@ -44,6 +48,10 @@ export interface StageHandlers {
   action(id: string, index: number): void;
   /** The row is nearly at its end: more content is wanted. */
   more(): void;
+  /** The shadow of the black hole of the music page was clicked: play or pause. */
+  hole(): void;
+  /** The track round the black hole was pressed or dragged: a place in the song (0 … 1); `final` once the pointer was let go. */
+  seek(fraction: number, final: boolean): void;
 }
 
 /** Name of the GPU the browser would use (software rasterisers are recognised by the governor). */
@@ -83,6 +91,13 @@ export class SceneHost {
   private ring: StageItem[] = [];
   private echo = false;
   private readonly fontChars = new Set<string>();
+  /** What the control rail (the plates and the music disc) reports; set by the app. */
+  railEvents: Partial<RailEvents> = {};
+  /** What the rail shows, kept here so that a scene that was given back to the GPU and rebuilt gets the same rail again. */
+  private railGroups: PlateGroup[] = [];
+  private railDisc: DiscSpec | null = null;
+  private spectrum: SpectrumField | null = null;
+  private cardSize: CardSize = "medium";
 
   constructor(
     private readonly container: HTMLElement,
@@ -140,6 +155,7 @@ export class SceneHost {
         next.setSuperPerformance(this.tier === "minimal");
         next.setMode(this.mode);
         next.setTheme(this.dark, true);
+        this.installRail(next);
         next.onSelect = (index, cell) => this.callbacks.select(index, cell);
         next.onNavigate = (axis, direction) => this.callbacks.navigate(axis, direction);
         next.onHover = (index) => this.callbacks.hover(index);
@@ -187,7 +203,7 @@ export class SceneHost {
   /** Build the 3D stage inside a new scene; if that fails the plain shelf is still usable. */
   private installStage(scene: ArchiveScene) {
     try {
-      const stage = scene.installStage(createFacePainter());
+      const stage = scene.installStage(withMusicFaces(createFacePainter()));
       stage.events = {
         select: (index) => {
           if (!this.echo) this.stageHandlers.select?.(index);
@@ -195,8 +211,12 @@ export class SceneHost {
         activate: (index) => this.stageHandlers.activate?.(index),
         action: (id, index) => this.stageHandlers.action?.(id, index),
         more: () => this.stageHandlers.more?.(),
+        hole: () => this.stageHandlers.hole?.(),
+        seek: (fraction, final) => this.stageHandlers.seek?.(fraction, final),
       };
       stage.setDark(this.dark);
+      stage.setSpectrum(this.spectrum);
+      stage.setCardSize(this.cardSize, true);
       scene.setStageLocked(this.mode === "detail");
       scene.setStageActive(true);
       stage.setItems(this.picture.layout, this.picture.items, this.picture.selected);
@@ -204,6 +224,57 @@ export class SceneHost {
     } catch (error) {
       console.error("3D stage unavailable, using the plain shelf", error);
     }
+  }
+
+  /** The control rail of a new scene: it reports to `railEvents` and shows what the app last asked for. */
+  private installRail(scene: ArchiveScene) {
+    const rail = scene.controls;
+    rail.events = {
+      press: (id, cell) => this.railEvents.press?.(id, cell),
+      slide: (id, amount) => this.railEvents.slide?.(id, amount),
+      wheel: (id, direction) => this.railEvents.wheel?.(id, direction),
+      field: (id, text) => this.railEvents.field?.(id, text),
+      submit: (id) => this.railEvents.submit?.(id),
+      focus: (id) => this.railEvents.focus?.(id),
+      disc: (action) => this.railEvents.disc?.(action),
+    };
+    rail.setDark(this.dark);
+    rail.setGroups(this.railGroups);
+    rail.setDisc(this.railDisc);
+  }
+
+  /** The plates of the control rail (index tabs drawn in the 3D scene). */
+  setRail(groups: PlateGroup[]) {
+    this.railGroups = groups;
+    this.scene?.controls.setGroups(groups);
+  }
+
+  /** The music disc of the control rail; null hides it. */
+  setDisc(spec: DiscSpec | null) {
+    this.railDisc = spec;
+    this.scene?.controls.setDisc(spec);
+  }
+
+  /** Give a text plate the keyboard. */
+  focusRailField(id: string) {
+    this.scene?.controls.focusField(id);
+  }
+
+  /** Print the plates again (fonts that arrived late). */
+  repaintRail() {
+    this.scene?.controls.repaintAll();
+  }
+
+  /** How large the archives are (small / medium / large); the stage grows or shrinks them smoothly. */
+  setCardSize(size: CardSize, immediate = false) {
+    this.cardSize = size;
+    this.stage?.setCardSize(size, immediate);
+  }
+
+  /** The music's frequency bands: every archive of the stage jumps with the band that lies under it. */
+  setSpectrum(field: SpectrumField | null) {
+    this.spectrum = field;
+    this.stage?.setSpectrum(field);
   }
 
   /** The 3D stage of the live scene (undefined without a scene, or when the stage could not be built). */
@@ -274,6 +345,7 @@ export class SceneHost {
       /* the fallback font is fine */
     }
     this.stage?.repaintAll();
+    this.scene?.controls.repaintAll();
   }
 
   /** Print the home ring's faces again after the facts changed (a game started, a favourite was toggled). */

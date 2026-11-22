@@ -154,7 +154,11 @@ export class HttpClient {
         } catch {
           throw new NetworkError(`Invalid redirect location from ${current}`, "ERR_INVALID_REDIRECT", current);
         }
-        const unsafe = unsafeRedirectReason(current, next);
+        // A same-origin redirect cannot turn a trusted initial request into a
+        // request to a different private/LAN host. Local mock servers and
+        // loopback mirrors use this path for `302 /audio/...` style URLs.
+        let unsafe = unsafeRedirectReason(current, next);
+        if (unsafe && new URL(current).origin === new URL(next).origin) unsafe = undefined;
         if (unsafe) throw new NetworkError(`Refused unsafe redirect to ${next} (${unsafe})`, "ERR_UNSAFE_REDIRECT", next);
         if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === "POST")) {
           method = "GET";

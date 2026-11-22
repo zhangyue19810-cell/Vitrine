@@ -48,6 +48,22 @@ export const BAND = {
   seam: 0,
 };
 
+/**
+ * How far the archives answer the music (see `spectrum.ts`; each plate and card listens to the band under it). The plates
+ * jump (`lift`, world units), stretch (`tall`, `wide`, fractions of their size) and take on `glow` of the accent colour;
+ * the cards jump less (`cardLift`), swell (`cardScale`) and lean forward (`cardTilt`, radians) — the pulled-out card is
+ * only allowed a small share of that, because it is being read.
+ */
+export const BOUNCE = {
+  lift: 0.85,
+  tall: 0.34,
+  wide: 0.08,
+  glow: 0.42,
+  cardLift: 0.6,
+  cardScale: 0.05,
+  cardTilt: 0.1,
+};
+
 const TAU = Math.PI * 2;
 const fract = (value: number) => value - Math.floor(value);
 const smooth = (t: number) => {

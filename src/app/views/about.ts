@@ -10,7 +10,7 @@ export function openAbout() {
   const body = document.createElement("div");
   body.className = "stack";
   body.innerHTML = html`
-    <div style="display:flex;gap:18px;align-items:center"><div style="width:64px;height:64px;flex:none">${markSvg({ label: PRODUCT.name })}</div><div><div style="font-size:22px;font-weight:750;letter-spacing:.5px">${PRODUCT.name} <span style="font-weight:400">${PRODUCT.nameCn}</span></div><div class="muted" style="margin-top:4px;font-size:13px">${PRODUCT.tagline}</div></div></div>
+    <div style="display:flex;gap:18px;align-items:center"><div style="width:64px;height:64px;flex:none">${markSvg({ label: PRODUCT.name, tight: true })}</div><div><div style="font-size:22px;font-weight:750;letter-spacing:.5px">${PRODUCT.name} <span style="font-weight:400">${PRODUCT.nameCn}</span></div><div class="muted" style="margin-top:4px;font-size:13px">${PRODUCT.tagline}</div></div></div>
     <dl class="kv">
       <dt>版本</dt><dd>${system ? system.version : "—"}${store.coreVersion ? ` · 核心 ${store.coreVersion}` : ""}</dd>
       ${system ? html`<dt>系统</dt><dd>${system.os.name} ${system.os.arch}${system.os.version ? ` · ${system.os.version}` : ""} · ${system.cpuCount} 核 · ${(system.totalMemoryMB / 1024).toFixed(1)} GB 内存</dd><dt>数据目录</dt><dd class="mono" style="font-size:11.5px;overflow-wrap:anywhere">${system.dataDir}</dd><dt>游戏目录</dt><dd class="mono" style="font-size:11.5px;overflow-wrap:anywhere">${system.root}</dd>` : ""}

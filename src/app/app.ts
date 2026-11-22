@@ -1,3 +1,4 @@
+import type { CardSize } from "../archive-stage";
 import { wrap, type ArchiveNavigation } from "../archive-loop";
 import { archiveColumns, columnFiles, fileLocation, records } from "../data";
 import { InspectionOverlay } from "../inspection-overlay";
@@ -7,13 +8,20 @@ import { createBridge, type Bridge } from "./bridge";
 import { $, action, html, sleep } from "./dom";
 import { guard, importPack, launchInstance, repairInstance, stopGame, toggleFavorite } from "./actions";
 import { browseContent } from "./content-browse";
+import { ViewControls } from "./controls";
 import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
+import { MusicDock } from "./music/dock";
+import { LyricsFeed } from "./music/lyrics-feed";
+import { MusicView } from "./music/music-view";
+import type { MusicPlayer } from "./music/player";
+import { createMusicPlayer } from "./music/service";
 import { Perf, type PerfApp } from "./perf";
+import { RailBus } from "./rail-bus";
 import { SceneHost, detectRendererName } from "./scene-host";
 import { installShortcuts } from "./shortcuts";
 import { sound } from "./sound";
@@ -67,6 +75,17 @@ export class App implements PerfApp {
   private inspection?: InspectionOverlay;
 
   private download!: DownloadView;
+  /** The plates drawn in the 3D scene (view tabs, archive size, the music page's sources, the transport next to the disc). */
+  private bus!: RailBus;
+  private controls!: ViewControls;
+  private player?: MusicPlayer;
+  /** The lyrics of the song as the 3D scene is told them. */
+  private lyrics?: LyricsFeed;
+  private dock?: MusicDock;
+  private music?: MusicView;
+  /** The place on the track of the black hole that the pointer holds (0 … 1), while it holds it. */
+  private seeking: number | null = null;
+  private lastDraw = 0;
   private mode: Mode = "archive";
   private view: View = "home";
   private tab: ViewId = "home";
@@ -110,9 +129,19 @@ export class App implements PerfApp {
   draw(time: number) {
     const scene = this.host.scene;
     const amount = scene ? scene.themeAmount : this.fader.amount;
-    paint(amount);
+    // The interface follows the theme — and goes dark in the music world's deep space, whichever theme is chosen.
+    paint(scene ? scene.chromeAmount : amount);
     this.fader.follow(amount);
     if (!scene) return;
+    const dt = this.lastDraw ? Math.min(0.1, Math.max(0, time - this.lastDraw)) : 0;
+    this.lastDraw = time;
+    this.player?.tick(dt);
+    // The black hole of the music page shows the song: the track round it fills as it plays.
+    this.host.stage?.setSong(this.songProgress(), Boolean(this.player?.state.playing));
+    // ...and its lyrics stand in front of it, drawn in the scene (they jump with the music).
+    this.host.stage?.setLyrics(this.lyrics?.read() ?? null);
+    this.music?.frame(this.seeking);
+    this.dock?.frame();
     scene.update(time);
     const visibility = scene.detailVisibility;
     const shade = Math.round(visibility * 1000) / 1000;
@@ -131,12 +160,23 @@ export class App implements PerfApp {
   released() {
     this.stage.dataset.scene = "off";
     this.hoverIndex = null;
+    this.lastDraw = 0;
+    this.syncRail();
+  }
+
+  /** The control rail belongs to the scene: while there is a scene the HTML strip of tabs steps aside. */
+  private syncRail() {
+    const on = this.host.ready && Boolean(this.host.stage);
+    this.stage.dataset.rail = on ? "on" : "off";
+    this.controls?.setEnabled(on);
+    this.bus?.resend();
   }
 
   async restore() {
     const ok = await this.host.ensure();
     this.stage.dataset.scene = this.host.status;
     this.stage.dataset.ring = this.host.stage ? "on" : "off";
+    this.syncRail();
     if (!ok) return;
     this.host.present(true);
     this.perf.refresh();
@@ -154,7 +194,8 @@ export class App implements PerfApp {
 
     // The palette of the last run, before anything else is drawn: no flash of the wrong colours.
     const cachedDark = cache.get("dark");
-    this.dark = cachedDark === null ? systemPrefersDark() : cachedDark === "1";
+    // First run: the deep-space look (near-black with gold) is the default, whatever the system prefers.
+    this.dark = cachedDark === null ? true : cachedDark === "1";
     this.fader.set(this.dark, true);
 
     this.bridge = createBridge();
@@ -174,8 +215,10 @@ export class App implements PerfApp {
     this.host.stageHandlers = {
       select: (index) => this.onStageSelect(index),
       activate: () => this.onStageActivate(),
-      action: (id, index) => this.download.handleAction(id, index),
-      more: () => this.download.loadMore(),
+      action: (id, index) => (this.tab === "music" ? this.music?.handleAction(id, index) : this.download.handleAction(id, index)),
+      more: () => (this.tab === "music" ? undefined : this.download.loadMore()),
+      hole: () => this.onHoleClick(),
+      seek: (fraction, final) => this.onHoleSeek(fraction, final),
     };
     this.download = new DownloadView(this.host, $("#download"), () => this.selectedInstance()?.id);
     window.addEventListener("vitrine:browse", (event) => {
@@ -184,6 +227,8 @@ export class App implements PerfApp {
       // Commands close their dialog before dispatching; defer one tick so `modals.open` is already clear.
       setTimeout(() => void this.openContent(detail.kind!, { instanceId: detail.instanceId, query: detail.query }), 0);
     });
+    this.bus = new RailBus(this.host);
+    this.controls = new ViewControls(this.bus, { show: (view) => void this.showView(view), size: (size) => this.setCardSize(size) });
     this.stage.dataset.view = "home";
     this.renderTabs();
     this.host.setDark(this.dark, true);
@@ -209,11 +254,17 @@ export class App implements PerfApp {
       return this.showCoreError(error);
     }
     splash?.status("正在布置展柜…", 0.5);
+    this.player = createMusicPlayer();
+    this.lyrics = new LyricsFeed(this.player);
+    this.music = new MusicView(this.host, this.bus, this.player, this.stage);
+    this.dock = new MusicDock(this.host, this.bus, this.player, { open: () => void this.showView("music") });
+    this.host.setSpectrum(this.player.spectrum);
     this.applySettings(true);
     this.syncShelf(true);
     await this.host.ensure();
     this.stage.dataset.scene = this.host.status;
     this.stage.dataset.ring = this.host.stage ? "on" : "off";
+    this.syncRail();
     if (this.host.status === "failed") toast(`无法启动 3D 画面：${this.host.error ?? "未知原因"}。仍可以用键盘、右侧按钮和搜索操作。`, "error", 10_000);
     this.perf.sceneReady();
     splash?.status("准备就绪", 1);
@@ -271,6 +322,8 @@ export class App implements PerfApp {
     sound.configure(ui.sounds, ui.soundVolume);
     cache.set("splash", ui.splash);
     this.perf.applyQuality();
+    this.host.setCardSize(ui.cardSize, first);
+    this.controls.setSize(ui.cardSize);
     this.applyTheme(ui.theme, first);
     this.perf.refresh();
     this.later("footer", 0, () => this.home.renderFooter());
@@ -386,6 +439,15 @@ export class App implements PerfApp {
 
   private renderTabs() {
     renderTabs($("#view-tabs"), this.tab);
+    this.controls?.setActive(this.tab);
+  }
+
+  /** The archive size switch (small / medium / large): saved in the settings, applied by the stage with a spring. */
+  private setCardSize(size: CardSize) {
+    if (store.settings.ui.cardSize === size) return;
+    this.controls.setSize(size);
+    this.host.setCardSize(size);
+    void tryRpc("settings.update", { patch: { ui: { cardSize: size } } });
   }
 
   private setView(view: View) {
@@ -401,13 +463,35 @@ export class App implements PerfApp {
     if (this.splashActive || modals.open || launchOverlay.open) return;
     if (this.mode === "detail") this.exitDetail();
     if (id === "home") return this.showHome();
-    // Without WebGL the download view renders its DOM rail instead; it must not silently become the old modal sheet.
+    // Without WebGL the download view renders its DOM rail instead. Music needs the 3D picture.
+    if (!this.host.stage && id === "music") return void toast("音乐页要在 3D 画面里使用，现在没有 3D 画面。", "info", 5000);
+    const from = this.tab;
     this.tab = id;
     this.renderTabs();
-    if (this.view === "browse") return void (await this.download.switchKind(id));
+    // The music page has its own controls (the capsule over the picture, the black hole): the small disc of the other pages stays out of its way.
+    this.dock?.setBig(id === "music");
+    this.dock?.setVisible(id !== "music");
+    if (this.view === "browse") {
+      if (from === "music" && id !== "music") {
+        this.music?.leave();
+        this.stage.dataset.browse = "download";
+        await this.download.resume(id);
+      } else if (id === "music" && from !== "music") {
+        this.download.leave();
+        this.stage.dataset.browse = "music";
+        await this.music?.enter(true);
+      } else if (id !== "music") await this.download.switchKind(id);
+      return;
+    }
     this.setView("browse");
     sound.play("open");
-    await this.download.enter(id);
+    if (id === "music") {
+      this.stage.dataset.browse = "music";
+      await this.music?.enter();
+    } else {
+      this.stage.dataset.browse = "download";
+      await this.download.enter(id);
+    }
   }
 
   /** Open the main content browser for an explicit instance/query, used by the instance tabs and crash fixes. */
@@ -424,17 +508,44 @@ export class App implements PerfApp {
   private showHome() {
     this.tab = "home";
     this.renderTabs();
+    this.dock?.setBig(false);
+    this.dock?.setVisible(true);
     if (this.view === "home") return;
     this.download.leave();
+    this.music?.leave();
     this.setView("home");
     this.host.showRing();
     sound.play("close");
   }
 
+  /** The share of the song played as the black hole shows it (the place being dragged to while the track is held), or null when it shows none. */
+  private songProgress(): number | null {
+    const state = this.player?.state;
+    if (this.view !== "browse" || this.tab !== "music" || !state?.song) return null;
+    if (this.seeking !== null) return this.seeking;
+    return state.durationMs > 0 ? Math.min(1, state.positionMs / state.durationMs) : 0;
+  }
+
+  /** The shadow of the black hole was clicked: play or pause; with nothing queued, play what the selected card stands for. */
+  private onHoleClick() {
+    if (this.view !== "browse" || this.tab !== "music") return;
+    if (this.player?.state.song) this.player.toggle();
+    else this.music?.activate();
+    sound.play("tick", 0);
+  }
+
+  /** The track round the hole is being dragged (the picture follows at once) or let go (the song jumps there). */
+  private onHoleSeek(fraction: number, final: boolean) {
+    if (this.view !== "browse" || this.tab !== "music" || !this.player?.state.song) return;
+    this.seeking = final ? null : fraction;
+    if (final) this.player.seekFraction(fraction);
+  }
+
   private onStageSelect(index: number) {
     if (this.splashActive) return;
     if (this.view === "browse") {
-      this.download.onSelect(index);
+      if (this.tab === "music") this.music?.onSelect(index);
+      else this.download.onSelect(index);
       sound.play("tick", 0);
       return;
     }
@@ -443,7 +554,8 @@ export class App implements PerfApp {
 
   /** The selected archive of the ring was clicked again: open it (an instance's page, or the action it stands for). */
   private onStageActivate() {
-    if (this.view === "home" && this.canBrowse()) this.openSelected();
+    if (this.view === "browse" && this.tab === "music") this.music?.activate();
+    else if (this.view === "home" && this.canBrowse()) this.openSelected();
   }
 
   // ------------------------------------------------------------------------------------------ modes
@@ -510,7 +622,7 @@ export class App implements PerfApp {
     set("#nav", front);
     set("#footer", front);
     set("#home", front || this.mode === "detail" || this.view === "browse");
-    set("#download", front || this.mode === "detail" || this.view !== "browse");
+    set("#download", front || this.mode === "detail" || this.view !== "browse" || this.tab === "music");
     set("#view-tabs", front || this.mode === "detail");
     set("#detail", front || this.mode !== "detail");
   }
@@ -546,6 +658,7 @@ export class App implements PerfApp {
     store.on("games", () => {
       refreshHome();
       this.perf.refresh();
+      this.syncMusic();
     });
     store.on("tasks", () => {
       refreshHome();
@@ -569,6 +682,11 @@ export class App implements PerfApp {
     });
     matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme(store.settings.ui.theme));
     matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => this.applySettings());
+  }
+
+  /** The music is paused while a game runs (if the player wants that) and picks up again afterwards. */
+  private syncMusic() {
+    this.player?.suspend(store.settings.music.pauseWhenGameRuns && store.gameRunning);
   }
 
   /** Toasts and sounds when background work ends (launches have their own screen). */
@@ -626,12 +744,12 @@ export class App implements PerfApp {
       view: () => this.view,
       ring: () => Boolean(this.host.stage),
       blocked: () => this.splashActive || modals.open || launchOverlay.open,
-      stepFile: (d) => (this.view === "browse" ? this.download.step(d) : this.stepFile(d)),
-      stepLane: (d) => (this.view === "browse" ? this.download.step(d) : this.stepLane(d)),
-      launch: () => (this.view === "browse" ? this.download.installSelected() : void this.launchSelected()),
-      open: () => (this.view === "browse" ? this.download.handleAction("page", this.host.stage?.selectedItem ?? 0) : this.openSelected()),
-      back: () => (this.mode === "detail" ? this.exitDetail() : this.view === "browse" ? this.showHome() : undefined),
-      search: () => (this.view === "browse" ? this.download.focusSearch() : this.openSearch(false)),
+      stepFile: (d) => (this.view === "browse" ? this.browser().step(d) : this.stepFile(d)),
+      stepLane: (d) => (this.view === "browse" ? this.browser().step(d) : this.stepLane(d)),
+      launch: () => (this.view === "browse" ? (this.tab === "music" ? this.music?.activate() : this.download.installSelected()) : void this.launchSelected()),
+      open: () => (this.view === "browse" ? (this.tab === "music" ? this.player?.toggle() : this.download.handleAction("page", this.host.stage?.selectedItem ?? 0)) : this.openSelected()),
+      back: () => (this.mode === "detail" ? this.exitDetail() : this.view === "browse" ? (this.tab === "music" && this.music?.canGoBack ? this.music.back() : this.showHome()) : undefined),
+      search: () => (this.view === "browse" ? (this.tab === "music" ? this.music?.focusSearch() : this.download.focusSearch()) : this.openSearch(false)),
       settings: () => void import("./views/settings").then((m) => m.openSettings()),
       downloads: () => void import("./views/downloads").then((m) => m.openDownloads()),
       create: () => void this.runRecordAction("create"),
@@ -647,6 +765,11 @@ export class App implements PerfApp {
         onNoPath: (names) => toast(names.length ? "网页预览拿不到文件路径，请点“导入整合包文件”并粘贴路径。" : "只能导入 .mrpack 或 .zip 整合包。", "info", 5000),
       });
     }
+  }
+
+  /** Whichever page owns the row of archives right now. */
+  private browser(): { step(direction: number): void } {
+    return this.tab === "music" && this.music ? this.music : this.download;
   }
 
   private openSearch(favorites: boolean) {
@@ -700,6 +823,10 @@ export class App implements PerfApp {
       app: this,
       host: this.host,
       download: this.download,
+      music: this.music,
+      player: this.player,
+      dock: this.dock,
+      bus: this.bus,
       perf: this.perf,
       store,
       layout: this.layout,

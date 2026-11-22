@@ -115,7 +115,10 @@ const MIME: Record<string, string> = {
   ".wasm": "application/wasm",
 };
 
-/** The page needs: its own scripts and styles, blob/data images and https icons (Modrinth / CurseForge), and nothing else. */
+/**
+ * The page needs: its own scripts and styles, blob/data images and https icons (Modrinth / CurseForge), the music's own servers for the
+ * songs it plays (see `allowMusicServers`), and nothing else.
+ */
 const CSP = [
   "default-src 'none'",
   "script-src 'self'",
@@ -123,7 +126,7 @@ const CSP = [
   "img-src 'self' data: blob: https:",
   "font-src 'self' data:",
   "connect-src 'self' blob: data: https://aidemo.youdao.com https://api.mymemory.translated.net",
-  "media-src 'self' blob: data:",
+  "media-src 'self' blob: data: https://*.music.126.net",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'none'",
@@ -164,6 +167,23 @@ function hardenSession() {
   const allowed = new Set(["clipboard-sanitized-write", "fullscreen"]);
   session.defaultSession.setPermissionRequestHandler((_contents, permission, callback) => callback(allowed.has(permission)));
   session.defaultSession.setPermissionCheckHandler((_contents, permission) => allowed.has(permission));
+}
+
+/**
+ * The songs and covers come from NetEase's CDN, which lets a page play them and show them but not look into them: the spectrum that the
+ * archives and the lyrics dance to is read out of the sound, and a cover's pixels become the texture of an archive, and for both the
+ * answer has to say that the page may. (Without it the player plays on all the same; it just has no spectrum, see `MusicPlayer.onError`.)
+ * The header is added for that CDN alone.
+ */
+function allowMusicServers() {
+  session.defaultSession.webRequest.onHeadersReceived({ urls: ["https://*.music.126.net/*"] }, (details, callback) => {
+    const headers: Record<string, string[]> = {};
+    for (const [name, value] of Object.entries(details.responseHeaders ?? {})) {
+      if (name.toLowerCase() !== "access-control-allow-origin") headers[name] = value;
+    }
+    headers["Access-Control-Allow-Origin"] = ["*"];
+    callback({ responseHeaders: headers });
+  });
 }
 
 // ------------------------------------------------------------------------------------------------ secrets and proxy
@@ -516,6 +536,7 @@ app.on("before-quit", (event) => {
 void app.whenReady().then(async () => {
   Menu.setApplicationMenu(null);
   hardenSession();
+  allowMusicServers();
   registerAppProtocol();
   const proxies = new ProxyCache();
   try {

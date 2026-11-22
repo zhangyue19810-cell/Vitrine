@@ -87,6 +87,11 @@
   display: inline;
 }
 
+/* The control rail of the 3D scene draws the view tabs itself; the HTML strip is only the fallback when there is no scene. */
+#stage[data-rail="on"] .view-tabs {
+  visibility: hidden;
+}
+
 /* ------------------------------------------------------------------------------------------ download view */
 
 .download {
@@ -104,6 +109,13 @@
   visibility: visible;
   /* The controls arrive after the archives have started to regroup. */
   transition: opacity 0.6s var(--ease) 0.45s, visibility 0s;
+}
+
+/* The music page is all in the 3D scene: the download page's controls stay away. */
+#stage[data-browse="music"] .download {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
 }
 
 .download > * {

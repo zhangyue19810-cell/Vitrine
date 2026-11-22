@@ -25,3 +25,4 @@ export type { ExportCandidate } from "../../core/src/pack/export";
 export type { LatestPack } from "../../core/src/pack/online";
 export type { JvmPresetInfo, JvmAdvice, MemoryAdvice } from "../../core/src/mc/jvm";
 export type { SourcePolicy } from "../../core/src/net/sources";
+export type { MusicSong, MusicPlaylist, MusicAccount, MusicStatus, MusicSource, MusicLyrics, LyricLine, QrLogin, QrPoll, QrState, SearchResult } from "../../core/src/music/types";

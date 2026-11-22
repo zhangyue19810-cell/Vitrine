@@ -111,7 +111,7 @@ function sections(): Section[] {
       id: "appearance",
       label: "外观与性能",
       rows: [
-        { name: "界面配色", path: "ui.theme", field: { kind: "seg", options: [["auto", "跟随系统"], ["light", "亮色"], ["dark", "暗色"]] } },
+        { name: "界面配色", path: "ui.theme", field: { kind: "seg", options: [["dark", "深空（暗色）"], ["light", "亮色"], ["auto", "跟随系统"]] } },
         { name: "动效", path: "ui.motion", field: { kind: "select", options: [["auto", "跟随系统的“减少动态效果”"], ["full", "完整动效"], ["reduced", "精简动效"]] }, desc: "精简动效会关闭滚动数字、选择涟漪等装饰，帧率上限降到 30。" },
         { name: "3D 帧率上限", path: "ui.fps", field: { kind: "select", options: [["auto", "自动（跟随显示器，最高 60）"], [30, "30 帧"], [60, "60 帧"], [120, "120 帧"]] }, desc: "停止操作 10 秒后会自动降到 30 帧，90 秒后降到 15 帧。" },
         { name: "3D 画质", path: "ui.quality", field: { kind: "select", options: [["auto", "自动（卡顿时自动降级）"], ["high", "高"], ["medium", "中"], ["low", "低（省电）"]] }, desc: "自动档会结合显卡、处理器和物理内存选择档位；帧率持续偏低时再逐级降级。" },
