@@ -26,54 +26,39 @@
 }
 
 .splash-mark {
-  width: 148px;
-  height: 148px;
+  width: 220px;
+  height: 123px;
   color: var(--ink);
   overflow: visible;
 }
 
-.splash-mark .frame {
+.splash-mark .loop {
   fill: none;
-  stroke: currentColor;
-  stroke-width: 9;
-  stroke-opacity: 0.5;
-  stroke-dasharray: 900;
-  stroke-dashoffset: 900;
-  animation: draw 1.3s 0.1s var(--ease) forwards;
+  stroke-width: 13;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
 }
 
-.splash-mark .pane-a,
-.splash-mark .pane-b {
+.splash-mark .loop-a {
+  stroke: currentColor;
+  stroke-opacity: 0.92;
+  animation: draw 1.15s 0.15s var(--ease) forwards;
+}
+
+.splash-mark .loop-b {
+  stroke: var(--accent);
+  animation: draw 1.15s 0.5s var(--ease) forwards;
+}
+
+/* The point where the loops meet flares once, like the first light of the disk. */
+.splash-mark .core {
+  fill: var(--accent-ink);
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
-}
-
-.splash-mark .pane-a {
-  fill: currentColor;
-  animation: pane-a 0.9s 0.55s var(--ease) forwards;
-}
-
-.splash-mark .pane-b {
-  fill: var(--accent);
-  fill-opacity: 0.92;
-  animation: pane-b 0.9s 0.75s var(--ease) forwards;
-}
-
-.splash-mark .strip {
-  stroke: currentColor;
-  stroke-opacity: 0.75;
-  stroke-width: 8;
-  stroke-linecap: round;
-  stroke-dasharray: 70;
-  stroke-dashoffset: 70;
-  animation: draw 0.6s 1.15s var(--ease) forwards;
-}
-
-.splash-mark .glint {
-  fill: #fff;
-  opacity: 0;
-  animation: glint 1.1s 1.35s ease-out forwards;
+  animation: flare 1.1s 1.3s ease-out forwards;
 }
 
 @keyframes draw {
@@ -82,39 +67,18 @@
   }
 }
 
-@keyframes pane-a {
-  from {
-    opacity: 0;
-    transform: translate(-26px, -18px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes pane-b {
-  from {
-    opacity: 0;
-    transform: translate(26px, -18px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
-}
-
-@keyframes glint {
+@keyframes flare {
   0% {
     opacity: 0;
-    transform: translateX(-60px);
+    transform: scale(0.4);
   }
-  30% {
-    opacity: 0.55;
+  35% {
+    opacity: 1;
+    transform: scale(2.6);
   }
   100% {
     opacity: 0;
-    transform: translateX(80px);
+    transform: scale(5);
   }
 }
 
@@ -210,10 +174,8 @@
 }
 
 /* Short version: everything arrives at once. */
-.splash[data-style="short"] .splash-mark .frame,
-.splash[data-style="short"] .splash-mark .pane-a,
-.splash[data-style="short"] .splash-mark .pane-b,
-.splash[data-style="short"] .splash-mark .strip,
+.splash[data-style="short"] .splash-mark .loop,
+.splash[data-style="short"] .splash-mark .core,
 .splash[data-style="short"] .splash-word b span,
 .splash[data-style="short"] .splash-word i,
 .splash[data-style="short"] .splash-status {
@@ -238,13 +200,14 @@
   }
 }
 
-#stage.reduce-motion .splash-mark .frame,
-#stage.reduce-motion .splash-mark .strip {
+#stage.reduce-motion .splash-mark .loop {
   stroke-dashoffset: 0;
 }
 
-#stage.reduce-motion .splash-mark .pane-a,
-#stage.reduce-motion .splash-mark .pane-b,
+#stage.reduce-motion .splash-mark .core {
+  opacity: 0;
+}
+
 #stage.reduce-motion .splash-word b span,
 #stage.reduce-motion .splash-word i,
 #stage.reduce-motion .splash-status,

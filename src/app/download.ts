@@ -103,6 +103,16 @@ export class DownloadView {
     await this.reload("replace");
   }
 
+  /** Back from a page that shares the row (the music page): the archives are pulled apart, then this category's gather. */
+  async resume(kind: ContentKind) {
+    this.active = true;
+    this.kind = kind;
+    this.query = "";
+    this.pickInstance();
+    await this.checkStatus();
+    await this.reload("swap");
+  }
+
   /** Another category while the row is up: the archives are pulled apart, then new ones gather. */
   async switchKind(kind: ContentKind) {
     if (!this.active) return void (await this.enter(kind));

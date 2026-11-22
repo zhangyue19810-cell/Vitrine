@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { newFrame, wrapSigned, type RingFrame } from "./mobius-ring";
-import { BAND, BandPath, TRACK, newPlate, lapFlip, plateAt, turnPlate, type PlateFrame } from "./fin-band";
+import { BAND, BOUNCE, BandPath, TRACK, newPlate, lapFlip, plateAt, turnPlate, unrollOrder, type PlateFrame } from "./fin-band";
+import type { SpectrumField } from "./spectrum";
 import { FinMesh } from "./fin-mesh";
 import { ROW, rowFrame } from "./row-track";
 import {
@@ -18,8 +19,20 @@ import {
   type Style,
 } from "./choreography";
 import { roll, unroll } from "./regroup";
-import { basisOf, detailPlacement, fovOf, holePlacement, ringCamera, rowCamera, type CameraPreset, type DetailPlacement } from "./stage-layout";
+import { basisOf, detailPlacement, fovOf, holePlacement, project, ringCamera, rowCamera, type CameraPreset, type DetailPlacement } from "./stage-layout";
 import { damp, type Spring } from "./motion";
+import { eyeOf, type Eye, type KeepOut } from "./space/cosmos";
+import { haloFrame, type Halo } from "./space/halo";
+import { RippleSet } from "./space/ripples";
+import { Sky } from "./space/starfield";
+import { BlackHole } from "./space/blackhole";
+import { DEFAULT_VIEW, DISK, lanePose, newLanePose, newSystem, systemOf, type ViewAngles } from "./space/disk";
+import { SHADOW } from "./space/geodesic";
+import { DiskView } from "./space/view";
+import { LyricsLayer, type LyricsState } from "./space/lyrics3d";
+import { Turntable } from "./deck/turntable";
+import { DECK_TILT } from "./deck/model";
+import type { WorldState } from "./fin-mesh";
 
 /**
  * The 3D stage of the launcher: ONE set of archives that is either the Möbius ring (home) or the single download row,
@@ -34,6 +47,24 @@ import { damp, type Spring } from "./motion";
  */
 
 export type StageLayout = "ring" | "row";
+
+/** How much of the camera's move aside (as the picture's own shift) the far sky takes with it. */
+const SKY_FOLLOW = 0.2;
+
+/**
+ * A world the plates of the ring can be sent to without the picture ceasing to be the same set of archives: "cosmos" is the deep
+ * space the music pages float in (the plates drift there and answer the pointer like water); "deck" is the same space with most
+ * of the plates standing in rings round the record of the now-playing page, and the cards put away.
+ */
+export type StageWorld = "none" | "cosmos" | "deck";
+
+/** Where the now-playing page puts its record on the picture (px of a `view`-sized picture) and which parts it keeps for text. */
+export interface DeckPlace {
+  view: { width: number; height: number };
+  record: { cx: number; cy: number; radius: number };
+  /** Rectangles (px) that the plates floating in front must leave free: the lyrics, the title block. */
+  keep: ReadonlyArray<{ x: number; y: number; width: number; height: number }>;
+}
 
 export interface StageItem {
   /** Identity of the thing shown; two items with the same key are the same archive. */
@@ -82,7 +113,24 @@ export interface StageEvents {
   hover?(item: number | null): void;
   /** The row is nearly at its end: load more. */
   more?(): void;
+  /** The black hole was clicked (the music world: play or pause). */
+  hole?(): void;
+  /** The track round the black hole was pressed or dragged: the place in the song, 0 … 1; `final` once the pointer is let go. */
+  seek?(fraction: number, final: boolean): void;
 }
+
+/** Where a pointer is on the black hole (see `ArchiveStage.holeAt`). */
+export interface HoleSpot {
+  /** Distance from the centre, in horizon radii. */
+  b: number;
+  /** Angle round the hole, clockwise from straight up, as a share of a turn. */
+  turn: number;
+  /** The shadow (a click plays or pauses), the track of the song round it (press or drag to seek), or neither (a drag turns the view). */
+  part: "shadow" | "track" | null;
+}
+
+/** The parts of the black hole's picture that can be pointed at (horizon radii from its centre). */
+export const HOLE = { shadow: SHADOW * 0.98, trackInner: SHADOW * 1.06, trackOuter: SHADOW * 1.44 } as const;
 
 export const STAGE = {
   capacity: 64,
@@ -96,11 +144,21 @@ const FACE = { width: 4.56, height: 3.3, z: 0.262 };
 /** Archives on the band stand a little larger than the plates around them, so they read as the tabs of the card file. */
 const RING_CARD = { scale: 1.22, arc: 3.4 };
 
+/** Candela of the disk's light per square horizon radius (so that what stands a few radii away is lit the same at any size of the picture). */
+const GLOW_CANDELA = 38;
+
+/** The three sizes of the archives (settings: small / medium / large). The card that is read changes a little less than the rest. */
+export type CardSize = "small" | "medium" | "large";
+export const CARD_SIZES: Record<CardSize, number> = { small: 0.84, medium: 1, large: 1.16 };
+
 const smooth = (t: number) => {
   t = Math.max(0, Math.min(1, t));
   return t * t * (3 - 2 * t);
 };
 const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
+
+/** A halo for a turntable that is not shown. */
+const DUMMY_HALO: Halo = { centre: [0, 0, 0], right: [1, 0, 0], back: [0, 1, 0], normal: [0, 0, 1], radius: 1 };
 
 class Pose {
   readonly pos = new THREE.Vector3();
@@ -195,6 +253,8 @@ const scratch = {
   c: new THREE.Vector3(),
   q: new THREE.Quaternion(),
   q2: new THREE.Quaternion(),
+  q3: new THREE.Quaternion(),
+  heard: { lift: 0, grow: 0, tilt: 0 },
   euler: new THREE.Euler(0, 0, 0, "YXZ"),
   target: new Pose(),
   detail: new Pose(),
@@ -203,6 +263,7 @@ const scratch = {
   ray: new THREE.Ray(),
   hit: new THREE.Vector3(),
   axisY: new THREE.Vector3(0, 1, 0),
+  axisX: new THREE.Vector3(1, 0, 0),
 };
 
 export class ArchiveStage {
@@ -257,6 +318,10 @@ export class ArchiveStage {
   private aspect = 16 / 9;
   private dark = false;
   private presence = 1;
+  private audio: SpectrumField | null = null;
+  /** The size of the archives: follows `sizeGoal` with a spring, so that a change grows or shrinks them smoothly. */
+  private readonly size: Spring = { value: 1, velocity: 0 };
+  private sizeGoal = 1;
   private detailOn = false;
   private hoverItem = -1;
   private hoverHot: string | null = null;
@@ -266,6 +331,48 @@ export class ArchiveStage {
   private stamp = 0;
   private instant = false;
   private detailItem = -1;
+  private cardsShown = 1;
+
+  // The worlds.
+  private world: StageWorld = "none";
+  /** 0 … 1: the plates have left the ring / track for the world. */
+  private readonly worldMix: Spring = { value: 0, velocity: 0 };
+  /** 0 = the world is the open cosmos, 1 = the rings round the record. */
+  private readonly deckMix: Spring = { value: 0, velocity: 0 };
+  /** 1 = the cards are out, 0 = put away. */
+  private readonly cardsMix: Spring = { value: 1, velocity: 0 };
+  /**
+   * 0 … 1, in the music world: how far the archives are out. They stay put away (and the lyrics stand alone in the middle) until the
+   * pointer goes to the right of the picture, the wheel or the keys turn them, or `revealHold` says they have only just been wanted;
+   * then the camera moves aside and they come out along an arc on the right.
+   */
+  private readonly reveal: Spring = { value: 0, velocity: 0 };
+  /** Seconds the archives stay out after they were last wanted (counted down while the pointer is away from the right). */
+  private revealHold = 0;
+  /** The picture's look while the archives are out: the player's own angles with the camera's move added (the player's are not changed). */
+  private readonly look: ViewAngles = { ...DEFAULT_VIEW };
+  /** The lyrics of the song, drawn in the scene (see `space/lyrics3d.ts`). */
+  readonly lyrics = new LyricsLayer();
+  private lyricsState: LyricsState | null = null;
+  private worldClock = 0;
+  /** The water the pointer stirs. */
+  readonly ripples = new RippleSet();
+  private pointerNdc: { x: number; y: number } | null = null;
+  private deckPlace: DeckPlace | null = null;
+  readonly sky = new Sky();
+  readonly hole = new BlackHole();
+  /** The light of the disk: a warm point of light at the hole that the debris and the cards are lit by (its own, not the theme's). */
+  private readonly glow = new THREE.PointLight("#ffb45e", 0, 0, 2);
+  readonly turntable = new Turntable();
+  /** The black hole and its disk as the picture of this frame places them (kept for the cards and the pointer). */
+  private readonly system = newSystem();
+  private systemOn = false;
+  private readonly lane = newLanePose();
+  private readonly slotLane = newLanePose();
+  /** The bass of the music, 0 … 1 (the ring of light round the hole swells with it). */
+  private bass = 0;
+  private readonly keep: KeepOut[] = [];
+  private halo: Halo | null = null;
 
   constructor(options: { painter: FacePainter; anisotropy?: number }) {
     this.painter = options.painter;
@@ -277,6 +384,10 @@ export class ArchiveStage {
     this.group.add(this.infoFace.mesh, this.detailFace.mesh);
 
     this.group.add(this.fins.mesh);
+    this.group.add(this.sky.group, this.hole.group, this.turntable.group, this.lyrics.group);
+    this.glow.userData.ownLight = true;
+    this.glow.castShadow = false;
+    this.group.add(this.glow);
   }
 
   /** How far the selected archive is pulled out to the left (0…1); in the row it always is. */
@@ -291,11 +402,24 @@ export class ArchiveStage {
 
   /** Two slots whose screen distance is "one step" of scrolling (in the row the pulled-out card at slot 0 is left out). */
   referenceSlots(): [number, number] {
-    return this.layout === "ring" ? [0, 1] : [1, 2];
+    return this.layout === "ring" || this.inMusicWorld ? [0, 1] : [1, 2];
+  }
+
+  /** The music world is the one on the picture (the archives come out on an arc at its right). */
+  private get inMusicWorld(): boolean {
+    return this.world === "cosmos" && this.worldMix.value > 0.5;
   }
 
   /** World position of the middle of the card `slot` places along (ring: counted from the focus, on the band; row: the track slot). */
   slotCentre(slot: number, out: THREE.Vector3): THREE.Vector3 {
+    if (this.inMusicWorld) {
+      // Where the places are when the archives are out (they are not always: but a drag needs to know how far one place is).
+      const reveal = this.system.reveal;
+      this.system.reveal = 1;
+      const pose = lanePose(slot, this.system, this.size.value, this.slotLane);
+      this.system.reveal = reveal;
+      return out.set(pose.p[0], pose.p[1], pose.p[2]);
+    }
     if (this.layout === "ring") {
       this.bandPose(slot, Math.max(1, this.items.length), scratch.target);
       return out.copy(scratch.target.pos);
@@ -339,6 +463,20 @@ export class ArchiveStage {
     if (this.detailItem >= 0) this.paintDetail(true);
   }
 
+  /** Make the archives smaller or larger (the ring's cards, the pulled-out card and the download row's cards). */
+  setCardSize(size: CardSize, immediate = false) {
+    this.sizeGoal = CARD_SIZES[size];
+    if (immediate) {
+      this.size.value = this.sizeGoal;
+      this.size.velocity = 0;
+    }
+  }
+
+  /** The music: every plate and card jumps with the band that lies under it. `null` (or a field at rest) means silence. */
+  setSpectrum(field: SpectrumField | null) {
+    this.audio = field;
+  }
+
   setPresence(presence: number) {
     this.presence = clamp(presence, 0, 1);
   }
@@ -346,6 +484,110 @@ export class ArchiveStage {
   /** Whether motion should be skipped (reduced-motion): transitions finish at once. */
   setInstant(instant: boolean) {
     this.instant = instant;
+  }
+
+  // ───────────────────────────── worlds ─────────────────────────────
+
+  /** Send the plates to a world (or bring them back to the ring / track with "none"). Everything flies; nothing pops. */
+  setWorld(world: StageWorld) {
+    if (world === "none") {
+      this.view.reset();
+      this.revealHold = 0;
+    } else if (world === "cosmos" && this.world !== "cosmos") {
+      // The first sight of the page shows where the archives are: they come out once, stay a moment, and go.
+      this.revealHold = DISK.reveal.intro;
+    }
+    this.world = world;
+  }
+
+  get currentWorld(): StageWorld {
+    return this.world;
+  }
+
+  /** 0 … 1: how much of the picture is deep space (the scene turns its background and light to it). */
+  get worldAmount(): number {
+    return clamp(this.worldMix.value, 0, 1);
+  }
+
+  /** 0 … 1: how far the world has become the record's page. */
+  get deckAmount(): number {
+    return clamp(this.deckMix.value, 0, 1) * this.worldAmount;
+  }
+
+  /** Where the record goes on the picture (and what to keep free of floating plates); null when there is no now-playing page. */
+  setDeckPlace(place: DeckPlace | null) {
+    this.deckPlace = place;
+  }
+
+  /**
+   * The pointer is over the picture at (`x`, `y`) in −1…1 (y up); null once it has left. The view of the black hole leans a little
+   * towards it, and on the right of the picture (`DISK.reveal.zone`) the archives come out.
+   */
+  pointAt(x: number | null, y = 0) {
+    this.pointerNdc = x === null ? null : { x, y };
+  }
+
+  /** Bring the archives out for a moment (the wheel or a key turned them; a click chose one): they go back after `DISK.reveal.hold` seconds. */
+  poke(seconds: number = DISK.reveal.hold) {
+    if (this.world === "cosmos") this.revealHold = Math.max(this.revealHold, seconds);
+  }
+
+  /** 0 … 1: how far the archives of the music world are out and the camera has moved aside for them (0 outside the music world). */
+  get revealAmount(): number {
+    return smooth(clamp(this.reveal.value, 0, 1)) * this.worldAmount;
+  }
+
+  /** The lyrics of the song being played (null: none to show). Drawn in the scene, over the black hole. */
+  setLyrics(state: LyricsState | null) {
+    this.lyricsState = state;
+  }
+
+  /** The player's hold on the picture of the black hole: drag to turn it, the wheel to come closer (see `DiskView`). */
+  readonly view = new DiskView();
+  /** What the pointer is on, as the shader wants it (smoothed), and the song the hole shows. */
+  private readonly holeHover = { shadow: { value: 0, velocity: 0 } as Spring, track: { value: 0, velocity: 0 } as Spring };
+  private holeGoal: { shadow: number; track: number } = { shadow: 0, track: 0 };
+  private readonly playing: Spring = { value: 0, velocity: 0 };
+  private song: { progress: number | null; playing: boolean } = { progress: null, playing: false };
+
+  /** Whether the black hole is on the picture for the player to hold (the music world, not the record page). */
+  get holeShown(): boolean {
+    return this.systemOn && this.world === "cosmos" && this.worldMix.value > 0.6 && this.deckMix.value < 0.5;
+  }
+
+  /** Where the pointer (−1 … 1, y up) is on the black hole; null while it is not shown. */
+  holeAt(x: number, y: number): HoleSpot | null {
+    if (!this.holeShown) return null;
+    const eye = eyeOf(this.cameraState(), this.aspect);
+    const dx = (x - this.system.ndc[0]) * eye.halfWidth;
+    const dy = (y - this.system.ndc[1]) * eye.halfHeight;
+    const b = Math.hypot(dx, dy) / this.system.rs;
+    let turn = Math.atan2(dx, dy) / (Math.PI * 2);
+    if (turn < 0) turn += 1;
+    return { b, turn, part: b < HOLE.shadow ? "shadow" : b > HOLE.trackInner && b < HOLE.trackOuter ? "track" : null };
+  }
+
+  /** Where the black hole is on a picture of `width` × `height` CSS pixels (its centre and the radius of its shadow), for the words that float round it; null while it is not shown. */
+  holeScreen(width: number, height: number): { x: number; y: number; radius: number } | null {
+    if (!this.holeShown || !(width > 0) || !(height > 0)) return null;
+    const eye = eyeOf(this.cameraState(), this.aspect);
+    return {
+      x: (this.system.ndc[0] * 0.5 + 0.5) * width,
+      y: (0.5 - this.system.ndc[1] * 0.5) * height,
+      radius: (this.system.radius / eye.halfHeight) * height * 0.5,
+    };
+  }
+
+  /** What the pointer rests on, for the glow of the track and the symbol in the shadow. */
+  setHoleHover(part: "shadow" | "track" | null) {
+    this.holeGoal.shadow = part === "shadow" ? 1 : 0;
+    this.holeGoal.track = part === "track" ? 1 : 0;
+  }
+
+  /** The song the hole shows: the share played (null: nothing loaded) and whether it is playing. */
+  setSong(progress: number | null, playing: boolean) {
+    this.song.progress = progress;
+    this.song.playing = playing;
   }
 
   /**
@@ -718,6 +960,7 @@ export class ArchiveStage {
     }
     if (index !== this.selected) {
       this.selected = index;
+      this.poke();
       this.events.select?.(index);
     }
     if (this.layout === "row" && this.items.length - index <= STAGE.after && !this.swapping) this.events.more?.();
@@ -725,6 +968,7 @@ export class ArchiveStage {
 
   step(delta: number) {
     if (this.busy) return;
+    this.poke();
     this.select(this.selected + delta);
   }
 
@@ -743,6 +987,7 @@ export class ArchiveStage {
   dragBy(slots: number) {
     if (this.busy || this.items.length === 0) return;
     this.dragging = true;
+    this.poke();
     if (this.layout === "ring") {
       this.ringPos.value += slots;
       this.ringTarget = this.ringPos.value;
@@ -796,7 +1041,9 @@ export class ArchiveStage {
 
   /** What is under the ray: the card, and the hotspot of its pulled-out face. */
   pick(ray: THREE.Ray): StagePick | null {
-    if (this.busy) return null;
+    if (this.busy || this.cardsMix.value < 0.5) return null;
+    // In the music world the archives can only be touched once they are out.
+    if (this.world === "cosmos" && this.reveal.value < 0.5) return null;
     let best: StagePick | null = null;
     let bestT = Infinity;
     for (const card of this.cards) {
@@ -851,6 +1098,8 @@ export class ArchiveStage {
 
   /** Where the camera should be for the current layout. */
   private cameraGoal(): CameraPreset {
+    // The worlds are composed for the head-on view of the ring (the long lens), whichever layout the cards were in.
+    if (this.world !== "none") return ringCamera(this.aspect);
     return this.layout === "ring" ? ringCamera(this.aspect) : rowCamera(this.aspect);
   }
 
@@ -878,11 +1127,13 @@ export class ArchiveStage {
     else damp(this.rowPos, this.dragging ? this.rowPos.value : this.rowTarget, rate, dt);
     damp(this.pull, this.layout === "ring" && this.detailOn ? 1 : 0, fast ? 40 : 5.5, dt);
     damp(this.morph, this.layout === "row" ? 1 : 0, fast ? 40 : 2.7, dt);
+    this.updateWorld(dt, fast);
 
     this.advance(dt);
     if (this.swapping && this.pending !== null && !this.cards.some((card) => card.mode === "leave")) this.gather();
     if (!this.swapping && this.layout === "row") this.syncRowWindow();
     this.updateBusy();
+    damp(this.size, this.sizeGoal, this.instant ? 40 : 7, dt);
     this.updateFins(dt);
     this.refreshSpots();
     this.compose(dt);
@@ -893,8 +1144,16 @@ export class ArchiveStage {
     const cameraMoving = this.camSprings.some((spring) => Math.abs(spring.velocity) > 0.01);
     const assembling = this.started && Math.abs(this.assemble.value - 1) > 0.002;
     const idling = this.ambient && this.layout === "ring" && this.started && this.presence > 0.01;
+    const dancing = Boolean(this.audio?.active) && this.started && this.presence > 0.01;
+    const resizing = Math.abs(this.size.value - this.sizeGoal) > 0.0005 || Math.abs(this.size.velocity) > 0.001;
+    const worldGoal = this.world === "none" ? 0 : 1;
+    const revealing = Math.abs(this.reveal.value - (this.revealWanted ? 1 : 0)) > 0.002 || this.revealHold > 0;
+    // A world is never still: things drift in it, and the water moves.
+    const inWorld = this.worldMix.value > 0.002 || worldGoal === 1 || this.ripples.active || Math.abs(this.cardsMix.value - (this.world === "deck" ? 0 : 1)) > 0.002;
     this.animating =
-      this.busy || this.loading || this.dragging || scrolling || hovering || cameraMoving || assembling || idling || this.presence < 1 || Math.abs(this.pull.value - pullGoal) > 0.002 || Math.abs(this.morph.value - morphGoal) > 0.002;
+      inWorld ||
+      revealing ||
+      this.busy || this.loading || this.dragging || scrolling || hovering || cameraMoving || assembling || idling || dancing || resizing || this.presence < 1 || Math.abs(this.pull.value - pullGoal) > 0.002 || Math.abs(this.morph.value - morphGoal) > 0.002;
   }
 
   private updateCamera(dt: number, fast: boolean) {
@@ -974,18 +1233,188 @@ export class ArchiveStage {
     }
   }
 
+  private updateWorld(dt: number, fast: boolean) {
+    damp(this.worldMix, this.world === "none" ? 0 : 1, fast ? 40 : 1.9, dt);
+    // Between the worlds the plates fly from one formation to the other; leaving for the ring keeps the last one.
+    if (this.world === "deck") damp(this.deckMix, 1, fast ? 40 : 2.2, dt);
+    else if (this.world === "cosmos") damp(this.deckMix, 0, fast ? 40 : 2.2, dt);
+    damp(this.cardsMix, this.world === "deck" ? 0 : 1, fast ? 40 : 4.5, dt);
+    const alive = this.world !== "none" || this.worldMix.value > 0.001;
+    if (alive) this.worldClock += dt;
+    // Nothing drops water on the picture any more (the pointer does not stir it); the set stays for the shaders that read it.
+    this.ripples.advance(dt);
+    this.ripples.trail(null, dt);
+    this.updateReveal(dt, fast);
+  }
+
+  /** Whether the archives of the music world are wanted out this frame. */
+  private get revealWanted(): boolean {
+    return this.world === "cosmos" && this.worldMix.value > 0.92 && this.revealHold > 0;
+  }
+
+  /**
+   * The archives of the music world come out when they are asked for: the pointer is on the right of the picture, an archive is under
+   * it or being dragged, or the wheel / keys / a click just moved them. Each of these keeps them out for `DISK.reveal.hold` seconds
+   * more; the first sight of the page (`DISK.reveal.intro`) only counts down once the world has arrived.
+   */
+  private updateReveal(dt: number, fast: boolean) {
+    const ready = this.world === "cosmos" && this.worldMix.value > 0.92;
+    if (ready) {
+      const pointer = this.pointerNdc;
+      const near = pointer !== null && pointer.x > DISK.reveal.zone;
+      if (near || this.dragging || this.hoverItem >= 0) this.revealHold = Math.max(this.revealHold, DISK.reveal.hold);
+      else this.revealHold = Math.max(0, this.revealHold - dt);
+    }
+    damp(this.reveal, this.revealWanted ? 1 : 0, fast ? 40 : 2.6, dt);
+    if (this.reveal.value < 0.0005 && !this.revealWanted) this.reveal.value = this.reveal.velocity = 0;
+  }
+
+  /** The parts of the picture that plates floating in front of the cards and the text must leave free (−1…1, y up). */
+  private keepOuts(camera: CameraPreset & { fov: number }, eye: Eye): KeepOut[] {
+    const keep = this.keep;
+    keep.length = 0;
+    const half = Math.tan(camera.fov / 2);
+    if (this.cardsMix.value > 0.05) {
+      for (const card of this.cards) {
+        if (!card.drawn) continue;
+        const at = project(camera, this.aspect, [card.pose.pos.x, card.pose.pos.y, card.pose.pos.z]);
+        if (at.depth <= 1) continue;
+        const scale = card.pose.scale;
+        // Half the card's size on the picture, with room round it.
+        const hw = (CARD.halfWidth * scale * 1.15) / (at.depth * half * this.aspect);
+        const hh = ((CARD.height / 2) * scale * 1.15) / (at.depth * half);
+        const x = at.u * 2 - 1;
+        const y = 1 - at.v * 2;
+        keep.push({ x0: x - hw, x1: x + hw, y0: y - hh, y1: y + hh, distance: at.depth });
+      }
+    }
+    const place = this.deckPlace;
+    if (place && this.deckMix.value > 0.01) {
+      const { view, record } = place;
+      const px = (x: number) => (x / view.width) * 2 - 1;
+      const py = (y: number) => 1 - (y / view.height) * 2;
+      // The record and the rings round it belong to the halo; the plates that stay in the cosmos keep out of that whole area.
+      const reach = record.radius * 1.9;
+      keep.push({ x0: px(record.cx - reach), x1: px(record.cx + reach), y0: py(record.cy + reach), y1: py(record.cy - reach), distance: eye.distance + 400 });
+      for (const rect of place.keep) keep.push({ x0: px(rect.x), x1: px(rect.x + rect.width), y0: py(rect.y + rect.height), y1: py(rect.y), distance: eye.distance + 400 });
+    }
+    return keep;
+  }
+
   private updateFins(dt: number) {
     if (this.ambient && this.layout === "ring") this.clock += dt;
     damp(this.assemble, this.started ? 1 : 0, this.instant ? 40 : 1.45, dt);
     const count = Math.max(1, this.items.length);
     const turn = this.layout === "ring" ? this.ringPos.value / count : this.finTurn;
     const shift = this.layout === "ring" ? turn : this.finTurn + (this.rowPos.value - this.finAnchor) / (TRACK.to - TRACK.from);
-    this.fins.update({ turn, shift, morph: clamp(this.morph.value, 0, 1), clock: this.clock, presence: smooth(this.presence) * clamp(this.assemble.value, 0, 1) });
+    const mix = clamp(this.worldMix.value, 0, 1);
+    let world: WorldState | null = null;
+    this.halo = null;
+    // The table of rays the black hole is drawn from is traced a few milliseconds a frame, in the background, until it is done.
+    this.hole.warm();
+    if (mix > 0.0005) {
+      const camera = this.cameraState();
+      const eye = eyeOf(camera, this.aspect);
+      const place = this.deckPlace;
+      const deck = clamp(this.deckMix.value, 0, 1);
+      if (place && deck > 0.0005) {
+        this.halo = haloFrame(eye, place.view, place.record, DECK_TILT);
+        if (deck > 0.5) this.focus.set(this.halo.centre[0], this.halo.centre[1], this.halo.centre[2]);
+      }
+      const lean = this.world === "cosmos" && deck < 0.5 ? this.pointerNdc : null;
+      const angles = this.view.update(dt, lean, this.instant, this.instant);
+      // While the archives are out the camera moves aside: the hole slides to the left, the disk tips open a little, and it all becomes smaller.
+      const out = clamp(this.reveal.value, 0, 1);
+      const move = smooth(out);
+      const look = this.look;
+      look.elevation = angles.elevation + DISK.reveal.tilt * move;
+      look.roll = angles.roll;
+      look.zoom = angles.zoom * (1 + (DISK.reveal.zoom - 1) * move);
+      look.pan = angles.pan + DISK.reveal.pan * move;
+      look.reveal = out;
+      const system = systemOf(eye, this.system, look);
+      this.systemOn = true;
+      const rate = this.instant ? 40 : 11;
+      damp(this.holeHover.shadow, this.holeGoal.shadow, rate, dt);
+      damp(this.holeHover.track, this.holeGoal.track, rate, dt);
+      damp(this.playing, this.song.playing ? 1 : 0, this.instant ? 40 : 7, dt);
+      const heard = this.audio && this.audio.active ? this.audio : null;
+      this.bass = heard ? Math.min(1, heard.at(0.06) * (1 + 0.3 * heard.beat)) : 0;
+      world = { mix, deck: this.halo ? deck : 0, time: this.worldClock, eye, keep: this.keepOuts(camera, eye), ripples: this.ripples, halo: this.halo, system };
+      // The sky is drawn in the picture's own coordinates; the black hole and the water of its disk stand where the system is.
+      this.sky.update({ time: this.worldClock, mix, eye, ripples: this.ripples, shift: (system.ndc[0] - DISK.centre.x) * SKY_FOLLOW });
+      this.hole.update({
+        mix: mix * (1 - smooth(deck)),
+        time: this.worldClock,
+        system,
+        eye,
+        ripples: this.ripples,
+        level: this.bass,
+        dt,
+        hover: { shadow: clamp(this.holeHover.shadow.value, 0, 1), track: clamp(this.holeHover.track.value, 0, 1) },
+        song: { progress: this.song.progress, playing: clamp(this.playing.value, 0, 1) },
+      });
+      // The lyrics stand in front of the hole once the world has come in; they follow it when the camera moves aside.
+      this.lyrics.update({
+        state: this.lyricsState,
+        system,
+        eye,
+        audio: heard,
+        bass: this.bass,
+        mix: this.world === "cosmos" ? smooth((mix - 0.55) / 0.45) * (1 - smooth(deck)) : 0,
+        reveal: out,
+        calm: this.instant,
+        dt,
+        time: this.worldClock,
+      });
+      // The light of the disk sits a little in front of the hole and swells with the bass.
+      const lit = smooth(mix) * (1 - smooth(deck));
+      this.glow.intensity = GLOW_CANDELA * lit * system.rs * system.rs * (0.85 + 0.45 * this.bass);
+      this.glow.position.set(
+        system.centre[0] + system.toward[0] * system.rs * 4,
+        system.centre[1] + system.toward[1] * system.rs * 4,
+        system.centre[2] + system.toward[2] * system.rs * 4,
+      );
+    } else {
+      this.systemOn = false;
+      this.glow.intensity = 0;
+      this.sky.update({ time: this.worldClock, mix: 0, eye: null, ripples: this.ripples });
+      this.hole.update({ mix: 0, time: this.worldClock, system: null, eye: null, ripples: this.ripples, level: 0, dt });
+      this.lyrics.hide();
+    }
+    this.fins.setDeep(smooth(mix));
+    this.fins.update({ turn, shift, morph: clamp(this.morph.value, 0, 1), clock: this.clock, presence: smooth(this.presence) * clamp(this.assemble.value, 0, 1), audio: this.audio, dt, world });
     this.fins.setVisible(this.started && this.presence > 0.002);
+    // The turntable rises out of the dark as the plates come in rings round its place.
+    if (this.halo) this.turntable.place(this.halo, smooth((this.deckAmount - 0.35) / 0.65));
+    else this.turntable.place(DUMMY_HALO, 0);
+    this.turntable.update(dt);
   }
 
   /** The pose a card would have at rest for its current item, in the current layout. */
   private restPose(card: Card, out: Pose) {
+    this.layoutPose(card, out);
+    // In the music world the cards orbit on the lane of the disk instead: they fly there as the world comes in.
+    const orbit = this.systemOn ? smooth(this.worldMix.value * 1.1 - 0.1) : 0;
+    if (orbit > 0.001) {
+      const count = Math.max(1, this.items.length);
+      const slot = this.layout === "ring" ? wrapSigned(card.item - this.ringPos.value, count) : card.item - this.rowPos.value;
+      const lane = lanePose(slot, this.system, this.size.value, this.lane);
+      scratch.a.set(lane.x[0], lane.x[1], lane.x[2]);
+      scratch.b.set(lane.y[0], lane.y[1], lane.y[2]);
+      scratch.c.set(lane.z[0], lane.z[1], lane.z[2]);
+      scratch.basis.makeBasis(scratch.a, scratch.b, scratch.c);
+      scratch.q.setFromRotationMatrix(scratch.basis);
+      out.pos.x += (lane.p[0] - out.pos.x) * orbit;
+      out.pos.y += (lane.p[1] - out.pos.y) * orbit;
+      out.pos.z += (lane.p[2] - out.pos.z) * orbit;
+      out.quat.slerp(scratch.q, orbit);
+      out.scale += (lane.scale - out.scale) * orbit;
+    }
+  }
+
+  /** The pose of a card on the ring or the row (where it is when no world has taken it). */
+  private layoutPose(card: Card, out: Pose) {
     const frame = scratch.frame;
     if (this.layout === "ring") {
       const count = Math.max(1, this.items.length);
@@ -1004,7 +1433,7 @@ export class ArchiveStage {
       // Cards slide in and out at the two ends of the track by growing/shrinking, not by popping.
       const left = smooth((slot - ROW.firstSlot) / 1.4);
       const right = 1 - smooth((slot - (ROW.lastSlot - 1.4)) / 1.4);
-      out.scale = Math.min(left, right);
+      out.scale = Math.min(left, right) * this.size.value;
       const weight = smooth(1 - Math.abs(slot));
       if (weight > 0.001) this.placeToward(out, this.detailSpot, weight, 0);
     }
@@ -1017,7 +1446,7 @@ export class ArchiveStage {
     out.pos.set(plate.p[0], plate.p[1], plate.p[2]);
     scratch.basis.makeBasis(scratch.a.set(plate.x[0], plate.x[1], plate.x[2]), scratch.b.set(plate.y[0], plate.y[1], plate.y[2]), scratch.c.set(plate.z[0], plate.z[1], plate.z[2]));
     out.quat.setFromRotationMatrix(scratch.basis);
-    out.scale = RING_CARD.scale;
+    out.scale = RING_CARD.scale * this.size.value;
   }
 
   private fromFrame(frame: RingFrame, out: Pose) {
@@ -1046,7 +1475,8 @@ export class ArchiveStage {
     out.pos.set(placement.position[0], placement.position[1], placement.position[2]);
     scratch.basis.makeBasis(scratch.a.set(placement.right[0], placement.right[1], placement.right[2]), scratch.b.set(placement.up[0], placement.up[1], placement.up[2]), scratch.c.set(placement.normal[0], placement.normal[1], placement.normal[2]));
     out.quat.setFromRotationMatrix(scratch.basis);
-    out.scale = placement.scale;
+    // The card that is read follows the size setting a little less than the others do.
+    out.scale = placement.scale * (1 + (this.size.value - 1) * 0.75);
   }
 
   private applyOffset(pose: Pose, offset: Offset) {
@@ -1064,6 +1494,8 @@ export class ArchiveStage {
     const target = scratch.target;
     let drawn = 0;
     const lift = (1 - smooth(this.presence)) * 34;
+    const away = smooth(this.cardsMix.value);
+    this.cardsShown = away;
     let detailCard: Card | undefined;
     let detailWeight = 0;
     for (const card of this.cards) {
@@ -1109,15 +1541,19 @@ export class ArchiveStage {
       const wantHover = card.item === this.hoverItem && card.mode === "rest" ? 1 : 0;
       damp(card.hover, wantHover, this.instant ? 40 : 12, dt);
       const hover = clamp(card.hover.value, 0, 1.2);
-      const scale = pose.scale * (1 + 0.05 * hover);
+      // The music: the card jumps, swells and leans forward with the band under it (kept out of `pose`, which the shot follows).
+      const heard = this.listen(card, scratch.heard);
+      const scale = pose.scale * (1 + 0.05 * hover) * (1 + heard.grow) * away;
       if (scale < 0.02 || (card.mode === "enter" && card.t < 0)) continue;
-      scratch.a.set(0, 0, 1).applyQuaternion(pose.quat);
+      let quat = pose.quat;
+      if (heard.tilt !== 0) quat = scratch.q3.copy(pose.quat).multiply(scratch.q2.setFromAxisAngle(scratch.axisX, heard.tilt));
+      scratch.a.set(0, 0, 1).applyQuaternion(quat);
       const px = pose.pos.x + scratch.a.x * 0.55 * hover;
-      const py = pose.pos.y + scratch.a.y * 0.55 * hover;
+      const py = pose.pos.y + scratch.a.y * 0.55 * hover + heard.lift;
       const pz = pose.pos.z + scratch.a.z * 0.55 * hover;
       // Origin of the cassette: its local centre is (0, mid, midZ), so move back from the centre point.
-      scratch.b.set(0, CARD.mid * scale, CARD.midZ * scale).applyQuaternion(pose.quat);
-      card.matrix.compose(scratch.hit.set(px - scratch.b.x, py - scratch.b.y, pz - scratch.b.z), pose.quat, scratch.a.set(scale, scale, scale));
+      scratch.b.set(0, CARD.mid * scale, CARD.midZ * scale).applyQuaternion(quat);
+      card.matrix.compose(scratch.hit.set(px - scratch.b.x, py - scratch.b.y, pz - scratch.b.z), quat, scratch.a.set(scale, scale, scale));
       card.matrix.toArray(this.matrices, drawn * 16);
       this.distances[drawn] = this.layout === "ring" ? Math.abs(wrapSigned(card.item - this.ringPos.value, Math.max(1, this.items.length))) : Math.abs(card.item - this.rowPos.value);
       drawn++;
@@ -1133,6 +1569,36 @@ export class ArchiveStage {
     this.composeFaces(detailCard, detailWeight);
     const front = detailCard ?? this.cards.find((card) => card.drawn && card.item === this.selected);
     if (front) this.focus.copy(front.pose.pos);
+    // In the world the picture is the black hole, so the lens focuses there: its disk and its debris stand within a few radii of it.
+    if (this.systemOn) {
+      const k = smooth(this.worldMix.value) * (1 - smooth(this.deckMix.value));
+      this.focus.x += (this.system.centre[0] - this.focus.x) * k;
+      this.focus.y += (this.system.centre[1] - this.focus.y) * k;
+      this.focus.z += (this.system.centre[2] - this.focus.z) * k;
+    }
+  }
+
+  /**
+   * How much a resting card answers the music this frame: `lift` (world units), `grow` (a fraction of its size) and `tilt`
+   * (radians, top towards the viewer). Cards listen by their place (bass at the focus, treble far along the row); the one
+   * that is pulled out to be read is almost still, and its neighbours move a little less than the rest.
+   */
+  private listen(card: Card, out: { lift: number; grow: number; tilt: number }) {
+    out.lift = out.grow = out.tilt = 0;
+    const audio = this.audio;
+    if (!audio || !audio.active || card.mode !== "rest" || card.item < 0) return out;
+    const ring = this.layout === "ring";
+    const count = Math.max(1, this.items.length);
+    const slot = ring ? wrapSigned(card.item - this.ringPos.value, count) : card.item - this.rowPos.value;
+    const x = ring ? unrollOrder(BAND.focus + slot / count) : clamp((clamp(slot, ROW.firstSlot, ROW.lastSlot) - TRACK.from) / (TRACK.to - TRACK.from), 0, 1);
+    const level = audio.at(x) * smooth(this.presence);
+    if (level < 0.002) return out;
+    const near = smooth(1 - Math.abs(slot));
+    const read = ring ? this.pull.value * near : near;
+    out.lift = level * BOUNCE.cardLift * (1 - near);
+    out.grow = level * BOUNCE.cardScale * (1 - 0.7 * read);
+    out.tilt = level * BOUNCE.cardTilt * (1 - near);
+    return out;
   }
 
   private composeFaces(detailCard: Card | undefined, detailWeight: number) {
@@ -1155,7 +1621,7 @@ export class ArchiveStage {
       face.mesh.matrix.copy(card.matrix);
       face.mesh.matrixWorldNeedsUpdate = true;
       face.mesh.visible = true;
-      face.material.opacity = (isDetail ? 1 - detailShown : 1) * presence * clamp(card.pose.scale * 1.6, 0, 1);
+      face.material.opacity = (isDetail ? 1 - detailShown : 1) * presence * clamp(card.pose.scale * 1.6, 0, 1) * this.cardsShown;
       if (face.material.opacity < 0.01) face.mesh.visible = false;
     }
     const detailOwner = detailCard && detailShown > 0.01 ? detailCard : undefined;
@@ -1163,7 +1629,7 @@ export class ArchiveStage {
     if (detailOwner) {
       this.detailFace.mesh.matrix.copy(detailOwner.matrix);
       this.detailFace.mesh.matrixWorldNeedsUpdate = true;
-      this.detailFace.material.opacity = detailShown * presence;
+      this.detailFace.material.opacity = detailShown * presence * this.cardsShown;
     }
     const hoverCard = this.hoverItem >= 0 ? this.cardOfItem.get(this.hoverItem) : undefined;
     const hoverShown = hoverCard && hoverCard.drawn && hoverCard !== detailOwner ? clamp((hoverCard.hover.value - 0.35) / 0.5, 0, 1) : 0;
@@ -1171,7 +1637,7 @@ export class ArchiveStage {
     if (hoverCard && hoverShown > 0.01) {
       this.infoFace.mesh.matrix.copy(hoverCard.matrix);
       this.infoFace.mesh.matrixWorldNeedsUpdate = true;
-      this.infoFace.material.opacity = hoverShown * presence;
+      this.infoFace.material.opacity = hoverShown * presence * this.cardsShown;
     }
   }
 
@@ -1195,6 +1661,15 @@ export class ArchiveStage {
       rowPos: Number(this.rowPos.value.toFixed(3)),
       pull: Number(this.pull.value.toFixed(3)),
       detail: this.detailItem,
+      dancing: Boolean(this.audio?.active),
+      world: this.world,
+      worldMix: Number(this.worldMix.value.toFixed(3)),
+      deckMix: Number(this.deckMix.value.toFixed(3)),
+      cardsMix: Number(this.cardsMix.value.toFixed(3)),
+      reveal: Number(this.reveal.value.toFixed(3)),
+      revealHold: Number(this.revealHold.toFixed(2)),
+      lyrics: this.lyrics.active,
+      ripples: this.ripples.items.length,
     };
   }
 
@@ -1204,6 +1679,9 @@ export class ArchiveStage {
     this.detailFace.dispose();
     this.faceGeometry.dispose();
     this.fins.dispose();
+    this.sky.dispose();
+    this.lyrics.dispose();
+    this.turntable.dispose();
     this.group.removeFromParent();
   }
 }

@@ -1,8 +1,8 @@
-import { PRODUCT } from "../brand";
+import { MARK_LOOPS, PRODUCT } from "../brand";
 import { escapeHtml } from "../html";
 
 /**
- * The opening animation: the mark draws itself, two panes slide into the display case, the name rises letter by letter.
+ * The opening animation: the two loops of the mark draw themselves and interlock, the name rises letter by letter.
  * It is pure CSS (see styles/boot.css); this file only builds the markup, shows the real start-up step under it, and
  * lets the player skip. The splash never delays real work: it waits for the boot to finish, not the other way round.
  */
@@ -27,11 +27,10 @@ export function showSplash(root: HTMLElement, style: "full" | "short"): Splash {
   element.setAttribute("aria-label", `${PRODUCT.name} 正在启动`);
   element.innerHTML = `
     <div class="splash-inner">
-      <svg class="splash-mark" viewBox="0 0 256 256" aria-hidden="true">
-        <rect class="frame" x="20" y="36" width="216" height="184" rx="38"/>
-        <path class="pane-a" d="M54 66H100L140 152 128 190Z"/>
-        <path class="pane-b" d="M202 66H156L116 152 128 190Z"/>
-        <path class="strip" d="M96 205H160"/>
+      <svg class="splash-mark" viewBox="28 72 200 112" aria-hidden="true">
+        <path class="loop loop-a" pathLength="1" d="${MARK_LOOPS.left}"/>
+        <path class="loop loop-b" pathLength="1" d="${MARK_LOOPS.right}"/>
+        <circle class="core" cx="128" cy="128" r="5"/>
       </svg>
       <div class="splash-word"><b>${letters}</b><i>${escapeHtml(PRODUCT.nameCn)}</i></div>
       <div class="splash-status"><div class="splash-line"><i style="--p:.05"></i></div><div class="splash-text">STARTING</div></div>

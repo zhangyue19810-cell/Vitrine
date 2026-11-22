@@ -12,7 +12,7 @@
   回到启动器窗口自动恢复。
 - 名称、图标、开屏动画都是原创的。
 
-状态：0.1.0。后端有 217 项自动化测试；界面和 Electron 外壳在 Linux 上做过浏览器与冒烟测试；
+状态：0.1.0。共有 453 项自动化测试（后端、音乐客户端、黑洞/歌词/视角的纯数学部分）；界面和 Electron 外壳在 Linux 上做过浏览器与冒烟测试；
 Windows 版是用官方 Electron 运行时重新打包的，**还没有在真实 Windows 上长期使用过**。
 
 ## 使用（Windows）
@@ -62,8 +62,9 @@ core/src/      核心（与界面无关，Electron 与开发服务器共用）
   world/       存档（NBT）、服务器列表
   crash/       崩溃分析
   tasks.ts     任务管理（进度、取消、界面刷新频率）
-  rpc.ts       89 个 RPC 方法；界面与核心之间唯一的接口
-core/test/     272 项测试和本地 mock 服务器（假 Mojang / Modrinth / 假游戏 jar）
+  music/       网易云音乐客户端（weapi 加密、扫码登录、搜索/歌单/榜单/每日推荐、取歌曲地址、歌词解析）
+  rpc.ts       101 个 RPC 方法；界面与核心之间唯一的接口
+core/test/     453 项测试和本地 mock 服务器（假 Mojang / Modrinth / 假网易云 / 假游戏 jar）
 electron/      主进程、preload、app:// 协议、窗口、托盘、系统密钥保护
 src/           界面（Vite + three.js）；src/app/perf*.ts / scheduler.ts 是动画暂停与降帧策略
 scripts/       dev-backend、dev-demo、图标生成、Electron 打包、Windows 打包、第三方许可汇总

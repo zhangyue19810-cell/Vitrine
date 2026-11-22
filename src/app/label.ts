@@ -67,7 +67,7 @@ export function paintLabel(ctx: CanvasRenderingContext2D, index: number, mark: H
     ctx.fillText(record.badge, 22, 366);
   }
   if (record.favorite) {
-    ctx.fillStyle = "#1f9e8e";
+    ctx.fillStyle = "#b27a22";
     ctx.font = `bold 54px ${FONT}`;
     ctx.fillText("★", 700, 372);
   }

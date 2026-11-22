@@ -49,7 +49,7 @@ export type FacePayload = InstancePayload | ActionPayload | ProjectPayload;
 
 export const FONT = "MiSans, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif";
 
-interface Palette {
+export interface Palette {
   paper: string;
   ink: string;
   muted: string;
@@ -61,9 +61,9 @@ interface Palette {
   tile: string;
 }
 
-const LIGHT: Palette = { paper: "rgba(238,233,222,0.97)", ink: "#171713", muted: "#7b786b", accent: "#1f9e8e", accentInk: "#157060", chip: "rgba(23,23,19,0.08)", chipInk: "#3a3a33", rule: "#171713", tile: "#cfe7e1" };
-const DARK: Palette = { paper: "rgba(27,34,37,0.97)", ink: "#e7efec", muted: "#8e9c9f", accent: "#4fd1bd", accentInk: "#7fe3d2", chip: "rgba(231,239,236,0.1)", chipInk: "#c5d3d0", rule: "#e7efec", tile: "#24413f" };
-const INFO = { paper: "rgba(17,23,26,0.96)", ink: "#f1f6f4", muted: "#a9b8b9", accent: "#4fd1bd" };
+export const LIGHT: Palette = { paper: "rgba(238,233,222,0.97)", ink: "#171713", muted: "#7b786b", accent: "#b27a22", accentInk: "#80530f", chip: "rgba(23,23,19,0.08)", chipInk: "#3a3a33", rule: "#171713", tile: "#efe0c2" };
+export const DARK: Palette = { paper: "rgba(13,13,16,0.97)", ink: "#ece5d6", muted: "#928b7d", accent: "#e8b967", accentInk: "#f4d08f", chip: "rgba(236,229,214,0.09)", chipInk: "#cfc7b4", rule: "#ece5d6", tile: "#2b2314" };
+export const INFO = { paper: "rgba(8,8,10,0.96)", ink: "#f4efe3", muted: "#a39c8c", accent: "#e8b967" };
 
 /** Largest start size ≤ `start` (down to `min`) at which `text` fits in `maxWidth`; ends with an ellipsis if it still does not. */
 export function fit(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, start: number, min: number, weight = "bold"): string {
@@ -113,7 +113,7 @@ export function wrap(ctx: CanvasRenderingContext2D, text: string, maxWidth: numb
   return lines;
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+export function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
   ctx.arcTo(x + w, y, x + w, y + h, r);
@@ -123,7 +123,7 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 }
 
-function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, fill: string, ink: string, weight = "normal"): number {
+export function pill(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, fill: string, ink: string, weight = "normal"): number {
   ctx.font = `${weight} ${size}px ${FONT}`;
   const padding = size * 0.7;
   const width = ctx.measureText(text).width + padding * 2;
@@ -170,7 +170,7 @@ function icon(ctx: CanvasRenderingContext2D, payload: ProjectPayload, x: number,
   ctx.textBaseline = "alphabetic";
 }
 
-function panel(ctx: CanvasRenderingContext2D, w: number, h: number, fill: string, rule?: string) {
+export function panel(ctx: CanvasRenderingContext2D, w: number, h: number, fill: string, rule?: string) {
   ctx.fillStyle = fill;
   roundRect(ctx, 6, 6, w - 12, h - 12, 12);
   ctx.fill();
@@ -307,7 +307,7 @@ function drawInfo(ctx: CanvasRenderingContext2D, payload: FacePayload) {
 
 // ──────────────────────────────── detail face (logical size 1024 × 741) ────────────────────────────────
 
-function button(ctx: CanvasRenderingContext2D, id: string, label: string, x: number, y: number, w: number, h: number, primary: boolean, hot: boolean, palette: Palette, spots: Hotspot[]) {
+export function button(ctx: CanvasRenderingContext2D, id: string, label: string, x: number, y: number, w: number, h: number, primary: boolean, hot: boolean, palette: Palette, spots: Hotspot[]) {
   ctx.save();
   roundRect(ctx, x, y, w, h, h / 2);
   if (primary) {

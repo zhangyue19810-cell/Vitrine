@@ -7,6 +7,7 @@ import type { Core } from "./core";
 import { exportLaunchScript } from "./launch";
 import { inspectJava } from "./java/detect";
 import { JVM_PRESETS, recommendMemory } from "./mc/jvm";
+import { NeteaseError } from "./music/netease";
 import { pingServer } from "./net/mc-ping";
 import { listExportCandidates } from "./pack/export";
 import { previewPack, readPackState } from "./pack/install";
@@ -82,6 +83,13 @@ function strList(params: Record<string, unknown>, key: string, maxItems = 5000):
   const value = params[key];
   if (!Array.isArray(value) || value.length > maxItems || value.some((entry) => typeof entry !== "string")) return bad(key, "必须是文本列表");
   return value as string[];
+}
+
+/** A NetEase id: a positive whole number that JSON can carry exactly. */
+function idOf(params: Record<string, unknown>, key: string): number {
+  const value = params[key];
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) return bad(key, "必须是正整数");
+  return value;
 }
 
 function oneOf<T extends string>(params: Record<string, unknown>, key: string, allowed: readonly T[]): T {
@@ -256,6 +264,36 @@ export function buildRpc(core: Core): RpcTable {
     if (!Array.isArray(params.updates) || params.updates.length > 500) return bad("updates", "必须是更新列表");
     return core.applyUpdatesTask(str(params, "instanceId", 200), params.updates as ModUpdate[]);
   });
+
+  // ---------------- music (NetEase Cloud Music)
+  const music = async <T>(work: () => Promise<T>): Promise<T> => {
+    try {
+      return await work();
+    } catch (error) {
+      if (error instanceof NeteaseError) throw new RpcError(error.message, `music-${error.code}`);
+      throw error;
+    }
+  };
+  def("music.status", (_params, { signal }) => music(() => core.music.status(signal)));
+  def("music.qrStart", (_params, { signal }) => music(() => core.music.qrStart(signal)));
+  def("music.qrPoll", (params, { signal }) => music(() => core.music.qrPoll(str(params, "key", 200), signal)));
+  def("music.logout", (_params, { signal }) => music(() => core.music.logout(signal)));
+  def("music.search", (params, { signal }) => {
+    const kind = oneOf(params, "kind", ["song", "playlist"] as const);
+    const query = str(params, "query", 100);
+    const limit = optNum(params, "limit", 1, 50) ?? 30;
+    const offset = optNum(params, "offset", 0, 1000) ?? 0;
+    // (Two calls rather than one with a conditional: the two kinds of result are different types.)
+    if (kind === "song") return music(() => core.music.search(query, "song", limit, offset, signal));
+    return music(() => core.music.search(query, "playlist", limit, offset, signal));
+  });
+  def("music.playlist", (params, { signal }) => music(() => core.music.playlist(idOf(params, "id"), signal)));
+  def("music.recommended", (_params, { signal }) => music(() => core.music.recommendedPlaylists(signal)));
+  def("music.toplists", (_params, { signal }) => music(() => core.music.toplists(signal)));
+  def("music.daily", (_params, { signal }) => music(() => core.music.dailySongs(signal)));
+  def("music.mine", (_params, { signal }) => music(() => core.music.myPlaylists(signal)));
+  def("music.source", (params, { signal }) => music(async () => (await core.music.source(idOf(params, "id"), signal)) ?? null));
+  def("music.lyrics", (params, { signal }) => music(() => core.music.lyrics(idOf(params, "id"), signal)));
 
   // ---------------- local mods and packs
   def("mods.list", async (params, { signal }) => {

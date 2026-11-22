@@ -20,14 +20,22 @@ import type {
   LocalMod,
   LoginChallenge,
   MemoryAdvice,
+  MusicLyrics,
+  MusicPlaylist,
+  MusicSong,
+  MusicSource,
+  MusicStatus,
   ModProblem,
   ModUpdate,
   PackPreview,
   PackState,
   PublicAccount,
+  QrLogin,
+  QrPoll,
   ResourcePackInfo,
   SaveInfo,
   ScreenshotInfo,
+  SearchResult,
   ServerEntry,
   ServerStatus,
   Settings,
@@ -168,6 +176,18 @@ export interface RpcMap {
   "java.test": [{ path: string }, JavaInstall | null];
   "java.install": [{ major?: number }, { taskId: string }];
   "fs.info": [{ path: string }, { exists: boolean; isFile?: boolean; isDirectory?: boolean; size?: number }];
+  "music.status": [void, MusicStatus];
+  "music.qrStart": [void, QrLogin];
+  "music.qrPoll": [{ key: string }, QrPoll];
+  "music.logout": [void, MusicStatus];
+  "music.search": [{ kind: "song" | "playlist"; query: string; limit?: number; offset?: number }, SearchResult<MusicSong> | SearchResult<MusicPlaylist>];
+  "music.playlist": [{ id: number }, { playlist: MusicPlaylist; songs: MusicSong[] }];
+  "music.recommended": [void, MusicPlaylist[]];
+  "music.toplists": [void, MusicPlaylist[]];
+  "music.daily": [void, MusicSong[]];
+  "music.mine": [void, MusicPlaylist[]];
+  "music.source": [{ id: number }, MusicSource | null];
+  "music.lyrics": [{ id: number }, MusicLyrics];
 }
 
 export type { AccountType };

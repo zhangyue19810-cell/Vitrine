@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { ControlRail } from "./control-rail";
 import { ArchiveVisibility } from "./archive-visibility";
 import { ArchiveDrawCoverage, ArchiveShadowCoverage } from "./archive-draw-coverage";
 import { InstanceUpdates } from "./instance-updates";
@@ -14,8 +15,8 @@ import { createArchiveLighting, type LightingLook } from "./archive-lighting";
 import { EffectComposer } from "three/addons/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { OutputPass } from "three/addons/postprocessing/OutputPass.js";
-import { BokehPass } from "three/addons/postprocessing/BokehPass.js";
 import { SMAAPass } from "three/addons/postprocessing/SMAAPass.js";
+import { Cinema } from "./cinema";
 import { normalizeQuality, type RenderQuality } from "./render-quality";
 import { applyTextureQuality, resizeQuality } from "./quality-renderer";
 import { CardAppearance } from "./appearance";
@@ -66,6 +67,9 @@ const RING_LIGHT = new THREE.Vector3(-9, 15, 12);
 const SHADOW_WINDOW = { ring: { x: 23, y: 19 }, row: { x: 16, y: 15 } };
 export class ArchiveScene {
   private inputEvents = new AbortController();
+  /** The plates and the music disc: a transparent second canvas over this one (see control-rail.ts). */
+  readonly controls: ControlRail;
+  private controlsLast = 0;
   private presence = 1;
   private presenceTarget = 1;
   setPresentationVisible(visible: boolean, immediate = false) {
@@ -92,6 +96,7 @@ export class ArchiveScene {
     this.light.shadow.map?.dispose();
     for (const pass of this.composer.passes) pass.dispose();
     this.composer.dispose();
+    this.controls.dispose();
     this.renderer.dispose();
     this.renderer.forceContextLoss();
     this.renderer.domElement.remove();
@@ -124,7 +129,12 @@ export class ArchiveScene {
   setSelectedIndexAccent(onlySelected: boolean) { this.selectedIndexOnly = onlySelected; }
   private themeAttribute?: THREE.InstancedBufferAttribute;
   get themeAmount() { return this.theme.background(performance.now() / 1000); }
-  setTheme(dark: boolean, immediate = false) { this.theme.set(dark, performance.now() / 1000, this.selectedCell, immediate); }
+  /** What the page's own colours (the interface painted over the picture) follow: the theme, and deep space whichever theme it is. */
+  get chromeAmount() { return Math.max(this.themeAmount, this.deepSpace()); }
+  setTheme(dark: boolean, immediate = false) {
+    this.theme.set(dark, performance.now() / 1000, this.selectedCell, immediate);
+    this.controls.setDark(dark);
+  }
   private playfield = { enabled: false, bands: quietBands(), strength: 1, flatten: 0, target: null as string | null, breathing: true };
   private flatMix = 0;
   private rhythm = new RhythmMotion();
@@ -172,7 +182,7 @@ export class ArchiveScene {
   readonly camera = new THREE.PerspectiveCamera(34, 16 / 9, 5, 300);
   private composer: EffectComposer;
   private ao: SharedDepthAO;
-  private bokeh: BokehPass;
+  private bokeh: SharedDepthBokeh;
   private instances: THREE.InstancedMesh[] = [];
   private matrixUpdates?: InstanceUpdates;
   private themeUpdates?: InstanceUpdates;
@@ -251,6 +261,10 @@ export class ArchiveScene {
   private quality = normalizeQuality(undefined);
   private appliedQuality = "";
   private smaa = new SMAAPass();
+  /** Bloom, streak, fringing, vignette and grain: the look of the film for deep space (see `cinema.ts`). */
+  private cinema!: Cinema;
+  /** Whether this quality tier has the film at all (the performance tier does not). */
+  private filmAllowed = true;
   private aoKernelSize = 32;
   private displayHeight = 0;
   private layoutKind = "";
@@ -333,7 +347,11 @@ export class ArchiveScene {
     if (!point) return;
     const pick = this.pickStage(point.x, point.y);
     stage.setHover(pick ? pick.item : null, pick?.hotspot ?? null);
-    this.renderer.domElement.style.cursor = pick ? "pointer" : "grab";
+    // On the black hole the shadow and the track round it answer the pointer (a card in front of them takes it first).
+    const at = this.ndcOf(point.x, point.y);
+    const spot = pick ? null : stage.holeAt(at.x, at.y);
+    stage.setHoleHover(spot ? spot.part : null);
+    this.renderer.domElement.style.cursor = pick || spot?.part ? "pointer" : "grab";
   }
   /** Screen pixels that one slot of scrolling moves a card by (a vector: the row runs up and to the right). */
   private slotPixels() {
@@ -344,12 +362,96 @@ export class ArchiveScene {
     const b = this.stage!.slotCentre(to, this.tmpB).project(this.camera);
     return { x: ((b.x - a.x) * rect.width) / 2, y: (-(b.y - a.y) * rect.height) / 2 };
   }
+  /**
+   * Presses, moves and the wheel that land on a plate or on the music disc belong to the rail. Its listeners are registered
+   * before all others and stop a consumed event, so the archives behind a plate do not also see it.
+   */
+  private bindRailPointer() {
+    const canvas = this.renderer.domElement;
+    const signal = this.inputEvents.signal;
+    const rail = this.controls;
+    let captured: number | null = null;
+    let wasOver = false;
+    const settle = () => {
+      wasOver = false;
+      this.renderer.domElement.style.cursor = this.stageOn ? "grab" : "default";
+    };
+    canvas.addEventListener("pointerdown", (e) => {
+      if (captured !== null || (e.pointerType === "mouse" && e.button !== 0)) return;
+      if (!rail.down(e.clientX, e.clientY)) return;
+      captured = e.pointerId;
+      canvas.setPointerCapture(e.pointerId);
+      this.stage?.setHover(null);
+      this.stagePending = null;
+      e.stopImmediatePropagation();
+      e.preventDefault();
+    }, { signal });
+    canvas.addEventListener("pointermove", (e) => {
+      if (captured !== null) {
+        if (e.pointerId === captured) {
+          rail.move(e.clientX, e.clientY);
+          e.stopImmediatePropagation();
+        }
+        return;
+      }
+      if (e.pointerType !== "mouse") return;
+      if (rail.move(e.clientX, e.clientY)) {
+        wasOver = true;
+        this.stage?.setHover(null);
+        this.stagePending = null;
+        this.stageLast = null;
+        canvas.style.cursor = "pointer";
+        e.stopImmediatePropagation();
+      } else if (wasOver) settle();
+    }, { signal });
+    const release = (e: PointerEvent, cancelled: boolean) => {
+      if (e.pointerId !== captured) return;
+      captured = null;
+      if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+      rail.up(e.clientX, e.clientY, cancelled);
+      e.stopImmediatePropagation();
+    };
+    canvas.addEventListener("pointerup", (e) => release(e, false), { signal });
+    canvas.addEventListener("pointercancel", (e) => release(e, true), { signal });
+    canvas.addEventListener("lostpointercapture", (e) => release(e, true), { signal });
+    canvas.addEventListener("pointerleave", () => {
+      if (captured === null) rail.leave();
+      if (wasOver) settle();
+    }, { signal });
+    canvas.addEventListener("wheel", (e) => {
+      if (e.ctrlKey) return;
+      if (rail.wheel(e.clientX, e.clientY, e.deltaY)) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    }, { passive: false, signal });
+    window.addEventListener("blur", () => rail.leave(), { signal });
+  }
+  /** A place on the page as a place on the picture (−1…1, y up). */
+  private ndcOf(clientX: number, clientY: number) {
+    const rect = this.renderer.domElement.getBoundingClientRect();
+    return { x: ((clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1, y: 1 - ((clientY - rect.top) / Math.max(1, rect.height)) * 2 };
+  }
+  /** The pointer on the picture: the view of the black hole leans a little towards it. */
+  private trackPointer(e: PointerEvent) {
+    const at = this.ndcOf(e.clientX, e.clientY);
+    this.stage?.pointAt(at.x, at.y);
+  }
   private bindStagePointer() {
     const canvas = this.renderer.domElement;
     const signal = this.inputEvents.signal;
     const touch = { id: null as number | null, startX: 0, startY: 0, x: 0, y: 0, moved: false, time: 0, speed: 0 };
+    // The three things a press can do to the black hole of the music world: turn the view (orbit), press its shadow (hole: a click
+    // plays or pauses; moving far enough turns it into an orbit) or take hold of the track of the song round it (seek).
+    const hold = { id: null as number | null, kind: "" as "" | "orbit" | "hole" | "seek", startX: 0, startY: 0, x: 0, y: 0, time: 0, vx: 0, vy: 0, turn: 0 };
+    const fingers = new Map<number, { x: number; y: number }>();
+    let pinchSpan = 0;
     let wheelTotal = 0;
     let wheelTime = 0;
+    const span = () => {
+      const [a, b] = [...fingers.values()];
+      return a && b ? Math.hypot(a.x - b.x, a.y - b.y) : 0;
+    };
     const finish = () => {
       const id = touch.id;
       touch.id = null;
@@ -357,13 +459,71 @@ export class ArchiveScene {
       touch.speed = 0;
       if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
     };
+    const endHold = (cancelled: boolean) => {
+      const { id, kind } = hold;
+      hold.id = null;
+      hold.kind = "";
+      if (id !== null && canvas.hasPointerCapture(id)) canvas.releasePointerCapture(id);
+      if (kind === "orbit") this.stage?.view.release(cancelled ? 0 : hold.vx, cancelled ? 0 : hold.vy);
+      else if (kind === "seek" && !cancelled) this.stage?.events.seek?.(hold.turn, true);
+    };
     this.cancelStage = () => {
       if (touch.moved) this.stage?.endDrag(0);
       finish();
+      endHold(true);
+      fingers.clear();
+      pinchSpan = 0;
       wheelTotal = 0;
       this.stagePending = null;
     };
+    /** A press on empty space (or the shadow, or the track) of the black hole: which of the three it is, or false if it is not for the hole. */
+    const takeHold = (e: PointerEvent): boolean => {
+      const stage = this.stage;
+      if (!stage || !stage.holeShown || hold.id !== null) return false;
+      const mouse = e.pointerType === "mouse";
+      if (mouse && e.button !== 0 && e.button !== 2) return false;
+      const at = this.ndcOf(e.clientX, e.clientY);
+      const spot = stage.holeAt(at.x, at.y);
+      let kind: "orbit" | "hole" | "seek";
+      if ((mouse && e.button === 2) || e.shiftKey) kind = "orbit";
+      else if (this.pickStage(e.clientX, e.clientY)) return false;
+      else if (spot?.part === "track") kind = "seek";
+      else if (spot?.part === "shadow") kind = "hole";
+      else kind = "orbit";
+      hold.id = e.pointerId;
+      hold.kind = kind;
+      hold.startX = hold.x = e.clientX;
+      hold.startY = hold.y = e.clientY;
+      hold.time = e.timeStamp;
+      hold.vx = hold.vy = 0;
+      hold.turn = spot?.turn ?? 0;
+      canvas.setPointerCapture(e.pointerId);
+      stage.setHover(null);
+      this.stagePending = null;
+      if (kind === "orbit") {
+        stage.view.grab();
+        canvas.style.cursor = "grabbing";
+      } else if (kind === "seek") {
+        stage.events.seek?.(hold.turn, false);
+        canvas.style.cursor = "grabbing";
+      }
+      return true;
+    };
     canvas.addEventListener("pointerdown", (e) => {
+      const stage = this.stage;
+      if (this.stageOn && stage) this.trackPointer(e);
+      if (this.stageOn && stage?.holeShown) {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size === 2) {
+          // A second finger: the two of them pinch the hole bigger or smaller, whatever the first was doing.
+          if (touch.moved) stage.endDrag(0);
+          finish();
+          endHold(true);
+          pinchSpan = span();
+          return;
+        }
+        if (fingers.size === 1 && touch.id === null && takeHold(e)) return;
+      }
       if (!this.stageReady() || (e.pointerType === "mouse" && e.button !== 0) || touch.id !== null) return;
       touch.id = e.pointerId;
       touch.startX = touch.x = e.clientX;
@@ -376,6 +536,46 @@ export class ArchiveScene {
     }, { signal });
     canvas.addEventListener("pointermove", (e) => {
       if (!this.stageOn || !this.stage) return;
+      const stage = this.stage;
+      if (fingers.has(e.pointerId)) {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size === 2 && pinchSpan > 0) {
+          const now = span();
+          if (now > 0) stage.view.scaleBy(now / pinchSpan);
+          pinchSpan = now;
+          return;
+        }
+      }
+      if (e.pointerType === "mouse" || touch.id !== null || hold.id !== null) this.trackPointer(e);
+      if (hold.id !== null) {
+        if (e.pointerId !== hold.id) return;
+        if (hold.kind === "hole") {
+          if (Math.hypot(e.clientX - hold.startX, e.clientY - hold.startY) < 7) return;
+          hold.kind = "orbit";
+          stage.view.grab();
+          canvas.style.cursor = "grabbing";
+        }
+        if (hold.kind === "orbit") {
+          const height = Math.max(1, canvas.getBoundingClientRect().height);
+          const dx = (e.clientX - hold.x) / height;
+          const dy = (e.clientY - hold.y) / height;
+          stage.view.drag(dx, dy);
+          const seconds = Math.max(1, e.timeStamp - hold.time) / 1000;
+          hold.vx += (dx / seconds - hold.vx) * 0.35;
+          hold.vy += (dy / seconds - hold.vy) * 0.35;
+          hold.x = e.clientX;
+          hold.y = e.clientY;
+          hold.time = e.timeStamp;
+        } else if (hold.kind === "seek") {
+          const at = this.ndcOf(e.clientX, e.clientY);
+          const spot = stage.holeAt(at.x, at.y);
+          if (spot) {
+            hold.turn = spot.turn;
+            stage.events.seek?.(spot.turn, false);
+          }
+        }
+        return;
+      }
       if (touch.id === null) {
         if (e.pointerType === "mouse") this.stageLast = this.stagePending = { x: e.clientX, y: e.clientY };
         return;
@@ -384,12 +584,12 @@ export class ArchiveScene {
       if (!touch.moved) {
         if (Math.hypot(e.clientX - touch.startX, e.clientY - touch.startY) < 7) return;
         touch.moved = true;
-        this.stage.setHover(null);
+        stage.setHover(null);
         canvas.style.cursor = "grabbing";
       }
       const per = this.slotPixels();
       const slots = -((e.clientX - touch.x) * per.x + (e.clientY - touch.y) * per.y) / Math.max(1, per.x * per.x + per.y * per.y);
-      this.stage.dragBy(slots);
+      stage.dragBy(slots);
       const seconds = Math.max(1, e.timeStamp - touch.time) / 1000;
       touch.speed += (slots / seconds - touch.speed) * 0.35;
       touch.x = e.clientX;
@@ -397,6 +597,16 @@ export class ArchiveScene {
       touch.time = e.timeStamp;
     }, { signal });
     const release = (e: PointerEvent, cancelled: boolean) => {
+      if (fingers.delete(e.pointerId) && fingers.size < 2) pinchSpan = 0;
+      if (e.pointerId === hold.id) {
+        const kind = hold.kind;
+        endHold(cancelled);
+        // A press on the shadow that did not move is a click: play or pause.
+        if (kind === "hole" && !cancelled) this.stage?.events.hole?.();
+        this.stageLast = { x: e.clientX, y: e.clientY };
+        canvas.style.cursor = "grab";
+        return;
+      }
       if (e.pointerId !== touch.id) return;
       const { moved, speed } = touch;
       finish();
@@ -411,13 +621,37 @@ export class ArchiveScene {
     canvas.addEventListener("lostpointercapture", (e) => release(e, true), { signal });
     canvas.addEventListener("pointerleave", () => {
       this.stagePending = this.stageLast = null;
-      if (touch.id === null) this.stage?.setHover(null);
+      if (touch.id === null && hold.id === null) {
+        this.stage?.setHover(null);
+        this.stage?.setHoleHover(null);
+      }
+      this.stage?.pointAt(null);
+    }, { signal });
+    canvas.addEventListener("contextmenu", (e) => {
+      if (this.stageOn && this.stage?.holeShown) e.preventDefault();
+    }, { signal });
+    // A double click on empty space brings the hole back to the composed picture.
+    canvas.addEventListener("dblclick", (e) => {
+      const stage = this.stage;
+      if (!this.stageOn || !stage?.holeShown || this.pickStage(e.clientX, e.clientY)) return;
+      const at = this.ndcOf(e.clientX, e.clientY);
+      if (stage.holeAt(at.x, at.y)?.part) return;
+      stage.view.reset();
     }, { signal });
     canvas.addEventListener("wheel", (e) => {
-      if (!this.stageOn || !this.stage || e.ctrlKey) return;
+      if (!this.stageOn || !this.stage) return;
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl (or ⌘) with the wheel, and the pinch of a trackpad (which arrives as the same), come closer to or go away from the hole.
+        if (!this.stage.holeShown) return;
+        e.preventDefault();
+        const pinch = e.ctrlKey && e.deltaMode === 0 && Math.abs(e.deltaY) < 30;
+        const raw = e.deltaY * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? canvas.clientHeight : 1);
+        this.stage.view.scaleBy(Math.exp(-THREE.MathUtils.clamp(raw, -300, 300) * (pinch ? 0.012 : 0.0015)));
+        return;
+      }
       // The 3D view owns the wheel: one notch moves the selection by one archive.
       e.preventDefault();
-      if (!this.stageReady() || touch.id !== null) return;
+      if (!this.stageReady() || touch.id !== null || hold.id !== null) return;
       const raw = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
       const delta = THREE.MathUtils.clamp(raw * (e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? canvas.clientHeight : 1), -300, 300);
       const now = performance.now();
@@ -439,12 +673,13 @@ export class ArchiveScene {
    * The ring floats in empty space; the row stands on a floor. The floor, the key light and its shadow window follow how far
    * the picture has become the row (`flat`: 0 = ring, 1 = row), so the surroundings change smoothly with the archives.
    */
-  private shapeSurroundings(flat: number) {
+  private shapeSurroundings(flat: number, deep = 0) {
     const k = THREE.MathUtils.clamp(flat, 0, 1);
     const blend = k * k * (3 - 2 * k);
     if (this.archiveFloor) {
-      this.archiveFloor.position.y = THREE.MathUtils.lerp(FLOOR_HEIGHT.ring, FLOOR_HEIGHT.row, blend);
-      this.archiveFloor.visible = blend > 0.001;
+      // In deep space there is no floor: it sinks away (its colour has already turned to the dark of the sky) and is left out.
+      this.archiveFloor.position.y = THREE.MathUtils.lerp(FLOOR_HEIGHT.ring, FLOOR_HEIGHT.row, blend) - deep * deep * 70;
+      this.archiveFloor.visible = blend > 0.001 && deep < 0.995;
     }
     this.light.position.lerpVectors(RING_LIGHT, this.rowLight, blend);
     const window = this.light.shadow.camera;
@@ -455,6 +690,18 @@ export class ArchiveScene {
       window.updateProjectionMatrix();
     }
   }
+  /** How much of the picture is deep space right now (0 … 1, eased): the cosmos and the deck of the music page. */
+  private deepSpace() {
+    const amount = this.stageOn && this.stage ? this.stage.worldAmount : 0;
+    return amount * amount * (3 - 2 * amount);
+  }
+  /** The sky is written once (it needs the renderer), the depth of field leaves it sharp, and its stars are as large as the pixels are. */
+  private prepareSky(stage: ArchiveStage, deep: number) {
+    this.bokeh.setEmptySharp(deep);
+    if (stage.worldAmount <= 0.001) return;
+    if (!stage.sky.ready) stage.sky.bake(this.renderer);
+    stage.sky.setPixelScale(Math.max(0.75, this.renderer.getPixelRatio()));
+  }
   /** One frame of the stage: poses, the camera shot, the instanced shells, then the common render tail. */
   private updateStage(time: number, dt: number) {
     const stage = this.stage!;
@@ -462,10 +709,13 @@ export class ArchiveScene {
     stage.setAspect(this.camera.aspect);
     stage.setPresence(this.presence);
     stage.setInstant(!this.motion.selectionTransition);
-    stage.setThemeAmount(this.themeAmount);
+    // Plates and printed faces take the dark look in deep space, whichever theme is chosen.
+    const deep = this.deepSpace();
+    stage.setThemeAmount(Math.max(this.themeAmount, deep));
     stage.setAmbient(this.motion.idleWave);
     stage.update(dt);
-    this.shapeSurroundings(stage.layoutBlend);
+    this.shapeSurroundings(stage.layoutBlend, deep);
+    this.prepareSky(stage, deep);
 
     // The stage owns the shot (aim, direction, distance, height of the picture); the lens follows from them.
     const shot = stage.cameraState();
@@ -485,6 +735,9 @@ export class ArchiveScene {
     const flat = stage.layoutBlend;
     fog.near = shot.distance + THREE.MathUtils.lerp(5 - 4 * fogTheme, 16, flat);
     fog.far = shot.distance + THREE.MathUtils.lerp(25 - 9 * fogTheme, 95 - 25 * fogTheme, flat);
+    // Deep space is deep: the far plates fade into the dark only slowly.
+    fog.near = THREE.MathUtils.lerp(fog.near, shot.distance + 30, deep);
+    fog.far = THREE.MathUtils.lerp(fog.far, shot.distance + 170, deep);
 
     // The archives: the stage's matrices go into the same instance buffers the old grid used.
     const count = stage.count;
@@ -549,6 +802,7 @@ export class ArchiveScene {
       "三维实例架，点击选择，左右拖动切换分组，上下拖动或滚轮切换分组内的实例",
     );
     container.appendChild(this.renderer.domElement);
+    this.controls = new ControlRail(container);
     this.renderer.domElement.addEventListener('webglcontextrestored', () => {
       this.renderState.invalidate();
       this.shadowState.invalidate();
@@ -607,7 +861,12 @@ export class ArchiveScene {
     this.composer.addPass(this.bokeh);
     this.smaa.enabled = false;
     this.composer.addPass(this.smaa);
+    this.cinema = new Cinema(container.clientWidth, container.clientHeight);
+    this.composer.addPass(this.cinema.bloom);
+    this.composer.addPass(this.cinema.grade);
     this.composer.addPass(new OutputPass());
+    // The rail's listeners come first so that a press on a plate never reaches the archives behind it.
+    this.bindRailPointer();
     this.bindPointer();
     this.bindStagePointer();
   }
@@ -854,6 +1113,8 @@ export class ArchiveScene {
     this.ao.enabled = quality.aoSamples > 0;
     this.bokeh.enabled = quality.depthOfField > 0;
     this.smaa.enabled = quality.antialias === "smaa";
+    this.filmAllowed = quality.depthOfField > 0;
+    this.cinema.setStreak(quality.scale >= 100);
     this.renderer.shadowMap.enabled = quality.shadows > 0;
     const size = Math.min(
       quality.shadows || 1024,
@@ -1042,7 +1303,7 @@ export class ArchiveScene {
       Math.max(1, Math.floor(dimensions.width * this.quality.aoResolution)),
       Math.max(1, Math.floor(dimensions.height * this.quality.aoResolution)),
     );
-    this.ao.setSharing(this.ao.enabled && this.bokeh.enabled && this.quality.aoResolution === 1 && !this.superPerformance);
+    this.ao.setSharing(this.ao.enabled && this.quality.depthOfField > 0 && this.quality.aoResolution === 1 && !this.superPerformance);
     this.container.dataset.renderQuality = JSON.stringify({
       ...JSON.parse(this.container.dataset.renderQuality!),
       aoSamples: this.ao.enabled ? this.aoKernelSize : 0,
@@ -1055,6 +1316,7 @@ export class ArchiveScene {
     });
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    this.controls.resize();
   }
   private canBrowse() {
     return (
@@ -1396,7 +1658,12 @@ export class ArchiveScene {
       pointers.delete(e.pointerId), { signal: this.inputEvents.signal }
     );
   }
-  update(
+  update(time: number, cinematic?: { reveal: number; lift: number; zoom: number; time: number }) {
+    this.updateWorld(time, cinematic);
+    this.controls.update(Math.min(0.05, Math.max(0, time - this.controlsLast)), time);
+    this.controlsLast = time;
+  }
+  private updateWorld(
     time: number,
     cinematic?: { reveal: number; lift: number; zoom: number; time: number },
   ) {
@@ -1410,7 +1677,7 @@ export class ArchiveScene {
     this.presence += Math.sign(this.presenceTarget - this.presence) * Math.min(step, Math.abs(this.presenceTarget - this.presence));
     this.renderer.domElement.style.opacity = String(THREE.MathUtils.clamp(this.presence / .16, 0, 1));
     this.theme.beginFrame();
-    themeEnvironment(this.scene, this.renderer, this.themeAmount);
+    themeEnvironment(this.scene, this.renderer, this.themeAmount, this.deepSpace());
     if (this.stageOn && this.stage) {
       this.updateStage(time, dt);
       return;
@@ -1959,10 +2226,12 @@ export class ArchiveScene {
       { value: number }
     >;
     bokehUniforms.focus.value = -focalPoint.z;
-    bokehUniforms.aperture.value =
-      (THREE.MathUtils.lerp(0.0003, 0.0008, detail) *
-        this.quality.depthOfField) /
-      100;
+    // Deep space has no depth of field: seen through a long lens it is all in focus, and blurring the debris and the stars would
+    // melt them into soft discs. The pass fades out with the world, and is not run at all once it is gone.
+    const focused = (1 - this.deepSpace()) ** 2;
+    this.bokeh.enabled = this.quality.depthOfField > 0 && focused > 0.01;
+    bokehUniforms.aperture.value = (THREE.MathUtils.lerp(0.0003, 0.0008, detail) * this.quality.depthOfField * focused) / 100;
+    this.cinema.update(this.filmAllowed ? this.deepSpace() : 0, performance.now() / 1000, this.camera.aspect);
     this.renderer.info.reset();
     // Keep all simulation and picking current. Reuse the composited canvas only
     // when its actual inputs are identical, including late textures and materials.
@@ -1984,15 +2253,20 @@ export class ArchiveScene {
         object.modelViewMatrix.multiplyMatrices(this.camera.matrixWorldInverse, object.matrixWorld);
         object.normalMatrix.getNormalMatrix(object.modelViewMatrix);
         state.floats(...object.modelViewMatrix.elements, ...object.normalMatrix.elements, ...object.matrixWorld.elements);
-        const mat = object.material as THREE.MeshPhysicalMaterial;
-        // Three increments material.version for its own double-sided transmission
-        // passes. Track application-controlled inputs, not that render-side counter.
-        state.add(object.geometry.id, mat.uuid, mat.map?.uuid, mat.map?.version ?? 0);
-        state.floats(
-          mat.opacity, mat.roughness, mat.metalness, mat.transmission, mat.thickness,
-          mat.attenuationDistance, mat.clearcoat, mat.clearcoatRoughness,
-          mat.color.r, mat.color.g, mat.color.b,
-          mat.attenuationColor?.r ?? 0, mat.attenuationColor?.g ?? 0, mat.attenuationColor?.b ?? 0);
+        state.add(object.geometry.id);
+        // Some meshes have a list of materials (one per side) and the shader-drawn parts of the music world have no standard
+        // material at all: read every field defensively. (Those shaders only show while the world animates, which always redraws.)
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          const mat = material as Partial<THREE.MeshPhysicalMaterial>;
+          // Three increments material.version for its own double-sided transmission
+          // passes. Track application-controlled inputs, not that render-side counter.
+          state.add(mat.uuid, mat.map?.uuid, mat.map?.version ?? 0);
+          state.floats(
+            mat.opacity ?? 0, mat.roughness ?? 0, mat.metalness ?? 0, mat.transmission ?? 0, mat.thickness ?? 0,
+            mat.attenuationDistance ?? 0, mat.clearcoat ?? 0, mat.clearcoatRoughness ?? 0,
+            mat.color?.r ?? 0, mat.color?.g ?? 0, mat.color?.b ?? 0,
+            mat.attenuationColor?.r ?? 0, mat.attenuationColor?.g ?? 0, mat.attenuationColor?.b ?? 0);
+        }
         for (const name of ['appearance', 'glassClarity', 'themeAmount', 'subduedIndex'])
           state.floats(object.userData[name]?.value ?? 0);
         if (object instanceof THREE.InstancedMesh)

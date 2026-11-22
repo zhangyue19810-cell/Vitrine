@@ -395,7 +395,7 @@ function paintSpark(canvas: HTMLCanvasElement | null, task: TaskSnapshot) {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
   const css = getComputedStyle(document.documentElement);
-  const accent = css.getPropertyValue("--accent").trim() || "#1f9e8e";
+  const accent = css.getPropertyValue("--accent").trim() || "#e8b967";
   const line = css.getPropertyValue("--line").trim() || "#aaa";
   const muted = css.getPropertyValue("--muted").trim() || "#777";
   ctx.clearRect(0, 0, width, height);

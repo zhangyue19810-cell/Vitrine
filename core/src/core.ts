@@ -4,6 +4,7 @@ import { mkdir, readdir } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { AccountManager } from "./account/manager";
 import { MicrosoftAuth, type MicrosoftEndpoints, MS_ENDPOINTS } from "./account/microsoft";
+import { MusicService } from "./music/service";
 import { FileSecretStore, plainCipher, type Cipher } from "./account/secrets";
 import type { LoginChallenge, PublicAccount } from "./account/types";
 import { YggdrasilClient } from "./account/yggdrasil";
@@ -57,6 +58,8 @@ export interface CoreOptions {
   host?: HostBridge;
   os?: OsInfo;
   microsoftEndpoints?: MicrosoftEndpoints;
+  /** Where the music service talks to (tests and the offline demo point it at a local stand-in). */
+  music?: { base?: string; publicKey?: string };
   /** Where Minecraft lives while the settings do not say otherwise. */
   defaultRoot?: string;
 }
@@ -193,6 +196,7 @@ export class Core {
   readonly tasks: TaskManager;
   readonly secrets: FileSecretStore;
   readonly accounts: AccountManager;
+  readonly music: MusicService;
   readonly modrinth: ModrinthClient;
   readonly curseforge: CurseForgeClient;
   readonly games: GameManager;
@@ -256,6 +260,13 @@ export class Core {
       microsoft: new MicrosoftAuth(this.http, () => this.settings.peek().accounts.msClientId, options.microsoftEndpoints ?? MS_ENDPOINTS),
       yggdrasil: new YggdrasilClient(this.http),
       ownerUuid: () => this.settings.peek().accounts.ownerUuid || undefined,
+    });
+    this.music = new MusicService({
+      http: this.http,
+      secrets: this.secrets,
+      level: () => this.settings.peek().music.quality,
+      base: options.music?.base,
+      publicKey: options.music?.publicKey,
     });
     const apiDeps = { http: this.http, router: this.router, log: this.logger.scope("content") };
     this.modrinth = new ModrinthClient(apiDeps);

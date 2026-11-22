@@ -78,7 +78,7 @@ describe("the core over the development transport", () => {
       assert.equal(boot.settings.ui.pauseWhenGameRuns, true);
       assert.equal(boot.settings.ui.whenUnfocused, "pause");
       assert.equal(boot.settings.ui.releaseGpuWhenGameRuns, true);
-      assert.equal(boot.settings.ui.theme, "auto");
+      assert.equal(boot.settings.ui.theme, "dark");
       assert.ok(Array.isArray(boot.instances) && Array.isArray(boot.accounts) && Array.isArray(boot.tasks));
       assert.ok(boot.jvmPresets.length >= 3);
     });
@@ -152,11 +152,9 @@ describe("the core over the development transport", () => {
       await client.call("instances.setConfig", { id: "fake", patch: { memory: "auto", width: 0, note: null } });
     });
 
-    it("uses the configured owner UUID as the default offline account", async () => {
-      const owner = "00112233-4455-4677-8899-aabbccddeeff";
-      await client.call("settings.update", { patch: { accounts: { ownerUuid: owner } } });
+    it("adds the player's own UUID as the default offline account", async () => {
       const account = await client.call("accounts.addOffline", { name: "Wind", useOwnerUuid: true });
-      assert.equal(account.uuid, owner);
+      assert.equal(account.uuid, DEFAULT_OWNER_UUID);
       assert.equal(account.type, "offline");
       const list = await client.call("accounts.list");
       assert.equal(list.selected, account.id);
@@ -178,7 +176,7 @@ describe("the core over the development transport", () => {
       assert.equal(exited.crash, undefined, "a clean exit is not analysed");
       const text = (await client.call("games.tail", { id: gameId })).join("\n");
       assert.match(text, /ARGS=--username\|Wind\|--version\|fake\|--gameDir\|/);
-      assert.match(text, /--uuid\|00112233445546778899aabbccddeeff/);
+      assert.match(text, /--uuid\|89a9c36b3f724942bdd44ff8b41223c1/);
       assert.match(text, /中文测试/);
       const info = await client.call("instances.get", { id: "fake" });
       assert.ok(info.config.lastPlayed > 0);

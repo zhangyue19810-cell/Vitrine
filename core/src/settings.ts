@@ -43,11 +43,22 @@ export interface Settings {
     soundVolume: number;
     splash: "full" | "short" | "off";
     scale: number;
+    /** Size of the archives in the 3D scene: the whole ring, the card that is read and the row. */
+    cardSize: "small" | "medium" | "large";
+  };
+  music: {
+    /** Highest sound quality asked from the service (the service may give less). */
+    quality: "standard" | "higher" | "exhigh";
+    volume: number;
+    /** Order of play: in order and stop, loop the list, repeat one song, shuffle. */
+    mode: "order" | "loop" | "single" | "shuffle";
+    /** Pause the music while a game runs and carry on when it closes. */
+    pauseWhenGameRuns: boolean;
   };
 }
 
-/** Optional owner UUID for offline accounts. Empty by default; the player sets it in settings. */
-export const DEFAULT_OWNER_UUID = "";
+/** The user's own ID, offered as the default UUID for offline accounts (editable in settings). */
+export const DEFAULT_OWNER_UUID = "89a9c36b-3f72-4942-bdd4-4ff8b41223c1";
 
 export const DEFAULT_SETTINGS: Settings = {
   version: 1,
@@ -58,7 +69,8 @@ export const DEFAULT_SETTINGS: Settings = {
   java: { autoInstall: true, extraPaths: [] },
   launch: { memory: "auto", jvmPreset: "default", jvmArgs: "", gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
   accounts: { msClientId: "", curseforgeKey: "", ownerUuid: DEFAULT_OWNER_UUID },
-  ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "auto", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1 },
+  ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "dark", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1, cardSize: "medium" },
+  music: { quality: "exhigh", volume: 0.6, mode: "loop", pauseWhenGameRuns: true },
 };
 
 type Json = Record<string, unknown>;
@@ -191,6 +203,15 @@ export function applySettings(current: Settings, patch: unknown): Settings {
     if (ui.soundVolume !== undefined) next.ui.soundVolume = Math.min(1, Math.max(0, Number(ui.soundVolume) || 0));
     if (ui.splash !== undefined) next.ui.splash = oneOf("开屏动画", ui.splash, ["full", "short", "off"] as const);
     if (ui.scale !== undefined) next.ui.scale = Math.min(1.5, Math.max(0.75, Number(ui.scale) || 1));
+    if (ui.cardSize !== undefined) next.ui.cardSize = oneOf("档案大小", ui.cardSize, ["small", "medium", "large"] as const);
+  }
+
+  const music = section("music");
+  if (music) {
+    if (music.quality !== undefined) next.music.quality = oneOf("音质", music.quality, ["standard", "higher", "exhigh"] as const);
+    if (music.volume !== undefined) next.music.volume = Math.min(1, Math.max(0, Number(music.volume) || 0));
+    if (music.mode !== undefined) next.music.mode = oneOf("播放模式", music.mode, ["order", "loop", "single", "shuffle"] as const);
+    if (music.pauseWhenGameRuns !== undefined) next.music.pauseWhenGameRuns = bool("游戏运行时暂停音乐", music.pauseWhenGameRuns);
   }
   return next;
 }
@@ -207,7 +228,7 @@ export function normalizeSettings(stored: unknown): Settings {
     }
   };
   attempt({ gameRoot: stored.gameRoot });
-  for (const key of ["sources", "download", "network", "java", "launch", "accounts", "ui"] as const) {
+  for (const key of ["sources", "download", "network", "java", "launch", "accounts", "ui", "music"] as const) {
     const value = stored[key];
     if (!isObject(value)) continue;
     for (const [field, entry] of Object.entries(value)) attempt({ [key]: { [field]: entry } });

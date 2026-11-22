@@ -1,0 +1,579 @@
+/*
+ * The words of the music page (app/music/hud.ts), laid over the black hole: what is playing on the left, a capsule of controls under
+ * the hole, a hint at the right edge, and the boxed figures that float round it. (The lyrics are not here: they are drawn in the 3D
+ * scene, in the middle, and jump with the music.) Lengths are in the stage's virtual pixels (about 1350 × 760). The layer lets
+ * pointer events through, so the picture can still be dragged and zoomed; only the controls take them. `--reveal` (0 … 1) says how
+ * far the archives are out on the right: the left panel, the boxes and the hint give way to them.
+ */
+
+.music-hud {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  container-type: size;
+  container-name: hud;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.35s var(--ease), visibility 0s linear 0.35s;
+}
+
+.music-hud[data-on="true"] {
+  opacity: 1;
+  visibility: visible;
+  /* The words arrive after the picture has regrouped into deep space. */
+  transition: opacity 0.9s var(--ease) 0.55s, visibility 0s;
+}
+
+/* ------------------------------------------------------------------------------------------ the left: what is playing */
+
+.hud-left {
+  position: absolute;
+  left: 46px;
+  top: 190px;
+  bottom: 190px;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  /* Gives way while the archives are out (and the lyrics move over to where it stands): gone before they have fully arrived, so that
+     no faint copy of it is left at the edge. */
+  opacity: calc(1 - 1.2 * var(--reveal, 0));
+  transform: translateX(calc(-46px * var(--reveal, 0)));
+}
+
+.music-hud[data-out="true"] .hud-left {
+  pointer-events: none;
+}
+
+.hud-left > * {
+  flex: none;
+}
+
+.hud-cover {
+  display: block;
+  width: 104px;
+  height: 104px;
+  margin-bottom: 2px;
+  border-radius: 16px;
+  border: 1px solid var(--hair);
+  background: #0a0806;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(var(--accent-rgb), 0.06);
+}
+
+.hud-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.28;
+  letter-spacing: 0.4px;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.hud-artist {
+  margin: 0;
+  font-size: 13px;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 22px;
+}
+
+.hud-chips span {
+  max-width: 150px;
+  height: 22px;
+  padding: 0 10px;
+  border: 1px solid rgba(var(--accent-rgb), 0.42);
+  border-radius: 999px;
+  background: rgba(var(--accent-rgb), 0.08);
+  color: var(--accent-ink);
+  font-size: 11px;
+  line-height: 20px;
+  letter-spacing: 0.6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The frequency bars: the bands of the music, drawn as a row of thin gold columns standing on a line. */
+.hud-spectrum {
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  height: 28px;
+  border-bottom: 1px solid rgba(var(--accent-rgb), 0.3);
+}
+
+.hud-spectrum i {
+  flex: 1;
+  height: 100%;
+  border-radius: 2px 2px 0 0;
+  background: linear-gradient(0deg, rgba(var(--accent-rgb), 0.3), var(--accent));
+  transform: scaleY(0.08);
+  transform-origin: 50% 100%;
+}
+
+.hud-place {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hud-times {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.6px;
+  color: rgba(var(--ink-rgb), 0.62);
+}
+
+.hud-progress,
+.hud-capsule .track {
+  position: relative;
+  flex: 1;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(var(--ink-rgb), 0.16);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: none;
+  outline: none;
+}
+
+/* A taller strip to press on than the line itself. */
+.hud-progress::before,
+.hud-capsule .track::before {
+  content: "";
+  position: absolute;
+  inset: -9px 0;
+}
+
+.hud-progress i,
+.hud-capsule .track i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 0 10px rgba(var(--accent-rgb), 0.55);
+}
+
+.hud-progress i::after,
+.hud-capsule .track i::after {
+  content: "";
+  position: absolute;
+  right: -4px;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: var(--accent-ink);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.8);
+  transform: scale(0);
+  transition: transform 0.2s var(--ease);
+}
+
+.hud-progress:hover i::after,
+.hud-progress:focus-visible i::after,
+.hud-capsule .track:hover i::after,
+.hud-capsule .track:focus-visible i::after {
+  transform: scale(1);
+}
+
+/* The queue: the playing song and its neighbours. */
+.hud-queue {
+  margin-top: 2px;
+  padding: 10px 12px 8px;
+  border: 1px solid var(--hair-soft);
+  border-radius: var(--r-md, 14px);
+  background: rgba(var(--panel-rgb), 0.4);
+  backdrop-filter: blur(10px) saturate(1.2);
+}
+
+.hud-queue header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 11px;
+  letter-spacing: 1.4px;
+  color: var(--muted);
+}
+
+.hud-queue header em {
+  font-style: normal;
+  font-family: var(--mono);
+  color: var(--accent-ink);
+}
+
+.hud-queue-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.hud-queue-rows li {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: baseline;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+  color: rgba(var(--ink-rgb), 0.58);
+}
+
+.hud-queue-rows li + li {
+  border-top: 1px solid rgba(var(--ink-rgb), 0.06);
+}
+
+.hud-queue-rows .n {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: rgba(var(--ink-rgb), 0.38);
+}
+
+.hud-queue-rows .t,
+.hud-queue-rows .a {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-queue-rows .a {
+  max-width: 64px;
+  font-size: 10.5px;
+  color: rgba(var(--ink-rgb), 0.38);
+}
+
+.hud-queue-rows li.now {
+  color: var(--accent-ink);
+}
+
+.hud-queue-rows li.now .n {
+  color: var(--accent);
+}
+
+.hud-queue-rows li.empty {
+  display: block;
+  white-space: normal;
+  color: rgba(var(--ink-rgb), 0.4);
+}
+
+/* ------------------------------------------------------------------------------------------ the hint at the right edge */
+
+/* The archives are put away until the pointer goes to the right of the picture: a small mark there says so, and goes once they are out. */
+.hud-hint {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+  color: var(--accent-ink);
+  font-size: 11px;
+  letter-spacing: 3px;
+  pointer-events: none;
+  opacity: calc(0.78 * (1 - 1.6 * var(--reveal, 0)));
+  transform: translateY(-50%);
+}
+
+.hud-hint::before,
+.hud-hint::after {
+  content: "";
+  width: 1px;
+  height: 46px;
+  background: linear-gradient(180deg, transparent, rgba(var(--accent-rgb), 0.7), transparent);
+}
+
+.hud-hint i {
+  font-style: normal;
+  font-size: 20px;
+  line-height: 1;
+  animation: hud-nudge 2.6s ease-in-out infinite;
+}
+
+.hud-hint span {
+  writing-mode: vertical-rl;
+}
+
+@keyframes hud-nudge {
+  50% {
+    transform: translateX(-5px);
+    opacity: 0.45;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ the capsule */
+
+.hud-capsule {
+  position: absolute;
+  left: 50%;
+  bottom: 112px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 760px;
+  padding: 8px 20px 8px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 999px;
+  background: var(--glass-strong);
+  backdrop-filter: blur(18px) saturate(1.3);
+  box-shadow: 0 16px 50px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(var(--ink-rgb), 0.06);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.hud-capsule[data-idle="true"] .who,
+.hud-capsule[data-idle="true"] .bar,
+.hud-capsule[data-idle="true"] .hud-thumb {
+  opacity: 0.6;
+}
+
+.hud-thumb {
+  flex: none;
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  border: 1px solid var(--hair);
+  background: #0a0806;
+}
+
+.hud-capsule[data-loading="true"] .hud-thumb {
+  animation: hud-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes hud-pulse {
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.hud-capsule .who {
+  flex: none;
+  display: grid;
+  gap: 2px;
+  width: 124px;
+  line-height: 1.25;
+}
+
+.hud-capsule .who b {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-capsule .who span {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hud-capsule .ctl {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.hud-capsule button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(var(--ink-rgb), 0.78);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.2s var(--ease);
+}
+
+.hud-capsule button:hover {
+  background: rgba(var(--ink-rgb), 0.1);
+  color: var(--ink);
+}
+
+.hud-capsule button svg {
+  width: 17px;
+  height: 17px;
+}
+
+.hud-capsule button.main {
+  width: 40px;
+  height: 40px;
+  background: var(--accent);
+  color: var(--on-accent);
+  box-shadow: 0 0 22px rgba(var(--accent-rgb), 0.34);
+}
+
+.hud-capsule button.main:hover {
+  background: var(--accent-ink);
+  color: var(--on-accent);
+  transform: scale(1.06);
+}
+
+.hud-capsule button.main svg {
+  width: 19px;
+  height: 19px;
+}
+
+.hud-capsule .bar {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.hud-cap-time {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  color: rgba(var(--ink-rgb), 0.58);
+}
+
+.hud-capsule .vol {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: rgba(var(--ink-rgb), 0.62);
+}
+
+.hud-capsule .vol svg {
+  width: 16px;
+  height: 16px;
+}
+
+.hud-capsule input[type="range"] {
+  width: 64px;
+  height: 14px;
+  margin: 0;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.hud-capsule input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(var(--ink-rgb), 0.2);
+}
+
+.hud-capsule input[type="range"]::-webkit-slider-thumb {
+  width: 10px;
+  height: 10px;
+  margin-top: -3.5px;
+  border-radius: 50%;
+  border: 0;
+  background: var(--accent-ink);
+  box-shadow: 0 0 8px rgba(var(--accent-rgb), 0.6);
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.hud-capsule input[type="range"]::-moz-range-track {
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(var(--ink-rgb), 0.2);
+}
+
+.hud-capsule input[type="range"]::-moz-range-thumb {
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--accent-ink);
+}
+
+/* ------------------------------------------------------------------------------------------ the figures round the hole */
+
+.hud-float {
+  left: 0;
+  top: 0;
+  opacity: 0;
+  will-change: transform;
+}
+
+.music-hud[data-floats="true"] .hud-float {
+  opacity: calc(1 - 1.4 * var(--reveal, 0));
+}
+
+.hud-orbit {
+  display: grid;
+  gap: 2px;
+  justify-items: start;
+}
+
+.hud-orbit svg {
+  display: block;
+  width: 64px;
+  height: 40px;
+  color: var(--accent-ink);
+}
+
+.hud-coords {
+  left: 52px;
+  bottom: 52px;
+  display: grid;
+  gap: 3px;
+}
+
+.hud-corner {
+  right: 52px;
+  bottom: 52px;
+  text-align: right;
+}
+
+/* ------------------------------------------------------------------------------------------ small windows */
+
+/* A stage shorter than the design (a small window): the queue gives way first. */
+@container hud (max-height: 720px) {
+  .hud-queue {
+    display: none;
+  }
+}
+
+#stage[data-compact="true"] .hud-queue {
+  display: none;
+}
+
+#stage[data-compact="true"] .hud-left {
+  left: 28px;
+  width: 190px;
+}
+
+#stage[data-compact="true"] .hud-capsule {
+  width: min(760px, calc(100% - 56px));
+}
+
+#stage[data-compact="true"] .hud-capsule .vol {
+  display: none;
+}

@@ -17,9 +17,9 @@
   --ink-rgb: 8, 10, 8;
   --muted: rgb(119, 117, 109);
   --line: rgb(170, 165, 154);
-  --accent: rgb(31, 158, 142);
-  --accent-ink: rgb(21, 112, 96);
-  --accent-rgb: 31, 158, 142;
+  --accent: rgb(178, 122, 34);
+  --accent-ink: rgb(128, 83, 15);
+  --accent-rgb: 178, 122, 34;
   --on-accent: rgb(255, 255, 255);
   --on-danger: rgb(255, 255, 255);
   --danger: rgb(176, 58, 46);
@@ -221,8 +221,8 @@ kbd {
 }
 
 .brand-mark {
-  width: 46px;
-  height: 46px;
+  width: 64px;
+  height: 36px;
   color: var(--ink);
   flex: none;
 }

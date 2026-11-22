@@ -5,6 +5,8 @@ import "./styles/home.css";
 import "./styles/stage.css";
 import "./styles/sheets.css";
 import "./styles/boot.css";
+import "./styles/gravity.css";
+import "./styles/music-hud.css";
 import { startApp } from "./app/app";
 
 startApp().catch((error: unknown) => {

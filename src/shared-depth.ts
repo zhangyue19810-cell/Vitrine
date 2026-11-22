@@ -72,13 +72,29 @@ export class SharedDepthBokeh extends BokehPass {
   constructor(scene: THREE.Scene, camera: THREE.Camera, params: BokehPassParameters, private source: () => SharedDepthAO) {
     super(scene, camera, params);
     this.quad = new FullScreenQuad(this.materialBokeh);
+    // `emptySharp` (0 … 1): pixels where nothing solid was drawn (the sky of a space scene) are left unblurred, so stars stay
+    // points instead of melting into the haze. At 0 the pass is exactly the stock one.
+    const material = this.materialBokeh;
+    material.uniforms.emptySharp = { value: 0 };
+    const declared = material.fragmentShader.replace('uniform float aspect;', 'uniform float aspect;\nuniform float emptySharp;');
+    const spread = 'vec2 dofblur = vec2 ( clamp( factor * aperture, -maxblur, maxblur ) );';
+    if (declared !== material.fragmentShader && declared.includes(spread)) {
+      material.fragmentShader = declared.replace(spread, 'float emptiness = step( 0.99995, getDepth( vUv ) );\n\t\t\tvec2 dofblur = vec2 ( clamp( factor * aperture, -maxblur, maxblur ) ) * ( 1.0 - emptySharp * emptiness );');
+    }
   }
   setSize(width: number, height: number) { super.setSize(width, height); this.width = width; this.height = height; }
+  /** How much of the unblurred-sky rule applies (0 … 1). */
+  setEmptySharp(amount: number) { (this.uniforms as Record<string, {value: number}>).emptySharp.value = amount; }
   render(renderer: THREE.WebGLRenderer, write: THREE.WebGLRenderTarget, read: THREE.WebGLRenderTarget, delta: number, mask: boolean) {
     const ao = this.source(), uniforms = this.uniforms as Record<string, {value: any}>;
     // Lower resolution AO must retain the original full resolution depth pass.
     if (!ao.enabled || ao.width !== this.width || ao.height !== this.height) {
-      return super.render(renderer, write, read, delta, mask);
+      // This pass draws the scene's depth itself: what is marked `excludeFromAO` (the sky, the water rings) is not solid.
+      const hidden: THREE.Object3D[] = [];
+      this.scene.traverseVisible(object => { if (object.userData.excludeFromAO) hidden.push(object); });
+      for (const object of hidden) object.visible = false;
+      try { return super.render(renderer, write, read, delta, mask); }
+      finally { for (const object of hidden) object.visible = true; }
     }
     const originalDepth = uniforms.tDepth.value;
     uniforms.tDepth.value = ao.normalRenderTarget.textures[1];
