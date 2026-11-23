@@ -1,4 +1,4 @@
-import { constants, createCipheriv, createDecipheriv, createPrivateKey, createPublicKey, privateDecrypt, publicEncrypt, randomBytes } from "node:crypto";
+import { constants, createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, privateDecrypt, publicEncrypt, randomBytes } from "node:crypto";
 
 /**
  * The request envelope of the NetEase Cloud Music web client ("weapi").
@@ -78,4 +78,26 @@ export function weapiDecrypt(form: WeapiForm, privateKeyPem: string): unknown {
   const secretKey = [...block.subarray(start).toString("utf8")].reverse().join("");
   const first = aesCbcDecryptBase64(form.params, secretKey);
   return JSON.parse(aesCbcDecryptBase64(first, WEAPI_PRESET_KEY));
+}
+
+/** eapi key from the web player; this is the app-level envelope, not a private credential. */
+const EAPI_KEY = "e82ckenh8dichen8";
+
+/** NetEase's app-facing eapi envelope: AES-128-ECB over the request URL, body and an MD5 digest. */
+export function eapiForm(url: string, payload: unknown): { params: string } {
+  const text = typeof payload === "string" ? payload : JSON.stringify(payload);
+  const digest = createHash("md5").update(`nobody${url}use${text}md5forencrypt`).digest("hex");
+  const plain = `${url}-36cd479b6b5-${text}-36cd479b6b5-${digest}`;
+  const cipher = createCipheriv("aes-128-ecb", Buffer.from(EAPI_KEY, "utf8"), null);
+  return { params: Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]).toString("hex").toUpperCase() };
+}
+
+
+/** Server-side/test-side counterpart of `eapiForm`, used by the local stand-in. */
+export function eapiDecrypt(params: string): { url: string; data: unknown; digest: string } {
+  const decipher = createDecipheriv("aes-128-ecb", Buffer.from(EAPI_KEY, "utf8"), null);
+  const plain = Buffer.concat([decipher.update(Buffer.from(params, "hex")), decipher.final()]).toString("utf8");
+  const match = /^(.*?)-36cd479b6b5-([\s\S]*?)-36cd479b6b5-(.*)$/.exec(plain);
+  if (!match) throw new Error("invalid eapi envelope");
+  return { url: match[1], data: JSON.parse(match[2]), digest: match[3] };
 }

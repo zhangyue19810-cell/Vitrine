@@ -468,7 +468,7 @@ const core = await Core.create({
   dataDir: join(dir, "data"),
   version: "0.1.0-demo",
   defaultRoot: join(dir, "minecraft"),
-  music: { base: netease.url, publicKey: netease.publicKey },
+  music: { base: netease.url, eapiBase: netease.url, publicKey: netease.publicKey },
   host: {
     openExternal: (url) => void console.log(`[host] openExternal ${url}`),
     openPath: (path) => void console.log(`[host] openPath ${path}`),

@@ -313,6 +313,27 @@ export function buildRpc(core: Core): RpcTable {
   def("music.mine", (_params, { signal }) => music(() => core.music.myPlaylists(signal)));
   def("music.source", (params, { signal }) => music(async () => (await core.music.source(idOf(params, "id"), signal)) ?? null));
   def("music.lyrics", (params, { signal }) => music(() => core.music.lyrics(idOf(params, "id"), signal)));
+  def("music.song", (params, { signal }) => music(async () => (await core.music.song(idOf(params, "id"), signal)) ?? null));
+  def("music.togetherStatus", (_params, { signal }) => music(() => core.music.togetherStatus(signal)));
+  def("music.togetherCreate", (_params, { signal }) => music(() => core.music.togetherCreate(signal)));
+  def("music.togetherAccept", (params, { signal }) => music(() => core.music.togetherAccept(str(params, "roomId", 100), idOf(params, "inviterId"), signal)));
+  def("music.togetherEnd", (params, { signal }) => music(() => core.music.togetherEnd(str(params, "roomId", 100), signal)));
+  def("music.togetherPlaylist", (params, { signal }) => music(() => core.music.togetherPlaylist(str(params, "roomId", 100), signal)));
+  def("music.togetherHeartbeat", (params, { signal }) => music(() => core.music.togetherHeartbeat(
+    str(params, "roomId", 100),
+    idOf(params, "songId"),
+    str(params, "playStatus", 20),
+    optNum(params, "progress", 0, 24 * 60 * 60 * 1000) ?? 0,
+    signal,
+  )));
+  def("music.togetherPlay", (params, { signal }) => music(() => core.music.togetherPlay(str(params, "roomId", 100), {
+    commandType: oneOf(params, "commandType", ["PLAY", "PAUSE", "GOTO", "seek"] as const),
+    progress: optNum(params, "progress", 0, 24 * 60 * 60 * 1000) ?? 0,
+    playStatus: str(params, "playStatus", 20),
+    formerSongId: optNum(params, "formerSongId", 0, Number.MAX_SAFE_INTEGER),
+    targetSongId: optNum(params, "targetSongId", 0, Number.MAX_SAFE_INTEGER),
+    clientSeq: optNum(params, "clientSeq", 0, Number.MAX_SAFE_INTEGER) ?? 0,
+  }, signal)));
 
   // ---------------- local mods and packs
   def("mods.list", async (params, { signal }) => {

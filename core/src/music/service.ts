@@ -1,7 +1,7 @@
 import type { SecretStore } from "../account/secrets";
 import type { HttpClient } from "../net/http";
 import { CookieJar, NeteaseClient, NeteaseError } from "./netease";
-import type { MusicLevel, MusicLyrics, MusicPlaylist, MusicSong, MusicSource, MusicStatus, QrLogin, QrPoll, SearchResult } from "./types";
+import type { MusicLevel, MusicLyrics, MusicPlaylist, MusicSong, MusicSource, MusicStatus, MusicTogetherRoom, MusicTogetherStatus, QrLogin, QrPoll, SearchResult } from "./types";
 
 /**
  * What the interface talks to: the NetEase client plus the things a client should not have to know about, namely
@@ -18,6 +18,7 @@ export interface MusicServiceOptions {
   /** Sound quality to ask for (read on every call, so a settings change applies at once). */
   level: () => MusicLevel;
   base?: string;
+  eapiBase?: string;
   publicKey?: string;
   now?: () => number;
 }
@@ -42,6 +43,7 @@ export class MusicService {
       http: options.http,
       cookies: this.jar,
       base: options.base,
+      eapiBase: options.eapiBase,
       publicKey: options.publicKey,
       onCookies: () => this.persist(),
     });
@@ -180,5 +182,95 @@ export class MusicService {
 
   lyrics(id: number, signal?: AbortSignal): Promise<MusicLyrics> {
     return this.cached(`lyrics:${id}`, 6 * 60 * MINUTE, () => this.client.lyrics(id, signal));
+  }
+
+  /** One song's metadata, used when a listen-together room changes the current track. */
+  async song(id: number, signal?: AbortSignal): Promise<MusicSong | undefined> {
+    return this.cached(`song:${id}`, 10 * MINUTE, async () => (await this.client.songs([id], signal))[0]);
+  }
+
+  // -------------------------------------------------------------------------------------------- listen together
+
+  private togetherRoom(data: unknown): MusicTogetherRoom | undefined {
+    const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
+    const info = root.roomInfo && typeof root.roomInfo === "object" ? root.roomInfo as Record<string, unknown> : root;
+    const rawId = info.roomId ?? root.roomId;
+    const roomId = rawId === undefined || rawId === null ? "" : String(rawId);
+    if (!roomId) return undefined;
+    const number = (value: unknown): number => typeof value === "number" && Number.isFinite(value) ? value : Number(value) || 0;
+    const users = Array.isArray(info.roomUsers)
+      ? info.roomUsers.map((entry) => {
+          const user = entry && typeof entry === "object" ? entry as Record<string, unknown> : {};
+          return { userId: number(user.userId ?? user.id), nickname: String(user.nickname ?? user.name ?? ""), avatar: typeof user.avatarUrl === "string" ? user.avatarUrl : undefined };
+        }).filter((user) => user.userId > 0)
+      : [];
+    const playingRaw = root.playingInfo && typeof root.playingInfo === "object" ? root.playingInfo as Record<string, unknown> : {};
+    const playlist = root.playlistInfo && typeof root.playlistInfo === "object" ? root.playlistInfo as Record<string, unknown> : {};
+    const playlistIds = Array.isArray((playlist.displayList as Record<string, unknown> | undefined)?.result)
+      ? ((playlist.displayList as Record<string, unknown>).result as unknown[]).map(number).filter(Boolean)
+      : [];
+    return {
+      roomId,
+      inviterId: number(info.inviterId ?? root.inviterId),
+      users,
+      playlistIds,
+      playing: {
+        songId: number(playingRaw.trackId ?? playingRaw.songId),
+        status: String(playingRaw.status ?? playingRaw.playStatus ?? ""),
+        progressMs: number(playingRaw.progress),
+      },
+    };
+  }
+
+  async togetherStatus(signal?: AbortSignal): Promise<MusicTogetherStatus> {
+    await this.ready();
+    const account = await this.status(signal);
+    if (!account.loggedIn) return { loggedIn: false, inRoom: false };
+    try {
+      const data = (await this.client.listenTogetherStatus(signal)).data;
+      const root = data && typeof data === "object" ? data as Record<string, unknown> : {};
+      if (!root.inRoom) return { loggedIn: true, inRoom: false };
+      return { loggedIn: true, inRoom: true, room: this.togetherRoom(root) };
+    } catch (error) {
+      if (error instanceof NeteaseError && error.code === 301) return { loggedIn: false, inRoom: false };
+      throw error;
+    }
+  }
+
+  async togetherCreate(signal?: AbortSignal): Promise<MusicTogetherStatus> {
+    const status = await this.status(signal);
+    if (!status.loggedIn) throw new NeteaseError("一起听需要先登录网易云音乐", 301);
+    const created = (await this.client.listenTogetherCreate(signal)).data;
+    const room = this.togetherRoom(created);
+    if (room) return { loggedIn: true, inRoom: true, room };
+    return this.togetherStatus(signal);
+  }
+
+  async togetherAccept(roomId: string, inviterId: number, signal?: AbortSignal): Promise<MusicTogetherStatus> {
+    const status = await this.status(signal);
+    if (!status.loggedIn) throw new NeteaseError("一起听需要先登录网易云音乐", 301);
+    await this.client.listenTogetherAccept(roomId, inviterId, signal);
+    return this.togetherStatus(signal);
+  }
+
+  async togetherEnd(roomId: string, signal?: AbortSignal): Promise<MusicTogetherStatus> {
+    await this.client.listenTogetherEnd(roomId, signal);
+    return { loggedIn: true, inRoom: false };
+  }
+
+  async togetherHeartbeat(roomId: string, songId: number, playStatus: string, progress: number, signal?: AbortSignal): Promise<boolean> {
+    await this.client.listenTogetherHeartbeat(roomId, songId, playStatus, progress, signal);
+    return true;
+  }
+
+  async togetherPlay(roomId: string, command: { commandType: string; progress?: number; playStatus: string; formerSongId?: number; targetSongId?: number; clientSeq: number }, signal?: AbortSignal): Promise<boolean> {
+    await this.client.listenTogetherPlay(roomId, command, signal);
+    return true;
+  }
+
+  async togetherPlaylist(roomId: string, signal?: AbortSignal): Promise<number[]> {
+    const data = (await this.client.listenTogetherPlaylist(roomId, signal)).data;
+    const room = this.togetherRoom(data);
+    return room?.playlistIds ?? [];
   }
 }

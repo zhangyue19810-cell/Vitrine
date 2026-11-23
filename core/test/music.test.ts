@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { generateKeyPairSync, createPublicKey } from "node:crypto";
+import { createDecipheriv, createHash, createPublicKey, generateKeyPairSync } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -7,7 +7,7 @@ import { after, before, describe, it } from "node:test";
 import { FileSecretStore } from "../src/account/secrets";
 import { Core } from "../src/core";
 import { HttpClient } from "../src/net/http";
-import { aesCbcBase64, aesCbcDecryptBase64, randomSecretKey, rsaNoPaddingHex, weapi, weapiDecrypt, WEAPI_PUBLIC_KEY } from "../src/music/crypto";
+import { aesCbcBase64, aesCbcDecryptBase64, eapiDecrypt, eapiForm, randomSecretKey, rsaNoPaddingHex, weapi, weapiDecrypt, WEAPI_PUBLIC_KEY } from "../src/music/crypto";
 import { buildLyrics, lineIndexAt, mergeTranslation, parseLrc, plainLines } from "../src/music/lrc";
 import { CookieJar, NeteaseClient, NeteaseError, coverUrl, playableUrl } from "../src/music/netease";
 import { MusicService } from "../src/music/service";
@@ -47,6 +47,19 @@ describe("the request envelope", () => {
     assert.match(form.encSecKey, /^[0-9a-f]{256}$/);
     assert.deepEqual(weapiDecrypt(form, pair.privateKey), payload);
     assert.notEqual(weapi(payload, { publicKey: pair.publicKey }).params, form.params, "a fresh secret key every time");
+  });
+
+  it("the eapi envelope keeps the url, payload and md5 digest, then AES-ECB", () => {
+    const path = "/api/listen/together/room/create";
+    const payload = { refer: "songplay_more", header: { os: "pc" } };
+    const form = eapiForm(path, payload);
+    assert.match(form.params, /^[0-9A-F]+$/);
+    const decipher = createDecipheriv("aes-128-ecb", Buffer.from("e82ckenh8dichen8"), null);
+    const plain = Buffer.concat([decipher.update(Buffer.from(form.params, "hex")), decipher.final()]).toString("utf8");
+    const body = JSON.stringify(payload);
+    const digest = createHash("md5").update(`nobody${path}use${body}md5forencrypt`).digest("hex");
+    assert.equal(plain, `${path}-36cd479b6b5-${body}-36cd479b6b5-${digest}`);
+    assert.deepEqual(eapiDecrypt(form.params), { url: path, data: payload, digest });
   });
 
   it("a fixed secret key gives a fixed envelope (reproducible for debugging)", () => {
@@ -218,6 +231,24 @@ describe("the client against the stand-in", () => {
     const source = await client.source(1005);
     assert.equal(source?.url, `${mock.url}/audio/1005.wav`);
     assert.equal(mock.stats.outer, before + 1);
+  });
+
+  it("creates, checks, syncs and ends a listen-together room through the app envelope", async () => {
+    fresh();
+    const jar = new CookieJar({ MUSIC_U: "mock-music-u-0123456789abcdef" });
+    const client = new NeteaseClient({ http: http(), cookies: jar, base: mock.url, eapiBase: mock.url, publicKey: mock.publicKey });
+    const created = await client.listenTogetherCreate();
+    const roomId = String((created.data as any)?.roomInfo?.roomId ?? "");
+    assert.ok(roomId);
+    const status = await client.listenTogetherStatus();
+    assert.equal((status.data as any)?.inRoom, true);
+    await client.listenTogetherHeartbeat(roomId, 1002, "PLAY", 12_000);
+    await client.listenTogetherPlay(roomId, { commandType: "PAUSE", playStatus: "PAUSE", targetSongId: 1002, clientSeq: 1 });
+    const playlist = await client.listenTogetherPlaylist(roomId);
+    assert.ok(Array.isArray((playlist.data as any)?.playlist?.displayList?.result));
+    await client.listenTogetherEnd(roomId);
+    const after = await client.listenTogetherStatus();
+    assert.equal((after.data as any)?.inRoom, false);
   });
 
   it("reads lyrics with credits, translation and the odd untimed or missing text", async () => {

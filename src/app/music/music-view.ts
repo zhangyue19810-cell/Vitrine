@@ -11,6 +11,7 @@ import { musicFontSample, type LoginPayload, type MusicPayload, type PlaylistPay
 import { MusicHud } from "./hud";
 import type { MusicPlayer, PlayerChange } from "./player";
 import { encodeQr } from "./qr";
+import { ListenTogether } from "./together";
 
 /**
  * The music page: a black hole with its accretion disk in deep space (`setWorld("cosmos")`; see `space/disk.ts`). Playlists and
@@ -78,6 +79,8 @@ export class MusicView {
   private readonly off: () => void;
   /** The words over the picture (what is playing, the lyrics, the controls); absent when there is no element to put them in. */
   private readonly hud?: MusicHud;
+  /** The shared room around the same player; it keeps running while another tab is up. */
+  private readonly together: ListenTogether;
 
   constructor(
     private readonly host: SceneHost,
@@ -91,11 +94,13 @@ export class MusicView {
       submit: (id) => id === "search" && this.search(),
     });
     this.off = player.subscribe((change) => this.onPlayer(change));
+    this.together = new ListenTogether(player, () => this.renderPlates());
     if (hudParent) this.hud = new MusicHud(hudParent, player, host);
   }
 
   dispose() {
     this.off();
+    this.together.dispose();
     this.hud?.dispose();
     this.stopPolling();
   }
@@ -130,6 +135,7 @@ export class MusicView {
     this.renderPlates();
     if (!fromRow) this.host.showRow(this.placeholders(), 0);
     await this.refreshStatus();
+    void this.together.refresh();
     await this.load("recommended", fromRow ? "swap" : "replace");
   }
 
@@ -153,8 +159,10 @@ export class MusicView {
 
   private applyStatus(status: MusicStatus) {
     this.status = status;
-    if (status.loggedIn) this.login = loginOf("done", { nickname: status.account?.nickname ?? "" });
-    else if (this.login.state === "done") this.login = loginOf("idle");
+    if (status.loggedIn) {
+      this.login = loginOf("done", { nickname: status.account?.nickname ?? "" });
+      void this.together.refresh();
+    } else if (this.login.state === "done") this.login = loginOf("idle");
   }
 
   private placeholders(): StageItem[] {
@@ -478,6 +486,7 @@ export class MusicView {
 
   private press(id: string, cell?: number) {
     if (id === "back") return this.back();
+    if (id === "together") return void this.together.openPanel();
     if (id === "kind") {
       this.searchKind = cell === 1 ? "playlist" : "song";
       this.renderPlates();
@@ -514,6 +523,7 @@ export class MusicView {
       { id: "mine", kind: "tab", label: "我的歌单", value: asks ? "登录" : undefined, active: here("mine"), width: asks ? 136 : 100 },
       { id: "search", kind: "field", label: "搜索", text: this.query, placeholder: this.searchKind === "song" ? "搜索歌曲 / 歌手" : "搜索歌单", width: 230, focused: false },
       { id: "kind", kind: "segments", label: "", options: ["歌曲", "歌单"], selected: this.searchKind === "song" ? 0 : 1, width: 104 },
+      { id: "together", kind: "tab", label: this.together.label, active: this.together.active, width: 88 },
     );
     const groups: PlateGroup[] = [{ id: "sources", dock: "bottom", margin: 52, gap: 8, plates }];
     this.bus.set(PART, groups);

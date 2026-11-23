@@ -298,14 +298,16 @@ void main() {
   float back = tex.b;
   // The lines far from the one being sung are out of focus: the sharp letter melts into its own glow.
   float body = mix(core, halo * 0.6, vBlur);
-  float dark = mix(back, halo, vBlur) * 0.55;
+  float dark = mix(back, halo, vBlur) * 0.72;
   // The grade of the picture smears whatever is brighter than 0.95 along its width (the anamorphic streak, made for the disk's hot
   // points): the words are kept just under that, or they would be echoed sideways. The music's flash is in the glow and the size.
-  vec3 white = vec3(0.90, 0.88, 0.84);
-  vec3 gold = vec3(0.95, 0.70, 0.30);
+  // The words should sit in the picture, not become a white light source: a
+  // quieter ivory, an amber sung highlight, and a small bloom contribution.
+  vec3 white = vec3(0.72, 0.70, 0.67);
+  vec3 gold = vec3(0.82, 0.57, 0.25);
   vec3 ink = mix(white, gold, vSung);
-  vec3 glow = vec3(0.95, 0.58, 0.2) * halo * (0.12 + 0.34 * vPulse) * (0.35 + 0.65 * vSung) * (1.0 - vBlur);
-  vec3 rgb = min((ink * body + glow) * vAlpha, vec3(0.94));
+  vec3 glow = vec3(0.70, 0.40, 0.14) * halo * (0.035 + 0.16 * vPulse) * (0.3 + 0.7 * vSung) * (1.0 - vBlur);
+  vec3 rgb = min((ink * body + glow) * vAlpha, vec3(0.78));
   gl_FragColor = vec4(rgb, dark * vAlpha);
   #include <colorspace_fragment>
 }`;

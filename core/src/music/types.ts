@@ -82,3 +82,29 @@ export interface SearchResult<T> {
   items: T[];
   total: number;
 }
+
+export interface MusicTogetherUser {
+  userId: number;
+  nickname: string;
+  avatar?: string;
+}
+
+export interface MusicTogetherPlaying {
+  songId: number;
+  status: string;
+  progressMs: number;
+}
+
+export interface MusicTogetherRoom {
+  roomId: string;
+  inviterId: number;
+  users: MusicTogetherUser[];
+  playing?: MusicTogetherPlaying;
+  playlistIds: number[];
+}
+
+export interface MusicTogetherStatus {
+  loggedIn: boolean;
+  inRoom: boolean;
+  room?: MusicTogetherRoom;
+}

@@ -2,7 +2,7 @@ import { createHash, generateKeyPairSync } from "node:crypto";
 import http from "node:http";
 import type { AddressInfo } from "node:net";
 import { crc32, deflateSync } from "node:zlib";
-import { weapiDecrypt } from "../../src/music/crypto";
+import { eapiDecrypt, weapiDecrypt } from "../../src/music/crypto";
 
 /**
  * A stand-in for music.163.com for the tests and the offline demo: it decrypts the same "weapi" envelope with a key pair
@@ -189,6 +189,13 @@ export async function startMockNetease(options: MockNeteaseOptions = {}): Promis
   const calls: MockNetease["calls"] = [];
   const stats = { active: 0, maxActive: 0, outer: 0 };
   const failures = new Map<string, { code: number; message?: string }>();
+  type TogetherRoom = { roomId: string; inviterId: number; users: { userId: number; nickname: string }[]; songId: number; playStatus: string; progress: number; playlistIds: number[] };
+  let together: TogetherRoom | undefined;
+  const togetherInfo = () => together ? {
+    roomInfo: { roomId: together.roomId, inviterId: together.inviterId, roomUsers: together.users },
+    playingInfo: { trackId: together.songId, status: together.playStatus, progress: together.progress },
+    playlistInfo: { displayList: { result: together.playlistIds } },
+  } : null;
   const audioSeconds = options.audioSeconds ?? 30;
   const sockets = new Set<import("node:net").Socket>();
 
@@ -289,6 +296,10 @@ export async function startMockNetease(options: MockNeteaseOptions = {}): Promis
       respond.cookies.push("MUSIC_U=; Max-Age=0; Path=/", "__csrf=; Max-Age=0; Path=/");
       return { code: 200 };
     },
+    "listen/together/status/get": (_p, cookie) => {
+      if (!loggedIn(cookie)) return { code: 301, message: "需要登录" };
+      return { code: 200, data: together ? { inRoom: true, ...togetherInfo() } : { inRoom: false } };
+    },
   };
 
   const audioCache = new Map<number, Buffer>();
@@ -337,6 +348,56 @@ export async function startMockNetease(options: MockNeteaseOptions = {}): Promis
         const song = songById(id);
         if (song && !song.gone && song.fee === 0) res.writeHead(302, { location: `/audio/${id}.wav` }).end();
         else res.writeHead(302, { location: "/404" }).end();
+        return;
+      }
+      if (req.method === "POST" && url.pathname.startsWith("/eapi/")) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        const form = new URLSearchParams(Buffer.concat(chunks).toString("utf8"));
+        let request: { url: string; data: any };
+        try {
+          request = eapiDecrypt(form.get("params") ?? "") as { url: string; data: any };
+        } catch {
+          res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ code: 400, message: "bad eapi envelope" }));
+          return;
+        }
+        const route = request.url.replace(/^\/api\//, "");
+        const data = request.data && typeof request.data === "object" ? request.data : {};
+        if (route === "listen/together/room/create") {
+          const roomId = String(Date.now()).slice(-10);
+          together = { roomId, inviterId: 424242, users: [{ userId: 424242, nickname: "演示用户" }], songId: 1001, playStatus: "PAUSE", progress: 0, playlistIds: [1001, 1002, 1003] };
+        } else if (route === "listen/together/play/invitation/accept") {
+          const roomId = String(data.roomId ?? "");
+          const inviterId = Number(data.inviterId ?? 424242);
+          together = { roomId: roomId || String(Date.now()).slice(-10), inviterId, users: [{ userId: inviterId || 424242, nickname: "邀请人" }, { userId: 424243, nickname: "我" }], songId: 1001, playStatus: "PAUSE", progress: 0, playlistIds: [1001, 1002, 1003] };
+        } else if (route === "listen/together/end/v2") {
+          together = undefined;
+        } else if (route === "listen/together/heartbeat" && together) {
+          together.songId = Number(data.songId) || together.songId;
+          together.playStatus = String(data.playStatus || together.playStatus);
+          together.progress = Number(data.progress) || together.progress;
+        } else if (route === "listen/together/play/command/report" && together) {
+          try {
+            const info = JSON.parse(String(data.commandInfo ?? "{}"));
+            if (info.targetSongId > 0) together.songId = Number(info.targetSongId);
+            if (info.playStatus) together.playStatus = String(info.playStatus);
+            if (info.progress !== undefined) together.progress = Number(info.progress) || 0;
+          } catch { /* ignore malformed demo command */ }
+        } else if (route === "listen/together/room/check") {
+          if (!together) {
+            res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ code: 404, message: "房间不存在" }));
+            return;
+          }
+        } else if (route === "listen/together/sync/playlist/get") {
+          if (!together) {
+            res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify({ code: 404, message: "房间不存在" }));
+            return;
+          }
+        }
+        const body = route === "listen/together/sync/playlist/get"
+          ? { code: 200, data: { playlist: { displayList: { result: together?.playlistIds ?? [] } } } }
+          : { code: 200, data: route === "listen/together/room/create" || route === "listen/together/play/invitation/accept" || route === "listen/together/room/check" ? togetherInfo() : {} };
+        res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
         return;
       }
       const match = /^\/weapi\/(.+)$/.exec(url.pathname);

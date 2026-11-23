@@ -1,6 +1,6 @@
 import type { HttpClient } from "../net/http";
 import { Semaphore } from "../util/async";
-import { WEAPI_PUBLIC_KEY, weapi } from "./crypto";
+import { WEAPI_PUBLIC_KEY, eapiForm, weapi } from "./crypto";
 import { buildLyrics } from "./lrc";
 import type { MusicAccount, MusicLevel, MusicLyrics, MusicPlaylist, MusicSong, MusicSource, QrLogin, SearchResult } from "./types";
 
@@ -189,6 +189,8 @@ export interface NeteaseClientOptions {
   cookies: CookieJar;
   /** Site root, `https://music.163.com` unless a test points it elsewhere. */
   base?: string;
+  /** App-facing endpoint used by the listen-together room calls. */
+  eapiBase?: string;
   /** RSA public key for the request envelope; tests pass their own. */
   publicKey?: string;
   /** Called after a response changed the cookies (so the service can store them). */
@@ -197,10 +199,12 @@ export interface NeteaseClientOptions {
 
 export class NeteaseClient {
   readonly base: string;
+  readonly eapiBase: string;
   private readonly gate = new Semaphore(3);
 
   constructor(private readonly options: NeteaseClientOptions) {
     this.base = (options.base ?? "https://music.163.com").replace(/\/+$/, "");
+    this.eapiBase = (options.eapiBase ?? "https://interfacepc.music.163.com").replace(/\/+$/, "");
   }
 
   get cookies(): CookieJar {
@@ -250,6 +254,117 @@ export class NeteaseClient {
     } finally {
       release();
     }
+  }
+
+  /** App-facing eapi call, used by the listen-together room endpoints. */
+  private async eapi(path: string, payload: Json, signal?: AbortSignal, accept: number[] = []): Promise<Json> {
+    const jar = this.options.cookies;
+    const csrf = jar.get("__csrf") ?? "";
+    const header: Json = {
+      osver: jar.get("osver") ?? "Microsoft-Windows-10-Professional-build-19045-64bit",
+      deviceId: jar.get("deviceId") ?? "vitrine",
+      os: "pc",
+      appver: "3.1.17.204416",
+      versioncode: "140",
+      mobilename: "",
+      buildver: String(Date.now()).slice(0, 10),
+      resolution: "1920x1080",
+      __csrf: csrf,
+      channel: "netease",
+      requestId: `${Date.now()}_${String(Math.floor(Math.random() * 1000)).padStart(4, "0")}`,
+    };
+    const musicU = jar.get("MUSIC_U");
+    const musicA = jar.get("MUSIC_A");
+    if (musicU) header.MUSIC_U = musicU;
+    if (musicA) header.MUSIC_A = musicA;
+    const form = eapiForm(path, { ...payload, header });
+    const release = await this.gate.acquire(signal);
+    try {
+      const response = await this.options.http.request(`${this.eapiBase}/eapi/${path.replace(/^\/api\//, "")}`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/x-www-form-urlencoded",
+          referer: `${this.base}/`,
+          "user-agent": BROWSER_UA,
+          cookie: jar.header({ __remember_me: "true", os: "pc", appver: "3.1.17.204416" }),
+        },
+        body: new URLSearchParams({ params: form.params }).toString(),
+        signal,
+        timeoutMs: 15_000,
+      });
+      const chunks: Buffer[] = [];
+      let size = 0;
+      for await (const chunk of response.body) {
+        size += (chunk as Buffer).length;
+        if (size > MAX_BODY) {
+          response.body.destroy();
+          throw new NeteaseError("网易云音乐的回应太大了", 413);
+        }
+        chunks.push(chunk as Buffer);
+      }
+      if (jar.absorb(response.headers["set-cookie"])) this.options.onCookies?.();
+      if (response.status < 200 || response.status >= 300) throw new NeteaseError(`网易云音乐返回了 HTTP ${response.status}`, response.status);
+      let json: Json;
+      try {
+        json = rec(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+      } catch {
+        throw new NeteaseError("网易云音乐的回应不是有效的数据", 502);
+      }
+      const code = num(json.code, 200);
+      if (code !== 200 && !accept.includes(code)) throw new NeteaseError(describeCode(code, text(json.message) || text(json.msg)), code);
+      return json;
+    } finally {
+      release();
+    }
+  }
+
+  // -------------------------------------------------------------------------------------------- listen together
+
+  /** The state of the account's current listen-together room. */
+  async listenTogetherStatus(signal?: AbortSignal): Promise<Json> {
+    return this.call("listen/together/status/get", {}, signal);
+  }
+
+  async listenTogetherCreate(signal?: AbortSignal): Promise<Json> {
+    return this.eapi("/api/listen/together/room/create", { refer: "songplay_more" }, signal);
+  }
+
+  async listenTogetherAccept(roomId: string, inviterId: number, signal?: AbortSignal): Promise<Json> {
+    return this.eapi("/api/listen/together/play/invitation/accept", { refer: "inbox_invite", roomId, inviterId }, signal);
+  }
+
+  async listenTogetherCheck(roomId: string, signal?: AbortSignal): Promise<Json> {
+    return this.eapi("/api/listen/together/room/check", { roomId }, signal);
+  }
+
+  async listenTogetherEnd(roomId: string, signal?: AbortSignal): Promise<Json> {
+    return this.eapi("/api/listen/together/end/v2", { roomId }, signal);
+  }
+
+  async listenTogetherHeartbeat(roomId: string, songId: number, playStatus: string, progress: number, signal?: AbortSignal): Promise<Json> {
+    return this.eapi("/api/listen/together/heartbeat", { roomId, songId, playStatus, progress }, signal);
+  }
+
+  async listenTogetherPlay(
+    roomId: string,
+    command: { commandType: string; progress?: number; playStatus: string; formerSongId?: number; targetSongId?: number; clientSeq: number },
+    signal?: AbortSignal,
+  ): Promise<Json> {
+    return this.eapi("/api/listen/together/play/command/report", {
+      roomId,
+      commandInfo: JSON.stringify({
+        commandType: command.commandType,
+        progress: command.progress ?? 0,
+        playStatus: command.playStatus,
+        formerSongId: command.formerSongId ?? -1,
+        targetSongId: command.targetSongId ?? -1,
+        clientSeq: command.clientSeq,
+      }),
+    }, signal);
+  }
+
+  async listenTogetherPlaylist(roomId: string, signal?: AbortSignal): Promise<Json> {
+    return this.eapi("/api/listen/together/sync/playlist/get", { roomId }, signal);
   }
 
   // -------------------------------------------------------------------------------------------- finding music

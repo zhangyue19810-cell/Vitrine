@@ -61,7 +61,7 @@ export interface CoreOptions {
   os?: OsInfo;
   microsoftEndpoints?: MicrosoftEndpoints;
   /** Where the music service talks to (tests and the offline demo point it at a local stand-in). */
-  music?: { base?: string; publicKey?: string };
+  music?: { base?: string; eapiBase?: string; publicKey?: string };
   /** Where Minecraft lives while the settings do not say otherwise. */
   defaultRoot?: string;
   /** Launcher-owned Minecraft folders to move to `defaultRoot` when it is a new visible location. */
@@ -272,6 +272,7 @@ export class Core {
       secrets: this.secrets,
       level: () => this.settings.peek().music.quality,
       base: options.music?.base,
+      eapiBase: options.music?.eapiBase,
       publicKey: options.music?.publicKey,
     });
     const apiDeps = { http: this.http, router: this.router, log: this.logger.scope("content") };

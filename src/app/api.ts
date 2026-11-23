@@ -28,6 +28,7 @@ import type {
   MusicSong,
   MusicSource,
   MusicStatus,
+  MusicTogetherStatus,
   ModProblem,
   ModUpdate,
   PackPreview,
@@ -193,6 +194,14 @@ export interface RpcMap {
   "music.mine": [void, MusicPlaylist[]];
   "music.source": [{ id: number }, MusicSource | null];
   "music.lyrics": [{ id: number }, MusicLyrics];
+  "music.song": [{ id: number }, MusicSong | undefined];
+  "music.togetherStatus": [void, MusicTogetherStatus];
+  "music.togetherCreate": [void, MusicTogetherStatus];
+  "music.togetherAccept": [{ roomId: string; inviterId: number }, MusicTogetherStatus];
+  "music.togetherEnd": [{ roomId: string }, MusicTogetherStatus];
+  "music.togetherPlaylist": [{ roomId: string }, number[]];
+  "music.togetherHeartbeat": [{ roomId: string; songId: number; playStatus: string; progress: number }, boolean];
+  "music.togetherPlay": [{ roomId: string; commandType: "PLAY" | "PAUSE" | "GOTO" | "seek"; progress?: number; playStatus: string; formerSongId?: number; targetSongId?: number; clientSeq: number }, boolean];
 }
 
 export type { AccountType };
