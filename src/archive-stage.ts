@@ -19,7 +19,7 @@ import {
   type Style,
 } from "./choreography";
 import { roll, unroll } from "./regroup";
-import { basisOf, detailPlacement, fovOf, holePlacement, project, ringCamera, rowCamera, type CameraPreset, type DetailPlacement } from "./stage-layout";
+import { ROW_DETAIL, basisOf, detailPlacement, fovOf, holePlacement, project, ringCamera, rowCamera, type CameraPreset, type DetailPlacement } from "./stage-layout";
 import { damp, type Spring } from "./motion";
 import { eyeOf, type Eye, type KeepOut } from "./space/cosmos";
 import { haloFrame, type Halo } from "./space/halo";
@@ -1468,7 +1468,8 @@ export class ArchiveStage {
     const camera = this.cameraState();
     this.towardEye.set(camera.dir[0], camera.dir[1], camera.dir[2]);
     this.spotOf(holePlacement(camera, this.aspect), this.holeSpot);
-    this.spotOf(detailPlacement(camera, this.aspect), this.detailSpot);
+    const row = this.layout === "row";
+    this.spotOf(detailPlacement(camera, this.aspect, row ? ROW_DETAIL.share : 0.46, ROW_DETAIL.turn, row ? ROW_DETAIL.rise : 0.035), this.detailSpot);
   }
 
   private spotOf(placement: DetailPlacement, out: Pose) {

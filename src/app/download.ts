@@ -581,8 +581,8 @@ export class DownloadView {
       this.kind === "modpack"
         ? html`<span class="dl-note">整合包会安装成一个新的实例，文件多线程并行下载</span>`
         : instances.length
-          ? html`<span class="micro">安装到</span>
-              <select class="select" data-f="target" aria-label="安装到哪个实例">${instances.map((entry) => html`<option value="${entry.id}" ${entry.id === this.instanceId ? "selected" : ""}>${displayName(entry)} · ${entry.mcVersion ?? "?"}${primaryLoader(entry) ? ` · ${loaderLabel(primaryLoader(entry)!.kind)}` : ""}</option>`)}</select>`
+          ? html`<div class="dl-target"><span class="micro">安装到</span>
+              <select class="select" data-f="target" aria-label="安装到哪个实例">${instances.map((entry) => html`<option value="${entry.id}" ${entry.id === this.instanceId ? "selected" : ""}>${displayName(entry)} · ${entry.mcVersion ?? "?"}${primaryLoader(entry) ? ` · ${loaderLabel(primaryLoader(entry)!.kind)}` : ""}</option>`)}</select></div>`
           : html`<span class="chip warn">还没有实例，先回首页新建一个才能安装${KIND_LABEL[this.kind]}</span>`;
 
     const effectiveVersion = this.gameVersion === "instance" && !instance ? "all" : this.gameVersion;

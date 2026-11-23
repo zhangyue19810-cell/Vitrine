@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { newFrame, wrapSigned } from "../../src/mobius-ring";
 import { BAND, BandPath, newPlate, plateAt } from "../../src/fin-band";
-import { HOLE, ROW_VISIBLE, basisOf, detailPlacement, fovOf, holePlacement, project, ringCamera, rowCamera } from "../../src/stage-layout";
+import { HOLE, ROW_DETAIL, ROW_VISIBLE, basisOf, detailPlacement, fovOf, holePlacement, project, ringCamera, rowCamera } from "../../src/stage-layout";
 import { rowFrame } from "../../src/row-track";
 
 const ASPECTS = [4 / 3, 16 / 10, 16 / 9, 21 / 9];
@@ -95,6 +95,20 @@ describe("camera presets", () => {
       const edge = [placement.position[0] + placement.right[0] * 2.5 * placement.scale, placement.position[1] + placement.right[1] * 2.5 * placement.scale, placement.position[2] + placement.right[2] * 2.5 * placement.scale] as [number, number, number];
       const frame = rowFrame(1, newFrame());
       assert.ok(project(camera, aspect, edge).u < project(camera, aspect, frame.point).u - 0.02);
+    }
+  });
+
+  it("the pulled-out row card clears the bottom filter bar", () => {
+    for (const aspect of ASPECTS) {
+      const camera = rowCamera(aspect);
+      const placement = detailPlacement(camera, aspect, ROW_DETAIL.share, ROW_DETAIL.turn, ROW_DETAIL.rise);
+      const bottom: [number, number, number] = [
+        placement.position[0] - placement.up[0] * (3.7 / 2) * placement.scale,
+        placement.position[1] - placement.up[1] * (3.7 / 2) * placement.scale,
+        placement.position[2] - placement.up[2] * (3.7 / 2) * placement.scale,
+      ];
+      const at = project(camera, aspect, bottom);
+      assert.ok(at.v < 0.7, `aspect ${aspect}: card bottom at ${at.v.toFixed(3)} v`);
     }
   });
 

@@ -121,13 +121,13 @@ export interface DetailPlacement {
  * Where the pulled-out card hangs: a fixed place on the screen (left, a little above the middle), facing the camera with a
  * slight turn towards the middle, sized to a fixed share of the picture's height.
  */
-export function detailPlacement(preset: CameraPreset, aspect: number, share = 0.46, turn = 0.2): DetailPlacement {
+export function detailPlacement(preset: CameraPreset, aspect: number, share = 0.46, turn = 0.2, rise = 0.035): DetailPlacement {
   const { right, up, forward } = basisOf(preset);
   const width = preset.span * aspect;
   const centre: Vec3 = [
-    preset.aim[0] + right[0] * (-0.255 * width) + up[0] * (0.035 * preset.span),
-    preset.aim[1] + right[1] * (-0.255 * width) + up[1] * (0.035 * preset.span),
-    preset.aim[2] + right[2] * (-0.255 * width) + up[2] * (0.035 * preset.span),
+    preset.aim[0] + right[0] * (-0.255 * width) + up[0] * (rise * preset.span),
+    preset.aim[1] + right[1] * (-0.255 * width) + up[1] * (rise * preset.span),
+    preset.aim[2] + right[2] * (-0.255 * width) + up[2] * (rise * preset.span),
   ];
   // Pull it towards the camera a little so it never intersects the row behind it.
   const toward: Vec3 = [-forward[0], -forward[1], -forward[2]];
@@ -157,6 +157,9 @@ export function holePlacement(preset: CameraPreset, aspect: number): DetailPlace
   const cardNormal: Vec3 = [toward[0] * c + right[0] * s, toward[1] * c + right[1] * s, toward[2] * c + right[2] * s];
   return { position, right: cardRight, up, normal: cardNormal, scale: HOLE.scale };
 }
+
+/** The pulled-out row card is slightly smaller and sits a little higher than the ring detail so the filter bar never covers its actions. */
+export const ROW_DETAIL = { share: 0.445, turn: 0.2, rise: 0.05 } as const;
 
 /** The slots that must be on the screen in the row view (the card at slot 0 is pulled out). */
 export const ROW_VISIBLE = { first: 1, last: 6 };

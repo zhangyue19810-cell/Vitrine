@@ -473,9 +473,10 @@ export class App implements PerfApp {
     const from = this.tab;
     this.tab = id;
     this.renderTabs();
-    // The music page has its own controls (the capsule over the picture, the black hole): the small disc of the other pages stays out of its way.
+    // Keep the floating now-playing dock on the home ring only. The download row has its own dense controls and the
+    // music page has its own transport, so the small dock must not cover either one.
     this.dock?.setBig(id === "music");
-    this.dock?.setVisible(id !== "music");
+    this.dock?.setVisible(false);
     if (this.view === "browse") {
       if (from === "music" && id !== "music") {
         this.music?.leave();
@@ -505,6 +506,8 @@ export class App implements PerfApp {
     if (this.mode === "detail") this.exitDetail();
     this.tab = kind;
     this.renderTabs();
+    this.dock?.setBig(false);
+    this.dock?.setVisible(false);
     this.setView("browse");
     sound.play("open");
     await this.download.enter(kind, preset);
