@@ -77,6 +77,14 @@ export function installLiquidGlass(root: HTMLElement): () => void {
     if (rect.width > 0 && rect.height > 0) {
       rx = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
       ry = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+      // SDF-style normal hint: centre points straight out; the rim leans
+      // towards the pointer. CSS turns this into the moving specular angle.
+      const nx = (rx / 50) - 1;
+      const ny = (ry / 50) - 1;
+      target.style.setProperty("--liquid-nx", nx.toFixed(3));
+      target.style.setProperty("--liquid-ny", ny.toFixed(3));
+      target.style.setProperty("--liquid-edge", Math.min(1, Math.max(Math.abs(nx), Math.abs(ny))).toFixed(3));
+      target.style.setProperty("--liquid-angle", `${(Math.atan2(ny, nx) * 180 / Math.PI + 360) % 360}deg`);
     }
     if (!frame) frame = requestAnimationFrame(flush);
   };

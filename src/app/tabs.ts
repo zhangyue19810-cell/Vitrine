@@ -81,7 +81,7 @@ export function renderTabs(root: HTMLElement, active: ViewId) {
   if (!root.querySelector(".view-tab")) {
     setHtml(
       root,
-      html`${VIEW_TABS.map((tab) => html`<button class="view-tab" data-act="view-tab" data-view="${tab.id}" aria-current="false">${tab.label}</button>`)}`,
+      html`${VIEW_TABS.map((tab) => html`<button class="view-tab" data-act="view-tab" data-view="${tab.id}" aria-current="false">${tab.label}</button>`)}<span class="view-tabs-peek" aria-hidden="true">···</span>`,
     );
     root.classList.add("view-tabs-capsule");
     wireReveal(root);
