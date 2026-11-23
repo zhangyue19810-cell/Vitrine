@@ -18,6 +18,10 @@ export function markGlyph(ink = INK, accent = ACCENT, withFrame = false): string
     withFrame ? `<rect x="20" y="36" width="216" height="184" rx="38" fill="none" stroke="${ink}" stroke-opacity=".3" stroke-width="7"/>` : "",
     `<path d="${MARK_LOOPS.left}" fill="none" stroke="${ink}" stroke-opacity=".92" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>`,
     `<path d="${MARK_LOOPS.right}" fill="none" stroke="${accent}" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>`,
+    // The half-twist where the two faces of the Möbius band trade places.
+    `<path d="M107 109C119 118 137 139 149 147" fill="none" stroke="${ink}" stroke-opacity=".74" stroke-width="4.5" stroke-linecap="round"/>`,
+    `<path d="M149 109C137 118 119 139 107 147" fill="none" stroke="${accent}" stroke-opacity=".9" stroke-width="4.5" stroke-linecap="round"/>`,
+    `<circle cx="128" cy="128" r="3.2" fill="${ink}" fill-opacity=".75"/>`,
   ].join("");
 }
 
@@ -37,4 +41,4 @@ export const logo = (className = "") =>
 
 export const brandHeading = `<h1>VITRINE</h1><div>琉匣 · MINECRAFT LAUNCHER</div>`;
 
-export const PRODUCT = { name: "Vitrine", nameCn: "琉匣", tagline: "玻璃柜里的 Minecraft 启动器" } as const;
+export const PRODUCT = { name: "Vitrine", nameCn: "琉匣", author: "wind3542", tagline: "玻璃柜里的 Minecraft 启动器" } as const;

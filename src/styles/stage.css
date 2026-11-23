@@ -7,9 +7,10 @@
 
 .view-tabs {
   position: absolute;
-  left: 46px;
-  top: 94px;
+  left: 50%;
+  top: 92px;
   z-index: 7;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 1px;
@@ -24,7 +25,7 @@
 
 #stage[data-mode="detail"] .view-tabs {
   opacity: 0;
-  transform: translateX(-24px);
+  transform: translateX(calc(-50% - 24px));
   pointer-events: none;
 }
 

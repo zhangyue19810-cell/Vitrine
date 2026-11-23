@@ -4,6 +4,7 @@
   "version": "0.1.0",
   "description": "Vitrine (琉匣) — a Minecraft launcher with a glass-archive 3D interface, built on the MIT-licensed RhineLabUI frontend.",
   "license": "MIT",
+  "author": "wind3542",
   "private": true,
   "engines": {
     "node": ">=22"

@@ -1,6 +1,6 @@
 import { rpc } from "../api";
 import { guard } from "../actions";
-import { $maybe, html, setHtml } from "../dom";
+import { $maybe, html, raw, setHtml } from "../dom";
 import { formatBytes, formatDuration, formatSpeed } from "../format";
 import { toast } from "../modal";
 import { displayName } from "./../records";
@@ -64,7 +64,7 @@ export function openLaunch(taskId: string, instanceId: string) {
   sound.play("launch");
   const instance = store.instance(instanceId);
   root.innerHTML = html`<div class="launch-card">
-      <div class="head"><div class="mark" style="color:var(--ink)">${markSvg()}</div><div style="min-width:0"><div class="micro" data-f="eyebrow">LAUNCHING</div><h2 data-f="title">${instance ? displayName(instance) : "启动游戏"}</h2></div></div>
+      <div class="head"><div class="mark" style="color:var(--ink)">${raw(markSvg())}</div><div style="min-width:0"><div class="micro" data-f="eyebrow">LAUNCHING</div><h2 data-f="title">${instance ? displayName(instance) : "启动游戏"}</h2></div></div>
       <div class="launch-stages" data-f="stages"></div>
       <div data-f="progress"></div>
       <div data-f="error"></div>

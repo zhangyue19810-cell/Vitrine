@@ -1,6 +1,6 @@
 # Vitrine 琉匣
 
-Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64
+Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64。作者：**wind3542**。
 
 界面用 Three.js 写，前端基于 [RhineLabUI](https://github.com/LBEILC/RhineLabUI)（MIT）修改，后端是 TypeScript。项目与 Mojang、Microsoft 没有关联。
 

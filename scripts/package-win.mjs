@@ -107,7 +107,7 @@ const appSrc = join(stage, "app");
 await mkdir(appSrc, { recursive: true });
 await writeFile(
   join(appSrc, "package.json"),
-  JSON.stringify({ name: "vitrine", productName: appName, version: pkg.version, description: pkg.description, main: "dist-electron/main.cjs", license: pkg.license, author: "Vitrine contributors" }, null, 2),
+  JSON.stringify({ name: "vitrine", productName: appName, version: pkg.version, description: pkg.description, main: "dist-electron/main.cjs", license: pkg.license, author: pkg.author ?? "wind3542" }, null, 2),
 );
 await cp(join(root, "dist"), join(appSrc, "dist"), { recursive: true, filter: (source) => !source.endsWith(".map") });
 await cp(join(root, "dist-electron"), join(appSrc, "dist-electron"), { recursive: true });
@@ -142,8 +142,8 @@ log("patching Vitrine.exe (icon, version info)");
     info.setStringValues(language, {
       FileDescription: "Vitrine 琉匣 — Minecraft 启动器",
       ProductName: "Vitrine 琉匣",
-      CompanyName: "Vitrine",
-      LegalCopyright: "MIT License",
+      CompanyName: "wind3542",
+      LegalCopyright: "MIT License · wind3542",
       OriginalFilename: `${appName}.exe`,
       InternalName: appName,
       FileVersion: pkg.version,

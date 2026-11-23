@@ -81,8 +81,8 @@ VIAddVersionKey /LANG=2052 "ProductName" "Vitrine 琉匣"
 VIAddVersionKey /LANG=2052 "ProductVersion" "${version}"
 VIAddVersionKey /LANG=2052 "FileDescription" "Vitrine 琉匣 安装程序"
 VIAddVersionKey /LANG=2052 "FileVersion" "${version}"
-VIAddVersionKey /LANG=2052 "CompanyName" "Vitrine contributors"
-VIAddVersionKey /LANG=2052 "LegalCopyright" "MIT License"
+VIAddVersionKey /LANG=2052 "CompanyName" "wind3542"
+VIAddVersionKey /LANG=2052 "LegalCopyright" "MIT License · wind3542"
 Page license
 Page directory
 Page instfiles
@@ -94,7 +94,7 @@ ${fileLines.join("\n")}
   WriteRegStr HKCU "Software\\Vitrine" "InstallDir" "$INSTDIR"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "DisplayName" "Vitrine 琉匣"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "DisplayVersion" "${version}"
-  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "Publisher" "Vitrine contributors"
+  WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "Publisher" "wind3542"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "DisplayIcon" "$INSTDIR\\Vitrine.exe"
   WriteRegStr HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "UninstallString" '"$INSTDIR\\Uninstall.exe"'
   WriteRegDWORD HKCU "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Vitrine" "NoModify" 1
