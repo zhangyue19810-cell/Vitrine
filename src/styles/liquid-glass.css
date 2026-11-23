@@ -1407,3 +1407,307 @@
   font-size: 11px;
   font-weight: 700;
 }
+
+/* ------------------------------------------------------------------------------------------ optical follow, caustics and motion */
+/*
+ * The final glass pass. A single pointer hotspot is not enough to read as a
+ * refractive sheet: the highlight is now split into a small, nearly white
+ * specular nucleus, a broader warm caustic and a thin displaced lens streak.
+ * The conic edge keeps a very quiet red/blue fringe, like the rim of a lens.
+ * Everything stays on compositor-friendly transforms or opacity. Reduced
+ * motion keeps the material but never animates it.
+ */
+.liquid-target > .liquid-sheen {
+  background:
+    var(--liquid-grain),
+    radial-gradient(210px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 251, 241, 0.22), rgba(255, 241, 214, 0.07) 34%, transparent 64%),
+    radial-gradient(74px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 255, 255, 0.33), transparent 72%),
+    radial-gradient(180px ellipse at calc(var(--liquid-x, 50%) + 9%) calc(var(--liquid-y, 18%) + 7%), rgba(var(--accent-rgb), 0.17), transparent 70%),
+    linear-gradient(calc(var(--liquid-angle, 135deg) + 90deg), transparent 22%, rgba(255, 249, 234, 0.105) 45%, transparent 64%),
+    linear-gradient(118deg, transparent 14%, rgba(var(--accent-rgb), 0.085) 48%, transparent 82%);
+  background-size: 160px 160px, auto, auto, auto, auto, auto;
+  background-blend-mode: soft-light, screen, screen, screen, screen, normal;
+  filter: saturate(1.07);
+  transition: opacity 0.26s ease, filter 0.36s var(--ease);
+}
+
+:root[data-dark-surface="true"] .liquid-target > .liquid-sheen {
+  background:
+    var(--liquid-grain),
+    radial-gradient(210px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 250, 237, 0.2), rgba(255, 236, 198, 0.065) 34%, transparent 64%),
+    radial-gradient(76px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 255, 255, 0.36), transparent 72%),
+    radial-gradient(190px ellipse at calc(var(--liquid-x, 50%) + 9%) calc(var(--liquid-y, 18%) + 7%), rgba(var(--accent-rgb), 0.2), transparent 70%),
+    linear-gradient(calc(var(--liquid-angle, 135deg) + 90deg), transparent 22%, rgba(255, 248, 232, 0.11) 45%, transparent 64%),
+    linear-gradient(118deg, transparent 14%, rgba(var(--accent-rgb), 0.1) 48%, transparent 82%);
+  background-size: 160px 160px, auto, auto, auto, auto, auto;
+  background-blend-mode: soft-light, screen, screen, screen, screen, normal;
+}
+
+.liquid-target > .liquid-sheen::before {
+  background:
+    radial-gradient(ellipse 74px 25px at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 255, 252, 0.3), transparent 72%),
+    radial-gradient(ellipse 170px 31px at calc(var(--liquid-x, 50%) + 8%) calc(var(--liquid-y, 18%) + 9%), rgba(255, 224, 166, 0.115), transparent 76%),
+    linear-gradient(calc(var(--liquid-angle, 135deg) + 90deg), transparent 24%, rgba(255, 252, 241, 0.2) 47%, transparent 68%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 252, 242, 0.24),
+    inset 0 1px 15px rgba(255, 255, 255, 0.1),
+    inset 0 -10px 22px rgba(0, 0, 0, 0.22);
+  opacity: 0.86;
+}
+
+.liquid-target > .liquid-sheen::after {
+  background:
+    radial-gradient(ellipse 190px 140px at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 246, 226, 0.17), transparent 71%),
+    conic-gradient(
+      from var(--liquid-angle, 135deg),
+      rgba(255, 92, 138, 0.2),
+      transparent 10%,
+      transparent 33%,
+      rgba(94, 198, 255, 0.17) 47%,
+      transparent 61%,
+      transparent 81%,
+      rgba(255, 216, 135, 0.2) 91%,
+      transparent
+    );
+  opacity: 0.66;
+  transform-origin: center;
+  animation: liquid-fringe-settle 0.58s var(--ease) both;
+}
+
+.liquid-hot > .liquid-sheen::before {
+  animation: liquid-lens-settle 0.48s var(--ease) both;
+}
+
+.liquid-hot > .liquid-sheen::after {
+  animation: liquid-fringe-settle 0.58s var(--ease) both, liquid-fringe-drift 7.5s 0.58s ease-in-out infinite alternate;
+}
+
+@keyframes liquid-lens-settle {
+  from { transform: scale(0.992); opacity: 0.48; }
+  to { transform: scale(1); opacity: 0.86; }
+}
+
+@keyframes liquid-fringe-settle {
+  from { transform: scale(0.985); opacity: 0.3; }
+  to { transform: scale(1); opacity: 0.66; }
+}
+
+@keyframes liquid-fringe-drift {
+  from { transform: rotate(-1.3deg) scale(1.002); }
+  to { transform: rotate(1.3deg) scale(1.016); }
+}
+
+/* A narrow highlight travels around the capsule rim. It reads as a reflection
+ * of the room moving across a bevelled glass edge, not as a loading shimmer. */
+.view-tabs::after,
+.system-nav::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  z-index: 2;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  background:
+    linear-gradient(
+      108deg,
+      transparent 25%,
+      rgba(255, 255, 255, 0.03) 35%,
+      rgba(255, 241, 207, 0.42) 46%,
+      rgba(255, 212, 137, 0.72) 49%,
+      rgba(255, 239, 203, 0.2) 54%,
+      transparent 65%
+    ) 0 0 / 260% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  opacity: 0.22;
+  animation: liquid-rim-travel 8.5s ease-in-out infinite;
+}
+
+@keyframes liquid-rim-travel {
+  0%, 15% { background-position: 190% 0; opacity: 0.14; }
+  42%, 62% { background-position: 35% 0; opacity: 0.78; }
+  88%, 100% { background-position: -150% 0; opacity: 0.14; }
+}
+
+/* The divider and eye-brow highlights drift at the same slow pace as the
+ * sheen, giving large panels a live but never busy inner light. */
+.callout-rule::after {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--accent-rgb), 0.38) 0%,
+    rgba(255, 246, 226, 0.22) 34%,
+    rgba(255, 241, 204, 0.95) 50%,
+    rgba(var(--accent-rgb), 0.38) 66%,
+    rgba(var(--accent-rgb), 0.2) 100%
+  ) 0 0 / 210% 100%;
+  animation: liquid-rule-glow 9s ease-in-out infinite;
+}
+
+@keyframes liquid-rule-glow {
+  0%, 18% { background-position: 120% 0; opacity: 0.55; }
+  50%, 68% { background-position: 40% 0; opacity: 0.95; }
+  100% { background-position: -120% 0; opacity: 0.55; }
+}
+
+.callout::after {
+  background:
+    radial-gradient(circle at 42% 45%, rgba(255, 244, 220, 0.16), transparent 38%),
+    radial-gradient(circle, rgba(var(--accent-rgb), 0.3), transparent 68%);
+  filter: blur(19px) saturate(1.08);
+  animation-duration: 11s;
+}
+
+/* Springy travel for the tabs: the active button leads, the rest arrive a
+ * few milliseconds later in reading order. */
+.view-tabs .view-tab {
+  transition-delay: 0s;
+}
+
+.view-tabs.view-tabs-open .view-tab {
+  transition-delay: calc(var(--tab-index, 0) * 18ms);
+}
+
+/* Gentle lift on the cards. Transform and shadow only; borders and text keep
+ * their layout so tables and long mod lists never jitter. */
+.card,
+.stat,
+.setting {
+  transition:
+    transform 0.4s cubic-bezier(0.18, 1.32, 0.28, 1),
+    box-shadow 0.4s var(--ease),
+    border-color 0.28s var(--ease),
+    background 0.28s var(--ease);
+}
+
+.mod-row {
+  transition:
+    transform 0.42s cubic-bezier(0.18, 1.32, 0.28, 1),
+    box-shadow 0.4s var(--ease),
+    border-color 0.28s var(--ease),
+    background 0.28s var(--ease);
+}
+
+@media (hover: hover) {
+  .card:hover,
+  .stat:hover,
+  .setting:hover,
+  .mod-row:hover {
+    transform: translate3d(0, -2px, 0);
+  }
+
+  .card:hover,
+  .stat:hover {
+    border-color: rgba(var(--accent-rgb), 0.4);
+    box-shadow:
+      0 22px 50px rgba(0, 0, 0, 0.23),
+      0 0 0 1px rgba(var(--rim-rgb), 0.08),
+      inset 0 1px 0 rgba(255, 249, 231, 0.64),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.22),
+      0 0 26px rgba(var(--accent-rgb), 0.075);
+  }
+}
+
+.btn {
+  transition:
+    transform 0.34s cubic-bezier(0.18, 1.34, 0.28, 1),
+    border-color 0.24s var(--ease),
+    background 0.24s var(--ease),
+    box-shadow 0.34s var(--ease),
+    color 0.2s;
+}
+
+@media (hover: hover) {
+  .btn:hover:not(:disabled) {
+    transform: translate3d(0, -1px, 0);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 249, 231, 0.66),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+      0 10px 25px rgba(0, 0, 0, 0.14),
+      0 0 20px rgba(var(--accent-rgb), 0.09);
+  }
+}
+
+/* Preserve the deliberate press squeeze from the existing rules. */
+.btn:active:not(:disabled),
+.callout-actions .btn:active:not(:disabled) {
+  transform: scale(0.965) translateY(1px);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .view-tabs::after,
+  .system-nav::after,
+  .callout-rule::after,
+  .callout::after {
+    animation: none;
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-target > .liquid-sheen::before,
+  .liquid-target > .liquid-sheen::after,
+  .view-tabs::after,
+  .system-nav::after,
+  .callout-rule::after,
+  .callout::after {
+    animation: none !important;
+  }
+
+  .view-tabs.view-tabs-open .view-tab {
+    transition-delay: 0s;
+  }
+
+  .card,
+  .stat,
+  .setting,
+  .mod-row,
+  .btn {
+    transition-duration: 0.001s;
+    transition-delay: 0s;
+  }
+
+  .card:hover,
+  .stat:hover,
+  .setting:hover,
+  .mod-row:hover,
+  .btn:hover:not(:disabled),
+  .btn:active:not(:disabled),
+  .callout-actions .btn:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+#stage.reduce-motion .liquid-target > .liquid-sheen::before,
+#stage.reduce-motion .liquid-target > .liquid-sheen::after,
+#stage.reduce-motion .view-tabs::after,
+#stage.reduce-motion .system-nav::after,
+#stage.reduce-motion .callout-rule::after,
+#stage.reduce-motion .callout::after {
+  animation: none !important;
+}
+
+#stage.reduce-motion .view-tabs.view-tabs-open .view-tab {
+  transition-delay: 0s;
+}
+
+#stage.reduce-motion .card,
+#stage.reduce-motion .stat,
+#stage.reduce-motion .setting,
+#stage.reduce-motion .mod-row,
+#stage.reduce-motion .btn {
+  transition-duration: 0.001s;
+  transition-delay: 0s;
+}
+
+#stage.reduce-motion .card:hover,
+#stage.reduce-motion .stat:hover,
+#stage.reduce-motion .setting:hover,
+#stage.reduce-motion .mod-row:hover,
+#stage.reduce-motion .btn:hover:not(:disabled),
+#stage.reduce-motion .btn:active:not(:disabled),
+#stage.reduce-motion .callout-actions .btn:active:not(:disabled) {
+  transform: none;
+}

@@ -7,6 +7,7 @@ import "./styles/sheets.css";
 import "./styles/boot.css";
 import "./styles/music-hud.css";
 import "./styles/liquid-glass.css";
+import "./styles/typography.css";
 import { startApp } from "./app/app";
 
 startApp().catch((error: unknown) => {

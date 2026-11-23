@@ -16,12 +16,18 @@ together with the following third-party work. Their licences stay with them.
    MiSans font licence. See public/fonts/NOTICE.txt and public/fonts/MiSans-license.pdf
    (in the packaged app: resources/app.asar → dist/fonts/).
 
-3. three.js 0.183 — https://threejs.org — MIT License, Copyright (c) 2010-2026 three.js authors.
+3. Source Serif 4 — Adobe — https://github.com/adobe-fonts/source-serif
+   SIL Open Font License 1.1, Copyright 2014 The Source Serif 4 Project Authors.
+   Distributed unmodified as public/fonts/vitrine-display/source-serif-4-latin.woff2 and
+   source-serif-4-italic-latin.woff2; the licence text is next to the fonts in
+   public/fonts/vitrine-display/OFL-SourceSerif4.txt.
 
-4. @kitlangton/rolling-number 0.4.1 — MIT License, Copyright (c) 2026 Kit Langton.
+4. three.js 0.183 — https://threejs.org — MIT License, Copyright (c) 2010-2026 three.js authors.
+
+5. @kitlangton/rolling-number 0.4.1 — MIT License, Copyright (c) 2026 Kit Langton.
    Licence text: public/licenses/rolling-number.txt.
 
-5. Bundled into the desktop application's core (esbuild, dist-electron/main.cjs):
+6. Bundled into the desktop application's core (esbuild, dist-electron/main.cjs):
    yauzl 3.x (MIT, Josh Wolfe) · yazl 3.x (MIT, Josh Wolfe) · pend (MIT, Andrew Kelley) · buffer-crc32 (MIT, Brian J. Brennan)
    · smol-toml 1.x (BSD-3-Clause, Squirrel Chat) · https-proxy-agent 7.x and agent-base 7.x (MIT, Nathan Rajlich)
    · debug 4.x (MIT, Josh Junon and contributors) · ms 2.x (MIT, Vercel).
@@ -30,10 +36,10 @@ together with the following third-party work. Their licences stay with them.
    The licence texts of the bundled packages (including three.js and rolling-number) are in THIRD-PARTY-LICENSES.txt
    (regenerate with: node scripts/gen-licenses.mjs).
 
-6. Electron 45 (MIT, Copyright (c) Electron contributors and GitHub Inc.) and Chromium — the runtime shipped in
+7. Electron 45 (MIT, Copyright (c) Electron contributors and GitHub Inc.) and Chromium — the runtime shipped in
    the Windows package. Their licences are in the package: LICENSE and LICENSES.chromium.html.
 
-7. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
+8. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
    BMCLAPI (https://bmclapi2.bangbang93.com), MCIM (https://mod.mcimirror.top), Modrinth, CurseForge,
    Fabric / Quilt / Forge / NeoForge / OptiFine metadata and download hosts.
    Please respect their terms of use and rate limits.

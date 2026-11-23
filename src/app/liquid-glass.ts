@@ -5,6 +5,10 @@
  * layer is created lazily on first entry. One delegated pointer listener and
  * one animation frame update the highlight, so a long mod list does not add
  * hundreds of listeners or permanent compositor layers.
+ *
+ * The highlight eases toward the pointer instead of snapping. That small
+ * lag is what makes the surface feel like a viscous lens: the reflection
+ * arrives a few milliseconds late, then settles without stepping at 144 Hz.
  */
 
 const LIQUID_TARGET = [
@@ -18,6 +22,8 @@ const LIQUID_TARGET = [
   ".card",
   ".notice",
   ".problem",
+  ".stat",
+  ".setting",
   ".mod-row",
   ".mod-update-row",
   ".mod-problem-trigger",
@@ -34,24 +40,66 @@ const LIQUID_TARGET = [
   ".chip",
   ".toggle",
   ".menu",
+  ".together-room",
 ].join(",");
+
+/** The time constant of the optical follow; smaller is snappier. */
+const FOLLOW_MS = 52;
 
 export function installLiquidGlass(root: HTMLElement): () => void {
   let active: HTMLElement | null = null;
-  let rx = 50;
-  let ry = 18;
+  let targetX = 50;
+  let targetY = 18;
+  let currentX = 50;
+  let currentY = 18;
   let frame = 0;
+  let lastTime = 0;
+  const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
+  let reduced = reducedQuery.matches;
+
+  const paint = () => {
+    if (!active) return;
+    active.style.setProperty("--liquid-x", `${currentX.toFixed(2)}%`);
+    active.style.setProperty("--liquid-y", `${currentY.toFixed(2)}%`);
+    // A normal points out of the glass at the centre and leans toward the
+    // pointer at the rim. CSS turns this into the moving specular angle.
+    const nx = currentX / 50 - 1;
+    const ny = currentY / 50 - 1;
+    const radius = Math.min(1, Math.hypot(nx, ny));
+    active.style.setProperty("--liquid-nx", nx.toFixed(3));
+    active.style.setProperty("--liquid-ny", ny.toFixed(3));
+    active.style.setProperty("--liquid-edge", radius.toFixed(3));
+    active.style.setProperty("--liquid-centre", (1 - radius).toFixed(3));
+    active.style.setProperty("--liquid-angle", `${(Math.atan2(ny, nx) * 180 / Math.PI + 360) % 360}deg`);
+  };
 
   const clear = () => {
     active?.classList.remove("liquid-hot");
     active = null;
+    cancelAnimationFrame(frame);
+    frame = 0;
+    lastTime = 0;
   };
 
-  const flush = () => {
+  const flush = (now: number) => {
     frame = 0;
     if (!active) return;
-    active.style.setProperty("--liquid-x", `${rx.toFixed(2)}%`);
-    active.style.setProperty("--liquid-y", `${ry.toFixed(2)}%`);
+    const elapsed = lastTime ? Math.min(64, Math.max(1, now - lastTime)) : 16.667;
+    lastTime = now;
+    const follow = reduced ? 1 : 1 - Math.exp(-elapsed / FOLLOW_MS);
+    currentX += (targetX - currentX) * follow;
+    currentY += (targetY - currentY) * follow;
+    const settled = Math.abs(targetX - currentX) < 0.03 && Math.abs(targetY - currentY) < 0.03;
+    if (settled) {
+      currentX = targetX;
+      currentY = targetY;
+    }
+    paint();
+    if (!settled) frame = requestAnimationFrame(flush);
+  };
+
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(flush);
   };
 
   const onPointerMove = (event: PointerEvent) => {
@@ -61,6 +109,12 @@ export function installLiquidGlass(root: HTMLElement): () => void {
       clear();
       return;
     }
+
+    const rect = target.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    targetX = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
+    targetY = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
+
     if (target !== active) {
       clear();
       active = target;
@@ -72,37 +126,40 @@ export function installLiquidGlass(root: HTMLElement): () => void {
         sheen.setAttribute("aria-hidden", "true");
         target.prepend(sheen);
       }
+      // The light is already where the pointer crossed the glass; only its
+      // movement inside the surface gets the viscous follow.
+      currentX = targetX;
+      currentY = targetY;
+      lastTime = 0;
+      paint();
+      return;
     }
-    const rect = target.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-      rx = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
-      ry = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
-      // SDF-style normal hint: centre points straight out; the rim leans
-      // towards the pointer. CSS turns this into the moving specular angle.
-      const nx = (rx / 50) - 1;
-      const ny = (ry / 50) - 1;
-      target.style.setProperty("--liquid-nx", nx.toFixed(3));
-      target.style.setProperty("--liquid-ny", ny.toFixed(3));
-      target.style.setProperty("--liquid-edge", Math.min(1, Math.max(Math.abs(nx), Math.abs(ny))).toFixed(3));
-      target.style.setProperty("--liquid-angle", `${(Math.atan2(ny, nx) * 180 / Math.PI + 360) % 360}deg`);
-    }
-    if (!frame) frame = requestAnimationFrame(flush);
+
+    schedule();
   };
 
-  const onLeave = () => {
-    cancelAnimationFrame(frame);
-    frame = 0;
-    clear();
+  const onLeave = () => clear();
+
+  const onReducedChange = () => {
+    reduced = reducedQuery.matches;
+    if (reduced && active) {
+      currentX = targetX;
+      currentY = targetY;
+      paint();
+    }
   };
 
   root.addEventListener("pointermove", onPointerMove, { passive: true });
   root.addEventListener("pointerleave", onLeave);
+  root.addEventListener("pointercancel", onLeave);
   window.addEventListener("blur", onLeave);
+  reducedQuery.addEventListener("change", onReducedChange);
   return () => {
-    cancelAnimationFrame(frame);
     clear();
     root.removeEventListener("pointermove", onPointerMove);
     root.removeEventListener("pointerleave", onLeave);
+    root.removeEventListener("pointercancel", onLeave);
     window.removeEventListener("blur", onLeave);
+    reducedQuery.removeEventListener("change", onReducedChange);
   };
 }

@@ -564,7 +564,7 @@ export class DownloadView {
   private renderChrome() {
     setHtml(
       this.f("sources"),
-      html`<span class="chip accent" title="一次搜索同时查询 Modrinth 和 CurseForge，结果合并排序">双源融合</span>${
+      html`${
         this.warnings.length ? html`<span class="chip warn" title="${this.warnings.join("\n")}">部分来源不可用</span>` : ""
       }`,
     );
@@ -610,7 +610,6 @@ export class DownloadView {
         </select></label>
         ${loaderFilter}
         ${this.kind === "mod" ? html`<label class="check dl-check"><input type="checkbox" data-f="deps" ${this.autoDependencies ? "checked" : ""} /> 智能安装前置</label>` : ""}
-        <span class="chip accent" title="项目简介会尝试翻译成中文，服务不可用时显示原文">介绍自动汉化</span>
         ${this.versionsLoaded ? "" : html`<span class="micro muted">正在读取版本列表…</span>`}`,
     );
     const versionSelect = bar.querySelector<HTMLSelectElement>("[data-f='game-version']");

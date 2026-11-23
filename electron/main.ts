@@ -69,6 +69,11 @@ selectDataDir();
 
 protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
+// If a Windows driver, VM or remote-desktop session cannot provide a hardware
+// WebGL context, let Chromium fall back to SwiftShader instead of dropping the
+// whole 3D shelf. The quality governor already pins SwiftShader to the minimal
+// tier, so this is a compatibility path rather than a second fast renderer.
+app.commandLine.appendSwitch("enable-unsafe-swiftshader");
 if (process.platform === "win32") app.setAppUserModelId("app.vitrine.launcher");
 
 if (!SMOKE && !app.requestSingleInstanceLock()) {

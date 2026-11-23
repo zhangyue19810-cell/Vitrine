@@ -265,7 +265,12 @@ export class App implements PerfApp {
     this.stage.dataset.scene = this.host.status;
     this.stage.dataset.ring = this.host.stage ? "on" : "off";
     this.syncRail();
-    if (this.host.status === "failed") toast(`无法启动 3D 画面：${this.host.error ?? "未知原因"}。仍可以用键盘、右侧按钮和搜索操作。`, "error", 10_000);
+    if (this.host.status === "failed") {
+      const reason = /webgl|context|gpu/i.test(this.host.error ?? "")
+        ? "没有可用的 WebGL 图形上下文（常见于显卡驱动异常、远程桌面或系统关闭了硬件加速）"
+        : (this.host.error ?? "未知原因");
+      toast(`无法启动 3D 画面：${reason}。已切换到兼容界面，键盘、右侧按钮和搜索仍可用。`, "error", 12_000);
+    }
     this.perf.sceneReady();
     splash?.status("准备就绪", 1);
 

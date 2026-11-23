@@ -63,10 +63,13 @@ export function themeEnvironment(scene: THREE.Scene, renderer: THREE.WebGLRender
   (scene.background as THREE.Color).copy(baseline.background).lerp(background, amount).lerp(deepBackground, deep);
   if (scene.fog && baseline.fog) scene.fog.color.copy(baseline.fog).lerp(mistColor, amount).lerp(deepMist, deep);
   if (baseline.floor) baseline.floor.material.color.copy(baseline.floor.color).lerp(floorColor, amount).lerp(deepBackground, deep);
-  scene.environmentIntensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.intensity, .32, amount), .22, deep);
-  renderer.toneMappingExposure = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.exposure, .98, amount), 1.02, deep);
+  // The dark look still needs a living environment: reduce the studio only
+  // enough to keep the black-gold contrast, never so far that clearcoat and
+  // titanium reflections collapse into flat silhouettes.
+  scene.environmentIntensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.intensity, .43, amount), .27, deep);
+  renderer.toneMappingExposure = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.exposure, 1.02, amount), 1.06, deep);
   for (const { light, intensity, color } of baseline.lights) {
-    light.intensity = intensity * (1 - .35 * amount) * (1 - .1 * deep);
-    light.color.copy(color).lerp(warmLight, .55 * amount);
+    light.intensity = intensity * (1 - .28 * amount) * (1 - .08 * deep);
+    light.color.copy(color).lerp(warmLight, .6 * amount);
   }
 }

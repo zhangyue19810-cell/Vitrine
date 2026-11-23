@@ -831,7 +831,14 @@ export class ArchiveScene {
     this.light.shadow.radius = 4;
     const floor = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshStandardMaterial({ color: "#d8c9b9", roughness: 0.95 }),
+      new THREE.MeshPhysicalMaterial({
+        color: "#d8c9b9",
+        roughness: 0.72,
+        metalness: 0.04,
+        clearcoat: 0.22,
+        clearcoatRoughness: 0.5,
+        envMapIntensity: 0.82,
+      }),
     );
     floor.rotation.x = -Math.PI / 2;
     floor.name = "archive-floor";
@@ -864,9 +871,9 @@ export class ArchiveScene {
     this.composer.addPass(this.bokeh);
     this.bloom = new UnrealBloomPass(
       new THREE.Vector2(Math.max(1, container.clientWidth), Math.max(1, container.clientHeight)),
-      0.22,
-      0.3,
-      0.88,
+      0.27,
+      0.36,
+      0.84,
     );
     this.bloom.enabled = false;
     this.composer.addPass(this.bloom);
@@ -916,7 +923,7 @@ export class ArchiveScene {
         mat.attenuationDistance = 2.6;
         mat.clearcoat = 0.72;
         mat.clearcoatRoughness = 0.12;
-        mat.envMapIntensity = 1.18;
+        mat.envMapIntensity = 1.5;
       }
       if (name === "Internal_Ceramic") {
         mat.color.set(this.lightingLook === "refined" ? "#a49789" : "#b8aa9c");
@@ -936,7 +943,7 @@ export class ArchiveScene {
         mat.ior = 1.45;
         mat.clearcoat = 0.75;
         mat.clearcoatRoughness = 0.15;
-        mat.envMapIntensity = 1.12;
+        mat.envMapIntensity = 1.42;
       }
       if (name === "Optical_Diffuser") {
         mat.color.set("#cbbda9");
@@ -967,7 +974,7 @@ export class ArchiveScene {
         mat.roughness = 0.18;
         mat.clearcoat = 0.4;
         mat.clearcoatRoughness = 0.1;
-        mat.envMapIntensity = 1.6;
+        mat.envMapIntensity = 2.15;
       }
       if (name === "Index_Inlay") {
         mat.color.set("#c6a05f");
@@ -975,7 +982,7 @@ export class ArchiveScene {
         mat.roughness = 0.26;
         mat.clearcoat = 0.62;
         mat.clearcoatRoughness = 0.16;
-        mat.envMapIntensity = 1.24;
+        mat.envMapIntensity = 1.66;
       }
       configureInternalOptics(name, mat);
       if (name === "Carbon_Ink") continue;
@@ -1008,7 +1015,7 @@ export class ArchiveScene {
         arrayMat.color.set("#e8dfd2");
         arrayMat.clearcoat = 0.66;
         arrayMat.clearcoatRoughness = 0.16;
-        arrayMat.envMapIntensity = 1.12;
+        arrayMat.envMapIntensity = 1.44;
         arrayMat.onBeforeCompile = (shader) => {
           shader.vertexShader =
             "varying float vPanelHeight;\n" + shader.vertexShader;
@@ -1034,7 +1041,7 @@ export class ArchiveScene {
         arrayMat.roughness = 0.3;
         arrayMat.clearcoat = 0.46;
         arrayMat.clearcoatRoughness = 0.19;
-        arrayMat.envMapIntensity = 1.08;
+        arrayMat.envMapIntensity = 1.34;
       }
       if (name === "Index_Inlay") {
         arrayMat.color.set("#c6a05f");
@@ -1042,7 +1049,7 @@ export class ArchiveScene {
         arrayMat.roughness = 0.28;
         arrayMat.clearcoat = 0.6;
         arrayMat.clearcoatRoughness = 0.16;
-        arrayMat.envMapIntensity = 1.2;
+        arrayMat.envMapIntensity = 1.56;
       }
       if (name === "Titanium_Fasteners") {
         arrayMat.color.set("#9fa9a8");
@@ -1050,7 +1057,7 @@ export class ArchiveScene {
         arrayMat.roughness = 0.2;
         arrayMat.clearcoat = 0.32;
         arrayMat.clearcoatRoughness = 0.1;
-        arrayMat.envMapIntensity = 1.36;
+        arrayMat.envMapIntensity = 1.9;
       }
       this.appearance.register(name, mat, arrayMat);
       this.themeAttribute ??= new THREE.InstancedBufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage);

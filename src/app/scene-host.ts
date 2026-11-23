@@ -130,6 +130,7 @@ export class SceneHost {
   private async create(): Promise<boolean> {
     this.status = "loading";
     this.error = undefined;
+    console.info(`[vitrine] WebGL renderer: ${detectRendererName()}`);
     await this.loadFonts();
     // Most machines get the full-quality context. Some newer GPU drivers reject the high-performance/MSAA request
     // specifically; retry with a conservative default context before giving up and showing the DOM-only view.

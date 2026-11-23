@@ -244,7 +244,6 @@ export function openBrowse(options: { kind?: ContentKind; instanceId?: string; q
             </select></label>`
           : ""}
         ${state.kind === "mod" ? html`<label class="check br-check"><input type="checkbox" data-f="deps" ${state.autoDependencies ? "checked" : ""} /> 智能安装前置</label>` : ""}
-        <span class="chip accent" title="项目简介会尝试翻译成中文，服务不可用时显示原文">介绍自动汉化</span>
         ${state.versionsLoaded ? "" : html`<span class="micro muted">正在读取版本列表…</span>`}`,
     );
     f<HTMLSelectElement>("game-version").value = effectiveVersion;

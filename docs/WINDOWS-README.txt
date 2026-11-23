@@ -73,8 +73,13 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
   · 崩溃诊断最上方会列出“最先报错的模组”和原始报错行；如果这里没有模组名，可以用报错行里的
     关键词搜索。模组冲突会按 mod 声明的 breaks / incompatible 版本范围判断，已安装版本不在
     范围内时不会再显示“不兼容”。
-  · 窗口黑屏 / 3D 画面异常：先把 设置 → 外观与性能 → 3D 画质 调到“低”；
-    还不行就在快捷方式的目标后面加上  --disable-gpu  再打开。
+  · 3D 画面未启动，或提示“没有可用的 WebGL 图形上下文”：这是显卡 / 浏览器没有创建
+    WebGL 上下文，不是存档或模组损坏。先更新显卡驱动，确认 Windows 设置 → 系统 → 屏幕 →
+    显示卡 中开启了硬件加速，并尽量在本机而不是远程桌面 / 虚拟机里运行；再把
+    设置 → 外观与性能 → 3D 画质 调到“低”后重启。新版在硬件 WebGL 不可用时会尝试
+    SwiftShader 软件兜底并自动使用最低画质，CPU 占用会升高但界面仍可操作。
+    日志中搜索“[vitrine] WebGL renderer”可以看到实际使用的渲染器。不要为了 3D 画面给
+    快捷方式加 --disable-gpu，它会强制关闭硬件渲染。
   · 下载游戏主程序长时间速度为 0：15 秒没有任何数据时会自动换下载源；如果所有源
     都失败，请检查系统代理是否可用，或在 设置 → 下载 里分别试一次“只用官方源”和
     “只用镜像源”。下载任务详情里会列出实际尝试的主机顺序。
@@ -96,5 +101,5 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
 
 九、许可
   Vitrine 以 MIT 许可发布（LICENSE.vitrine.txt）。界面基于 LBEILC 的 RhineLabUI（MIT）。
-  第三方组件、字体（MiSans）与 Electron / Chromium 的许可见 NOTICE.txt、THIRD-PARTY-LICENSES.txt、
+  第三方组件、字体（MiSans、Source Serif 4）与 Electron / Chromium 的许可见 NOTICE.txt、THIRD-PARTY-LICENSES.txt、
   LICENSE 与 LICENSES.chromium.html。
