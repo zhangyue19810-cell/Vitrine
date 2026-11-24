@@ -1,150 +1,12 @@
 /*
- * Cinematic interface layer.
+ * Vitrine's cinematic interface layer.
  *
- * The WebGL carousel supplies the actual Minecraft panorama. This stylesheet
- * gives the DOM chrome the same depth: a soft-focus fallback backdrop, moving
- * diffuse light, Gaussian page transitions, a staggered page entrance, gently
- * tilted glass panels and a travelling gradient at their rims.
+ * There is deliberately no page-transition Gaussian blur here: transitions are
+ * carried by opacity, depth and a staggered spring instead, so the interface
+ * never becomes hard to read while the scene is changing.
  */
 
-/* Curved media wells inside the compatibility browser. */
-.dl-flat-card {
-  border-radius: 16px;
-}
-
-/* ------------------------------------------------------------------------------------------ world and atmosphere */
-
-.world-backdrop {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  opacity: 0;
-  background: radial-gradient(ellipse 80% 70% at 50% 44%, rgba(16, 13, 9, 0.25), transparent 70%);
-  transition: opacity 0.65s var(--ease);
-}
-
-#stage[data-scene="failed"] .world-backdrop,
-#stage[data-scene="off"] .world-backdrop {
-  opacity: 1;
-}
-
-/* The Minecraft carousel belongs to the home stage only. */
-#stage[data-view="browse"] .world-backdrop,
-#stage[data-mode="detail"] .world-backdrop {
-  opacity: 0 !important;
-}
-
-.world-backdrop-stage {
-  position: absolute;
-  inset: 0;
-  perspective: 1600px;
-  transform-style: preserve-3d;
-}
-
-.world-backdrop-card {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: min(52vw, 780px);
-  aspect-ratio: 16 / 9;
-  overflow: hidden;
-  border: 1px solid rgba(var(--accent-rgb), 0.34);
-  border-radius: 24px;
-  background: #050403;
-  box-shadow:
-    0 24px 70px rgba(0, 0, 0, 0.52),
-    inset 0 1px 0 rgba(255, 248, 228, 0.24);
-  transition:
-    opacity 0.55s var(--ease),
-    filter 0.55s var(--ease),
-    transform 0.82s var(--ease);
-}
-
-.world-backdrop-card::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background:
-    linear-gradient(180deg, rgba(255, 247, 228, 0.1), transparent 22%, transparent 70%, rgba(2, 2, 2, 0.52)),
-    radial-gradient(ellipse at 50% 42%, transparent 42%, rgba(2, 2, 2, 0.3) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255, 246, 222, 0.1);
-  pointer-events: none;
-}
-
-.world-backdrop-card.is-current {
-  z-index: 2;
-  transform: translate(-50%, -50%);
-}
-
-.world-backdrop-card.is-prev {
-  z-index: 1;
-  transform: translate(calc(-50% - 50vw), -50%) rotateY(31deg) scale(0.94);
-  filter: brightness(0.7) saturate(0.82);
-}
-
-.world-backdrop-card.is-next {
-  z-index: 1;
-  transform: translate(calc(-50% + 50vw), -50%) rotateY(-31deg) scale(0.94);
-  filter: brightness(0.7) saturate(0.82);
-}
-
-.world-backdrop-layer {
-  position: absolute;
-  inset: -3%;
-  background-position: center;
-  background-size: cover;
-  filter: blur(1.5px) saturate(0.9) brightness(0.78);
-  opacity: 0.9;
-  transform: translateZ(0);
-}
-
-.world-backdrop.is-shifting .world-backdrop-card {
-  opacity: 0.28;
-  filter: blur(8px) brightness(0.65);
-}
-
-.world-backdrop::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 60% 54% at 50% 44%, transparent 30%, rgba(2, 2, 2, 0.16) 76%, rgba(2, 2, 2, 0.52) 100%),
-    linear-gradient(180deg, rgba(3, 3, 3, 0.24), transparent 25%, transparent 72%, rgba(3, 3, 3, 0.48));
-}
-
-.world-backdrop::after {
-  content: "";
-  position: absolute;
-  inset: -15%;
-  z-index: 0;
-  background:
-    radial-gradient(ellipse 34% 30% at 20% 25%, rgba(var(--accent-rgb), 0.34), transparent 70%),
-    radial-gradient(ellipse 30% 38% at 82% 68%, rgba(71, 163, 158, 0.21), transparent 72%);
-  filter: blur(54px);
-  mix-blend-mode: screen;
-  opacity: 0.62;
-  animation: world-aura-breathe 16s ease-in-out infinite alternate;
-}
-
-@keyframes world-aura-breathe {
-  from { opacity: 0.42; transform: scale(0.96) translate3d(-2%, 1%, 0); }
-  to { opacity: 0.76; transform: scale(1.06) translate3d(2%, -1%, 0); }
-}
-
-/* A darker optical backstop keeps long Chinese text crisp while the world
- * photography changes behind the glass. */
-:root[data-dark-surface="true"] .callout,
-:root[data-dark-surface="true"] .detail-panel,
-:root[data-dark-surface="true"] .dl-bar {
-  background-color: rgba(3, 3, 2, 0.34);
-  backdrop-filter: blur(34px) saturate(1.58) brightness(0.84);
-  -webkit-backdrop-filter: blur(34px) saturate(1.58) brightness(0.84);
-}
+/* ------------------------------------------------------------------------------------------ diffuse room light */
 
 .scene-aura {
   position: absolute;
@@ -152,13 +14,13 @@
   z-index: 2;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 30% 34% at 18% 24%, rgba(var(--accent-rgb), 0.25), transparent 72%),
-    radial-gradient(ellipse 28% 34% at 82% 66%, rgba(92, 176, 169, 0.17), transparent 72%),
-    radial-gradient(ellipse 38% 30% at 55% 44%, rgba(255, 246, 224, 0.1), transparent 76%);
-  filter: blur(38px) saturate(1.18);
+    radial-gradient(ellipse 30% 34% at 18% 24%, rgba(var(--accent-rgb), 0.16), transparent 72%),
+    radial-gradient(ellipse 28% 34% at 82% 66%, rgba(92, 176, 169, 0.1), transparent 72%),
+    radial-gradient(ellipse 38% 30% at 55% 44%, rgba(255, 246, 224, 0.065), transparent 76%);
+  filter: blur(44px) saturate(1.14);
   mix-blend-mode: screen;
-  opacity: 0.8;
-  animation: aura-breathe 16s ease-in-out infinite alternate;
+  opacity: 0.48;
+  animation: aura-breathe 18s ease-in-out infinite alternate;
 }
 
 .scene-aura::before,
@@ -168,33 +30,36 @@
   width: 42%;
   aspect-ratio: 1;
   border-radius: 50%;
-  filter: blur(54px);
+  filter: blur(56px);
   mix-blend-mode: screen;
-  opacity: 0.55;
+  opacity: 0.42;
 }
 
 .scene-aura::before {
   left: 7%;
   top: 13%;
-  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.34), transparent 70%);
-  animation: aura-orbit 21s ease-in-out infinite alternate;
+  background: radial-gradient(circle, rgba(var(--accent-rgb), 0.26), transparent 70%);
+  animation: aura-orbit 23s ease-in-out infinite alternate;
 }
 
 .scene-aura::after {
   right: 6%;
   bottom: 8%;
-  background: radial-gradient(circle, rgba(89, 184, 177, 0.23), transparent 70%);
-  animation: aura-orbit 25s ease-in-out -7s infinite alternate-reverse;
+  background: radial-gradient(circle, rgba(89, 184, 177, 0.16), transparent 70%);
+  animation: aura-orbit 27s ease-in-out -7s infinite alternate-reverse;
 }
 
-@keyframes world-aura-breathe {
-  from { opacity: 0.42; transform: scale(0.96) translate3d(-2%, 1%, 0); }
-  to { opacity: 0.76; transform: scale(1.06) translate3d(2%, -1%, 0); }
+:root[data-dark-surface="true"] .scene-atmosphere {
+  background:
+    radial-gradient(ellipse 44% 46% at 78% 8%, rgba(255, 230, 180, 0.24), transparent 68%),
+    linear-gradient(113deg, transparent 38%, rgba(255, 244, 217, 0.1) 49%, rgba(255, 252, 240, 0.025) 57%, transparent 68%),
+    linear-gradient(180deg, rgba(var(--paper-rgb), 0.14), transparent 20%, transparent 76%, rgba(var(--ink-rgb), 0.18)),
+    radial-gradient(ellipse at 48% 45%, transparent 38%, rgba(0, 0, 0, 0.24) 100%);
 }
 
 @keyframes aura-breathe {
-  from { opacity: 0.52; transform: scale(0.97) translate3d(-1.5%, 0.8%, 0); }
-  to { opacity: 0.9; transform: scale(1.06) translate3d(1.8%, -0.9%, 0); }
+  from { opacity: 0.34; transform: scale(0.97) translate3d(-1.5%, 0.8%, 0); }
+  to { opacity: 0.62; transform: scale(1.05) translate3d(1.8%, -0.9%, 0); }
 }
 
 @keyframes aura-orbit {
@@ -202,108 +67,103 @@
   to { transform: translate3d(7%, -3%, 0) scale(1.1); }
 }
 
-/* ------------------------------------------------------------------------------------------ gaussian page transitions */
+/* ------------------------------------------------------------------------------------------ page cross-fade */
 
 .home,
 .detail {
   transition:
-    opacity 0.4s var(--ease),
-    transform 0.5s var(--ease),
-    filter 0.44s var(--ease);
+    opacity 0.44s var(--ease),
+    transform 0.58s var(--ease);
 }
 
 .download {
   transition:
-    opacity 0.35s var(--ease),
-    visibility 0s linear 0.35s,
-    filter 0.44s var(--ease);
+    opacity 0.38s var(--ease),
+    visibility 0s linear 0.38s,
+    transform 0.58s var(--ease);
 }
 
 #stage[data-view="browse"] .download {
   transition:
-    opacity 0.42s var(--ease),
+    opacity 0.46s var(--ease),
     visibility 0s,
-    filter 0.46s var(--ease);
+    transform 0.58s var(--ease);
 }
 
 .home,
 .detail,
 .download {
-  filter: blur(0);
+  transform: none;
+}
+
+.dl-flat-card {
+  border-radius: 16px;
 }
 
 #stage[data-mode="detail"] .home,
-#stage[data-view="browse"] .home,
-#stage:not([data-mode="detail"]) .detail,
-#stage:not([data-view="browse"]) .download,
-#stage[data-browse="music"] .download {
-  filter: blur(11px);
+#stage[data-view="browse"] .home {
+  opacity: 0;
+  transform: translate3d(0, -10px, 0) scale(0.994);
+  pointer-events: none;
 }
 
-.three-scene {
-  transition: opacity 0.45s, filter 0.4s var(--ease);
+#stage:not([data-mode="detail"]) .detail {
+  opacity: 0;
+  transform: translate3d(0, 12px, 0) scale(0.994);
+  pointer-events: none;
 }
 
-#stage[data-switching="true"] .three-scene {
-  filter: blur(5px) saturate(0.92);
+#stage:not([data-view="browse"]) .download {
+  opacity: 0;
+  visibility: hidden;
+  transform: translate3d(0, 10px, 0) scale(0.994);
+  pointer-events: none;
 }
 
-#stage[data-switching="true"] .brand,
-#stage[data-switching="true"] .system-nav,
-#stage[data-switching="true"] .view-tabs,
-#stage[data-switching="true"] .home,
-#stage[data-switching="true"] .download,
-#stage[data-switching="true"] .detail,
-#stage[data-switching="true"] .system-footer {
-  filter: blur(7px);
+#stage[data-view="browse"] .download {
+  transform: none;
 }
 
-/* The old page leaves with a soft focus pull; the new page gets its elements
- * back in a small, slightly springy sequence. */
+/* ------------------------------------------------------------------------------------------ staggered page parts */
+
 @keyframes page-part-rise {
   0% {
     opacity: 0;
-    transform: translate3d(0, 17px, 0) scale(0.986);
-    filter: blur(9px);
+    transform: perspective(1000px) translate3d(0, 30px, -18px) rotateX(9deg) scale(0.955);
   }
-  68% {
+  62% {
     opacity: 1;
-    transform: translate3d(0, -2px, 0) scale(1.003);
-    filter: blur(0);
+    transform: perspective(1000px) translate3d(0, -5px, 0) rotateX(-1.5deg) scale(1.006);
   }
-  86% {
-    transform: translate3d(0, 1px, 0) scale(0.999);
+  82% {
+    transform: perspective(1000px) translate3d(0, 2px, 0) rotateX(0.6deg) scale(0.998);
   }
   100% {
     opacity: 1;
     transform: none;
-    filter: none;
   }
 }
 
 @keyframes page-part-rise-centered {
   0% {
     opacity: 0;
-    transform: translate(-50%, 17px) scale(0.986);
-    filter: blur(9px);
+    transform: translate(-50%, 30px) perspective(1000px) rotateX(9deg) scale(0.955);
   }
-  68% {
+  62% {
     opacity: 1;
-    transform: translate(-50%, -2px) scale(1.003);
-    filter: blur(0);
+    transform: translate(-50%, -5px) perspective(1000px) rotateX(-1.5deg) scale(1.006);
   }
-  86% {
-    transform: translate(-50%, 1px) scale(0.999);
+  82% {
+    transform: translate(-50%, 2px) perspective(1000px) rotateX(0.6deg) scale(0.998);
   }
   100% {
     opacity: 1;
     transform: translateX(-50%);
-    filter: none;
   }
 }
 
 #stage[data-staggering="true"] [data-page-item] {
-  animation: page-part-rise 0.62s cubic-bezier(0.18, 1.35, 0.28, 1) backwards;
+  animation: page-part-rise 0.9s cubic-bezier(0.16, 0.95, 0.25, 1.08) backwards;
   animation-delay: var(--page-delay, 0ms);
 }
 
@@ -312,7 +172,14 @@
 }
 
 #stage[data-staggering="true"] .callout > [data-page-item] {
-  animation-duration: 0.55s;
+  animation-duration: 0.8s;
+}
+
+/* New result cards can arrive after the page-level pass has begun. Use their
+ * stable result index to keep the left-to-right cascade intact. */
+#stage[data-staggering="true"] .dl-flat-track > .dl-flat-card {
+  animation: page-part-rise 0.9s cubic-bezier(0.16, 0.95, 0.25, 1.08) backwards;
+  animation-delay: calc(160ms + var(--flat-index, 0) * 45ms);
 }
 
 /* ------------------------------------------------------------------------------------------ first arrival */
@@ -328,109 +195,174 @@
 }
 
 @keyframes enter-from-top-left {
-  0% { opacity: 0; transform: translate3d(-24px, -13px, 0); filter: blur(10px); }
-  68% { opacity: 1; transform: translate3d(2px, 1px, 0); filter: blur(0); }
-  100% { opacity: 1; transform: none; filter: none; }
+  0% { opacity: 0; transform: translate3d(-34px, -18px, 0) rotate(-1.2deg) scale(0.96); }
+  68% { opacity: 1; transform: translate3d(3px, 2px, 0) rotate(0.25deg) scale(1.006); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes enter-from-top-right {
-  0% { opacity: 0; transform: translate3d(24px, -13px, 0); filter: blur(10px); }
-  68% { opacity: 1; transform: translate3d(-2px, 1px, 0); filter: blur(0); }
-  100% { opacity: 1; transform: none; filter: none; }
+  0% { opacity: 0; transform: translate3d(34px, -18px, 0) rotate(1.2deg) scale(0.96); }
+  68% { opacity: 1; transform: translate3d(-3px, 2px, 0) rotate(-0.25deg) scale(1.006); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes enter-tabs {
-  0% { opacity: 0; transform: translate(-50%, -17px) scale(0.96); filter: blur(10px); }
-  70% { opacity: 1; transform: translate(-50%, 2px) scale(1.004); filter: blur(0); }
-  100% { opacity: 1; transform: translateX(-50%); filter: none; }
+  0% { opacity: 0; transform: translate(-50%, -24px) scale(0.94); }
+  70% { opacity: 1; transform: translate(-50%, 2px) scale(1.005); }
+  100% { opacity: 1; transform: translateX(-50%); }
 }
 
 @keyframes enter-from-right {
-  0% { opacity: 0; transform: translate3d(34px, 0, 0) scale(0.985); filter: blur(12px); }
-  70% { opacity: 1; transform: translate3d(-2px, 0, 0) scale(1.002); filter: blur(0); }
-  100% { opacity: 1; transform: none; filter: none; }
+  0% { opacity: 0; transform: perspective(1100px) translate3d(48px, 0, -22px) rotateY(-8deg) scale(0.96); }
+  70% { opacity: 1; transform: perspective(1100px) translate3d(-3px, 0, 0) rotateY(1deg) scale(1.004); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes enter-from-bottom-left {
-  0% { opacity: 0; transform: translate3d(-19px, 25px, 0); filter: blur(10px); }
-  70% { opacity: 1; transform: translate3d(3px, -2px, 0); filter: blur(0); }
-  100% { opacity: 1; transform: none; filter: none; }
+  0% { opacity: 0; transform: translate3d(-24px, 32px, 0) scale(0.96); }
+  70% { opacity: 1; transform: translate3d(4px, -3px, 0) scale(1.005); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes enter-from-bottom {
-  0% { opacity: 0; transform: translate3d(0, 26px, 0); filter: blur(10px); }
-  70% { opacity: 1; transform: translate3d(0, -2px, 0); filter: blur(0); }
-  100% { opacity: 1; transform: none; filter: none; }
+  0% { opacity: 0; transform: translate3d(0, 34px, 0) scale(0.97); }
+  70% { opacity: 1; transform: translate3d(0, -3px, 0) scale(1.004); }
+  100% { opacity: 1; transform: none; }
 }
 
 @keyframes enter-hint {
-  0% { opacity: 0; transform: translate(-50%, 22px); filter: blur(8px); }
-  72% { opacity: 1; transform: translate(-50%, -2px); filter: blur(0); }
-  100% { opacity: 1; transform: translateX(-50%); filter: none; }
+  0% { opacity: 0; transform: translate(-50%, 24px); }
+  72% { opacity: 1; transform: translate(-50%, -2px); }
+  100% { opacity: 1; transform: translateX(-50%); }
 }
 
 #stage.ui-entering .brand {
-  animation: enter-from-top-left 0.8s 0.04s var(--ease) backwards;
+  animation: enter-from-top-left 0.92s 0.04s var(--ease) backwards;
 }
 
 #stage.ui-entering .system-nav {
-  animation: enter-from-top-right 0.8s 0.12s var(--ease) backwards;
+  animation: enter-from-top-right 0.92s 0.13s var(--ease) backwards;
 }
 
 #stage.ui-entering .view-tabs {
-  animation: enter-tabs 0.9s 0.16s var(--ease) backwards;
+  animation: enter-tabs 0.98s 0.19s var(--ease) backwards;
 }
 
 #stage.ui-entering .home > .callout {
-  animation: enter-from-right 0.9s 0.24s var(--ease) backwards;
+  animation: enter-from-right 1.02s 0.28s var(--ease) backwards;
 }
 
 #stage.ui-entering .home > .counter {
-  animation: enter-from-bottom-left 0.86s 0.34s var(--ease) backwards;
+  animation: enter-from-bottom-left 0.98s 0.4s var(--ease) backwards;
 }
 
 #stage.ui-entering .home > .ticks {
-  animation: enter-from-bottom 0.78s 0.43s var(--ease) backwards;
+  animation: enter-from-bottom 0.92s 0.51s var(--ease) backwards;
 }
 
 #stage.ui-entering .home > .lane-nav {
-  animation: enter-from-top-right 0.9s 0.51s var(--ease) backwards;
+  animation: enter-from-top-right 1s 0.61s var(--ease) backwards;
 }
 
 #stage.ui-entering .home > .hint {
-  animation: enter-hint 0.7s 0.59s var(--ease) backwards;
+  animation: enter-hint 0.84s 0.71s var(--ease) backwards;
 }
 
 #stage.ui-entering .download > .dl-bar {
-  animation: enter-from-bottom 0.78s 0.34s var(--ease) backwards;
+  animation: enter-from-bottom 0.92s 0.42s var(--ease) backwards;
 }
 
 #stage.ui-entering .detail > .back-button {
-  animation: enter-from-top-left 0.72s 0.18s var(--ease) backwards;
+  animation: enter-from-top-left 0.84s 0.22s var(--ease) backwards;
 }
 
 #stage.ui-entering .detail > .detail-panel {
-  animation: enter-from-right 0.9s 0.26s var(--ease) backwards;
+  animation: enter-from-right 1s 0.3s var(--ease) backwards;
 }
 
 #stage.ui-entering .system-footer {
-  animation: enter-from-bottom 0.8s 0.7s var(--ease) backwards;
+  animation: enter-from-bottom 0.92s 0.82s var(--ease) backwards;
 }
 
-/* ------------------------------------------------------------------------------------------ tilted glass + moving rim */
+/* ------------------------------------------------------------------------------------------ depth and light on cards */
 
 .liquid-tiltable {
-  transform: perspective(1400px) rotateX(var(--liquid-rot-x, 0deg)) rotateY(var(--liquid-rot-y, 0deg)) translateZ(0);
+  transform: perspective(1100px) rotateX(var(--liquid-rot-x, 0deg)) rotateY(var(--liquid-rot-y, 0deg));
   transform-style: preserve-3d;
   transform-origin: 50% 50%;
-  transition: transform 0.32s var(--ease);
-  will-change: transform;
+  transition:
+    transform 0.34s var(--ease),
+    box-shadow 0.38s var(--ease);
 }
 
 .liquid-tiltable.liquid-tilt-live {
-  transition-duration: 0.09s;
+  transform: perspective(1100px) rotateX(var(--liquid-rot-x, 0deg)) rotateY(var(--liquid-rot-y, 0deg)) translate3d(0, -3px, 16px);
+  transition-duration: 0.1s;
   transition-timing-function: linear;
+  will-change: transform;
 }
+
+:root[data-dark-surface="true"] .callout,
+:root[data-dark-surface="true"] .detail-panel,
+:root[data-dark-surface="true"] .dl-bar {
+  background-color: rgba(2, 2, 2, 0.48);
+  backdrop-filter: blur(34px) saturate(1.42) brightness(0.74);
+  -webkit-backdrop-filter: blur(34px) saturate(1.42) brightness(0.74);
+}
+
+:root[data-dark-surface="true"] .callout,
+:root[data-dark-surface="true"] .detail-panel,
+:root[data-dark-surface="true"] .dl-bar,
+:root[data-dark-surface="true"] .dl-flat-card,
+:root[data-dark-surface="true"] .card,
+:root[data-dark-surface="true"] .mod-row,
+:root[data-dark-surface="true"] .stat,
+:root[data-dark-surface="true"] .setting,
+:root[data-dark-surface="true"] .notice {
+  box-shadow:
+    0 30px 76px rgba(0, 0, 0, 0.58),
+    0 8px 22px rgba(0, 0, 0, 0.36),
+    0 0 0 1px rgba(var(--rim-rgb), 0.09),
+    inset 0 1px 0 rgba(255, 247, 225, 0.18),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.38);
+}
+
+:root[data-dark-surface="true"] .dl-flat-card {
+  border-color: rgba(var(--rim-rgb), 0.16);
+  background:
+    linear-gradient(150deg, rgba(17, 14, 10, 0.94), rgba(3, 3, 3, 0.9)),
+    radial-gradient(ellipse at 100% 0%, rgba(var(--accent-rgb), 0.1), transparent 62%);
+}
+
+:root[data-dark-surface="true"] .dl-flat-card:hover {
+  border-color: rgba(var(--accent-rgb), 0.54);
+  box-shadow:
+    0 34px 86px rgba(0, 0, 0, 0.62),
+    0 10px 26px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(var(--rim-rgb), 0.14),
+    inset 0 1px 0 rgba(255, 248, 228, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42),
+    0 0 28px rgba(var(--accent-rgb), 0.08);
+}
+
+:root[data-dark-surface="true"] .card,
+:root[data-dark-surface="true"] .mod-row,
+:root[data-dark-surface="true"] .stat,
+:root[data-dark-surface="true"] .setting,
+:root[data-dark-surface="true"] .notice {
+  background-color: rgba(3, 3, 3, 0.32);
+}
+
+.liquid-tiltable.liquid-tilt-live {
+  box-shadow:
+    0 34px 86px rgba(0, 0, 0, 0.62),
+    0 10px 26px rgba(0, 0, 0, 0.38),
+    0 0 0 1px rgba(var(--rim-rgb), 0.14),
+    inset 0 1px 0 rgba(255, 248, 228, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.42);
+}
+
+/* ------------------------------------------------------------------------------------------ travelling rim */
 
 .liquid-edge {
   position: absolute;
@@ -444,18 +376,18 @@
     linear-gradient(
       112deg,
       rgba(255, 247, 229, 0.03) 9%,
-      rgba(255, 243, 211, 0.18) 24%,
-      rgba(255, 252, 243, 0.76) 37%,
-      rgba(var(--accent-rgb), 0.36) 48%,
-      rgba(110, 191, 191, 0.22) 61%,
-      rgba(255, 245, 223, 0.09) 75%,
+      rgba(255, 243, 211, 0.2) 24%,
+      rgba(255, 252, 243, 0.82) 37%,
+      rgba(var(--accent-rgb), 0.44) 48%,
+      rgba(110, 191, 191, 0.24) 61%,
+      rgba(255, 245, 223, 0.1) 75%,
       rgba(255, 247, 229, 0.03) 89%
     ) 0 0 / 280% 100%;
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor;
   mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   mask-composite: exclude;
-  opacity: 0.54;
+  opacity: 0.62;
   mix-blend-mode: screen;
   animation: liquid-edge-flow 9s linear infinite;
   animation-delay: var(--edge-delay, 0s);
@@ -469,12 +401,12 @@
 }
 
 .liquid-edge-always > .liquid-edge {
-  opacity: 0.7;
+  opacity: 0.76;
 }
 
 .liquid-edge-host:hover > .liquid-edge,
 .liquid-edge-host:focus-within > .liquid-edge {
-  opacity: 0.94;
+  opacity: 1;
 }
 
 @keyframes liquid-edge-flow {
@@ -485,8 +417,6 @@
 /* ------------------------------------------------------------------------------------------ graceful settings */
 
 @media (prefers-reduced-motion: reduce) {
-  .world-backdrop-layer,
-  .world-backdrop::after,
   .scene-aura,
   .scene-aura::before,
   .scene-aura::after,
@@ -510,21 +440,12 @@
 
   .home,
   .detail,
-  .download,
-  .three-scene,
-  #stage[data-switching="true"] .brand,
-  #stage[data-switching="true"] .system-nav,
-  #stage[data-switching="true"] .view-tabs,
-  #stage[data-switching="true"] .home,
-  #stage[data-switching="true"] .download,
-  #stage[data-switching="true"] .detail {
-    filter: none;
+  .download {
+    transform: none;
     transition-duration: 0.001s;
   }
 }
 
-#stage.reduce-motion .world-backdrop-layer,
-#stage.reduce-motion .world-backdrop::after,
 #stage.reduce-motion .scene-aura,
 #stage.reduce-motion .scene-aura::before,
 #stage.reduce-motion .scene-aura::after,
@@ -547,13 +468,9 @@
 }
 
 @media (prefers-reduced-transparency: reduce) {
-  .world-backdrop-layer {
-    filter: none;
-  }
-
   .scene-aura,
   .scene-aura::before,
   .scene-aura::after {
-    opacity: 0.35;
+    opacity: 0.22;
   }
 }

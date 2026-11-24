@@ -179,7 +179,7 @@ export class FlatDownloadStage {
           <button class="btn sm ghost" data-flat-action="mcmod" data-flat-index="${index}" type="button">百科</button>
           <button class="btn sm ghost" data-flat-action="page" data-flat-index="${index}" type="button" title="在浏览器中打开">↗</button>
         </div>`;
-    return html`<article class="dl-flat-card" data-flat-index="${index}" data-selected="${selected}" aria-selected="${selected}" role="listitem" data-loading="${loading}">
+    return html`<article class="dl-flat-card" style="--flat-index:${index}" data-flat-index="${index}" data-selected="${selected}" aria-selected="${selected}" role="listitem" data-loading="${loading}">
       <div class="dl-flat-head">
         <div class="dl-flat-icon" data-flat-icon="${index}">${icon ? "" : glyph}</div>
         <div class="dl-flat-heading">

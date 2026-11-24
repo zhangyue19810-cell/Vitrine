@@ -80,7 +80,6 @@ export class SceneHost {
   private mode: SceneMode = "archive";
   private dark = false;
   private reduced = false;
-  private worldVisible = true;
   private loading?: Promise<boolean>;
   private disposed = false;
   private fontsReady?: Promise<unknown>;
@@ -120,10 +119,10 @@ export class SceneHost {
   }
 
   private loadFonts(): Promise<unknown> {
-    // The printed label uses MiSans; make sure the shards holding its characters are in before the first paint.
+    // The printed labels use the same calligraphic family as the interface.
     this.fontsReady ??= Promise.race([
-      Promise.all(["300", "400", "700"].map((weight) => document.fonts.load(`${weight} 40px MiSans`, labelFontSample()))),
-      new Promise((resolve) => setTimeout(resolve, 2500)),
+      Promise.all(["500", "700"].map((weight) => document.fonts.load(`${weight} 40px "LXGW WenKai"`, labelFontSample()))),
+      new Promise((resolve) => setTimeout(resolve, 3500)),
     ]).catch(() => undefined);
     return this.fontsReady;
   }
@@ -156,7 +155,6 @@ export class SceneHost {
         next.setQuality(TIER_QUALITY[this.tier]);
         next.setSuperPerformance(this.tier === "minimal");
         next.setMode(this.mode);
-        next.setWorldVisible(this.worldVisible);
         next.setTheme(this.dark, true);
         this.installRail(next);
         next.onSelect = (index, cell) => this.callbacks.select(index, cell);
@@ -343,7 +341,7 @@ export class SceneHost {
     for (const char of fresh) this.fontChars.add(char);
     const sample = fresh.join("");
     try {
-      await Promise.race([Promise.all(["400", "700"].map((weight) => document.fonts.load(`${weight} 24px MiSans`, sample))), new Promise((resolve) => setTimeout(resolve, 2500))]);
+      await Promise.race([Promise.all(["500", "700"].map((weight) => document.fonts.load(`${weight} 24px "LXGW WenKai"`, sample))), new Promise((resolve) => setTimeout(resolve, 3500))]);
     } catch {
       /* the fallback font is fine */
     }
@@ -372,13 +370,6 @@ export class SceneHost {
     this.picture.detail = mode === "detail";
     this.scene?.setStageLocked(mode === "detail");
     this.stage?.setDetail(mode === "detail" && this.picture.layout === "ring");
-  }
-
-  /** The Minecraft room only lives behind the home ring, never behind the browser rows or a detail page. */
-  setWorldVisible(visible: boolean) {
-    if (this.worldVisible === visible) return;
-    this.worldVisible = visible;
-    this.scene?.setWorldVisible(visible);
   }
 
   setDark(dark: boolean, immediate = false) {

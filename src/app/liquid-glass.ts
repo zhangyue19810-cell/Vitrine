@@ -41,7 +41,7 @@ const LIQUID_TARGET = [
 ].join(",");
 
 /** Only broad, stable surfaces tilt; controls keep their familiar geometry. */
-const TILT_TARGET = ".callout,.detail-panel,.dl-bar";
+const TILT_TARGET = ".callout,.detail-panel,.dl-bar,.card,.dl-flat-card,.mod-row,.stat,.setting,.notice,.dialog,.menu";
 
 /** The travelling gradient border is deliberately limited to framed surfaces. */
 const EDGE_TARGET = [
@@ -227,8 +227,9 @@ export function installLiquidGlass(root: HTMLElement): () => void {
       if (rect.width > 0 && rect.height > 0) {
         const nx = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1));
         const ny = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1));
-        targetTiltX = -ny * 0.72;
-        targetTiltY = nx * 0.9;
+        const broad = panel.matches(".callout,.detail-panel,.dl-bar,.dialog,.menu");
+        targetTiltX = -ny * (broad ? 2.05 : 3.4);
+        targetTiltY = nx * (broad ? 2.45 : 4.1);
       }
       if (panel !== tiltPanel) {
         clearTilt(true);

@@ -47,7 +47,7 @@ export interface ProjectPayload {
 
 export type FacePayload = InstancePayload | ActionPayload | ProjectPayload;
 
-export const FONT = "MiSans, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif";
+export const FONT = "'LXGW WenKai', MiSans, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif";
 
 export interface Palette {
   paper: string;

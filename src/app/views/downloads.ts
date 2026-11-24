@@ -437,7 +437,7 @@ function paintSpark(canvas: HTMLCanvasElement | null, task: TaskSnapshot) {
     ctx.stroke();
   }
   ctx.globalAlpha = 1;
-  ctx.font = `${10 * ratio}px sans-serif`;
+  ctx.font = `${10 * ratio}px "LXGW WenKai", sans-serif`;
   ctx.fillStyle = muted;
   if (samples.length < 2) {
     ctx.fillText(task.state === "running" ? "正在采集速度…" : "没有速度记录", pad, 14 * ratio);

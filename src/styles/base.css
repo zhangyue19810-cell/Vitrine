@@ -8,24 +8,24 @@
 
 :root {
   /* Painted per frame by theme.ts while the light/dark wave runs; these are the light defaults. */
-  --paper: rgb(234, 229, 225);
-  --paper-rgb: 234, 229, 225;
-  --panel: rgb(237, 235, 228);
-  --panel-rgb: 237, 235, 228;
-  --field: rgb(231, 227, 217);
-  --glass: rgb(246, 242, 235);
-  --glass-rgb: 246, 242, 235;
-  --glass-strong: rgb(255, 253, 248);
-  --glass-strong-rgb: 255, 253, 248;
+  --paper: rgb(221, 216, 209);
+  --paper-rgb: 221, 216, 209;
+  --panel: rgb(230, 225, 217);
+  --panel-rgb: 230, 225, 217;
+  --field: rgb(220, 214, 203);
+  --glass: rgb(241, 235, 224);
+  --glass-rgb: 241, 235, 224;
+  --glass-strong: rgb(251, 245, 233);
+  --glass-strong-rgb: 251, 245, 233;
   --rim: rgb(255, 255, 255);
   --rim-rgb: 255, 255, 255;
   --ink: rgb(8, 10, 8);
   --ink-rgb: 8, 10, 8;
-  --muted: rgb(119, 117, 109);
-  --line: rgb(170, 165, 154);
-  --accent: rgb(178, 122, 34);
-  --accent-ink: rgb(128, 83, 15);
-  --accent-rgb: 178, 122, 34;
+  --muted: rgb(102, 99, 92);
+  --line: rgb(145, 139, 128);
+  --accent: rgb(163, 107, 24);
+  --accent-ink: rgb(116, 73, 13);
+  --accent-rgb: 163, 107, 24;
   --on-accent: rgb(255, 255, 255);
   --on-danger: rgb(255, 255, 255);
   --danger: rgb(176, 58, 46);
@@ -34,7 +34,7 @@
   --warn-rgb: 178, 118, 24;
   --ok: rgb(40, 130, 84);
   --ok-rgb: 40, 130, 84;
-  --font: "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font: "LXGW WenKai", "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
   --mono: "Cascadia Mono", "JetBrains Mono", "SFMono-Regular", Consolas, "Microsoft YaHei", monospace;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
   --glass-blur: blur(20px) saturate(1.25);
@@ -576,28 +576,6 @@ kbd {
   color: var(--ink);
 }
 
-.status-light {
-  width: 6px;
-  height: 6px;
-  background: var(--ok);
-  display: inline-block;
-}
-
-.status-light[data-state="off"] {
-  background: var(--danger);
-}
-
-.status-light[data-state="busy"] {
-  background: var(--accent);
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-
 /*
  * While nobody is looking at the launcher (minimised, another window has the focus, a game is running in front of it)
  * every animation stops, not just the 3D scene; they all pick up again the moment the window is focused. A sheet or the
@@ -716,4 +694,10 @@ html[data-shell="electron"] .sheet-tools {
 html[data-shell="electron"] .drag-strip,
 html[data-shell="electron"] .sheet-head {
   user-select: none;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
 }

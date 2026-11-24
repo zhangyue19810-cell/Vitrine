@@ -40,9 +40,9 @@ export function themeMaterial(material: THREE.Material, name: string, instanced 
 
 type Baseline = { background: THREE.Color; fog?: THREE.Color; intensity: number; exposure: number; lights: { light: THREE.Light; intensity: number; color: THREE.Color }[]; floor?: { material: THREE.MeshStandardMaterial; color: THREE.Color } };
 const scenes = new WeakMap<THREE.Scene, Baseline>();
-const background = new THREE.Color("#050403"), floorColor = new THREE.Color("#090705"), mistColor = new THREE.Color("#12100c");
+const background = new THREE.Color("#010101"), floorColor = new THREE.Color("#040403"), mistColor = new THREE.Color("#080604");
 /** Deep space: the darkest the scene gets (a warm near-black), whatever the theme is. */
-const deepBackground = new THREE.Color("#020201"), deepMist = new THREE.Color("#050403");
+const deepBackground = new THREE.Color("#010101"), deepMist = new THREE.Color("#030302");
 /** The lights of the dark theme lean towards the gold of the accretion disk. */
 const warmLight = new THREE.Color("#ffd9a3");
 /**
@@ -66,8 +66,8 @@ export function themeEnvironment(scene: THREE.Scene, renderer: THREE.WebGLRender
   // The dark look still needs a living environment: reduce the studio only
   // enough to keep the black-gold contrast, never so far that clearcoat and
   // titanium reflections collapse into flat silhouettes.
-  scene.environmentIntensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.intensity, .43, amount), .27, deep);
-  renderer.toneMappingExposure = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.exposure, 1.02, amount), 1.06, deep);
+  scene.environmentIntensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.intensity, .38, amount), .23, deep);
+  renderer.toneMappingExposure = THREE.MathUtils.lerp(THREE.MathUtils.lerp(baseline.exposure, .96, amount), 1.02, deep);
   for (const { light, intensity, color } of baseline.lights) {
     light.intensity = intensity * (1 - .28 * amount) * (1 - .08 * deep);
     light.color.copy(color).lerp(warmLight, .6 * amount);

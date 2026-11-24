@@ -1,13 +1,36 @@
 /*
- * Editorial typography in the spirit of the Claude marketing pages: a warm,
- * readable contemporary serif for the wordmark and large statements, with a
- * clean sans for controls, navigation and dense Chinese copy.
+ * Calligraphic editorial typography. LXGW WenKai carries the whole interface
+ * (body copy, controls, navigation and dense Chinese lists) with a readable Kai
+ * hand; Ma Shan Zheng supplies the bolder brush voice for Chinese display
+ * headings. Source Serif 4 remains the Latin display face so VITRINE keeps its
+ * upright wordmark and the small English line keeps its editorial cadence.
  *
- * The bundled face is Source Serif 4, an open-source stand-in for the
- * proprietary Anthropic Serif. Chinese glyphs fall through to the platform's
- * Song / serif face, keeping headings bookish without loading a huge CJK font.
- * See public/fonts/vitrine-display/OFL-SourceSerif4.txt.
+ * All three bundled faces are open-source and live under public/fonts.
  */
+
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("/fonts/lxgw-wenkai/lxgw-wenkai-500.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "LXGW WenKai";
+  src: url("/fonts/lxgw-wenkai/lxgw-wenkai-700.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 700 900;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Ma Shan Zheng";
+  src: url("/fonts/ma-shan-zheng/ma-shan-zheng-400.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
 
 @font-face {
   font-family: "Vitrine Serif";
@@ -28,7 +51,8 @@
 }
 
 :root {
-  --font-display: "Vitrine Serif", "Source Serif 4", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Songti SC", STSong, SimSun, "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  --font-display: "Vitrine Serif", "Ma Shan Zheng", "LXGW WenKai", "Source Serif 4", "Songti SC", STSong, SimSun, "Noto Serif CJK SC", serif;
+  --font: "LXGW WenKai", "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
 ::selection {

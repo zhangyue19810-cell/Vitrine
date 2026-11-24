@@ -22,12 +22,22 @@ together with the following third-party work. Their licences stay with them.
    source-serif-4-italic-latin.woff2; the licence text is next to the fonts in
    public/fonts/vitrine-display/OFL-SourceSerif4.txt.
 
-4. three.js 0.183 — https://threejs.org — MIT License, Copyright (c) 2010-2026 three.js authors.
+4. LXGW WenKai / 霞鹜文楷 — https://github.com/lxgw/LxgwWenKai
+   SIL Open Font License 1.1, Copyright 2021-2023 LXGW and Copyright 2020 The Klee Project Authors.
+   Distributed unmodified as public/fonts/lxgw-wenkai/lxgw-wenkai-500.woff2 and
+   lxgw-wenkai-700.woff2; the licence text is next to the fonts in public/fonts/lxgw-wenkai/OFL.txt.
 
-5. @kitlangton/rolling-number 0.4.1 — MIT License, Copyright (c) 2026 Kit Langton.
+5. Ma Shan Zheng / 马善政毛笔楷书 — https://github.com/googlefonts/mashanzheng
+   SIL Open Font License 1.1, Copyright 2018 The MaShanZheng Project Authors.
+   Distributed unmodified as public/fonts/ma-shan-zheng/ma-shan-zheng-400.woff2;
+   the licence text is next to the font in public/fonts/ma-shan-zheng/OFL.txt.
+
+6. three.js 0.183 — https://threejs.org — MIT License, Copyright (c) 2010-2026 three.js authors.
+
+7. @kitlangton/rolling-number 0.4.1 — MIT License, Copyright (c) 2026 Kit Langton.
    Licence text: public/licenses/rolling-number.txt.
 
-6. Bundled into the desktop application's core (esbuild, dist-electron/main.cjs):
+8. Bundled into the desktop application's core (esbuild, dist-electron/main.cjs):
    yauzl 3.x (MIT, Josh Wolfe) · yazl 3.x (MIT, Josh Wolfe) · pend (MIT, Andrew Kelley) · buffer-crc32 (MIT, Brian J. Brennan)
    · smol-toml 1.x (BSD-3-Clause, Squirrel Chat) · https-proxy-agent 7.x and agent-base 7.x (MIT, Nathan Rajlich)
    · debug 4.x (MIT, Josh Junon and contributors) · ms 2.x (MIT, Vercel).
@@ -36,15 +46,10 @@ together with the following third-party work. Their licences stay with them.
    The licence texts of the bundled packages (including three.js and rolling-number) are in THIRD-PARTY-LICENSES.txt
    (regenerate with: node scripts/gen-licenses.mjs).
 
-7. Electron 45 (MIT, Copyright (c) Electron contributors and GitHub Inc.) and Chromium — the runtime shipped in
+9. Electron 45 (MIT, Copyright (c) Electron contributors and GitHub Inc.) and Chromium — the runtime shipped in
    the Windows package. Their licences are in the package: LICENSE and LICENSES.chromium.html.
 
-8. Minecraft world-carousel screenshots — Xbox México / Wikimedia Commons
-   CC BY 3.0. Cropped, resized and colour-graded for the launcher background carousel.
-   The individual source pages and licence links are listed in
-   public/assets/worlds/NOTICE.txt (also inside dist/assets/worlds in the packaged app).
-
-9. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
+10. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
    BMCLAPI (https://bmclapi2.bangbang93.com), MCIM (https://mod.mcimirror.top), Modrinth, CurseForge,
    Fabric / Quilt / Forge / NeoForge / OptiFine metadata and download hosts.
    Please respect their terms of use and rate limits.

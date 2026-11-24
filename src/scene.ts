@@ -41,7 +41,6 @@ import { labelMarkSvg } from "./brand";
 import { archiveFraming } from "./viewport-layout";
 import { ArchiveDrag, ArchivePlaneMomentum, type DragAxis, type DragProjection, type DragPosition } from "./archive-drag";
 import { assetUrl as publicAsset } from "./asset-url";
-import { WorldCarousel } from "./world-carousel";
 import { fullMotion, reducedMotion, type MotionPreferences } from "./motion-preferences";
 import {
   archiveWave,
@@ -90,8 +89,6 @@ export class ArchiveScene {
     this.cancelPointer();
     this.stage?.dispose();
     this.stage = undefined;
-    this.worldCarousel?.dispose();
-    this.worldCarousel = undefined;
     disposeThreeTree(this.scene);
     this.appearance.disposeSources();
     this.model.clear();
@@ -283,13 +280,6 @@ export class ArchiveScene {
   private stageLocked = false;
   /** The floor only exists for the row: the Möbius ring hangs in empty space. */
   private archiveFloor?: THREE.Mesh;
-  /** The Minecraft panorama that lives behind the archive stage. */
-  private worldCarousel?: WorldCarousel;
-  private worldVisible = true;
-  /** Extra warm edge light used only while the home gallery is behind the ring. */
-  private homeRim?: THREE.DirectionalLight;
-  private frameDt = 1 / 60;
-  private frameElapsed = 1 / 60;
   /** The key light's place for the row (the one the lighting set-up chose); the ring is lit from the front instead. */
   private readonly rowLight = new THREE.Vector3();
   private cancelStage = () => {};
@@ -827,16 +817,6 @@ export class ArchiveScene {
     this.scene.fog = new THREE.Fog("#eae5e1", 22, 47);
     this.light = createArchiveLighting(this.renderer, this.scene, lightingLook);
     this.light.castShadow = true;
-    // The carousel is a bright room behind dark metal. A home-only rim light
-    // separates the Möbius silhouette from the photographs without changing
-    // the lighting on the browser row or a detail page.
-    this.homeRim = new THREE.DirectionalLight("#ffe0ae", 0);
-    this.homeRim.name = "home-world-rim";
-    this.homeRim.position.set(13, 10, 12);
-    this.homeRim.target.position.set(-1, 1, 0);
-    this.homeRim.userData.ownLight = true;
-    this.homeRim.castShadow = false;
-    this.scene.add(this.homeRim, this.homeRim.target);
     Object.assign(this.light.shadow.camera, {
       left: -16,
       right: 16,
@@ -911,14 +891,6 @@ export class ArchiveScene {
   async load(assetUrl = publicAsset("assets/archive-cassette.glb")) {
     this.labelMark.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(labelMarkSvg)}`;
     await this.labelMark.decode();
-    // The panorama is independent of the cassette model: load both in parallel
-    // so the first useful frame is not delayed by the background photography.
-    const panorama = WorldCarousel.create(
-      Math.min(8, this.renderer.capabilities.getMaxAnisotropy()),
-    ).catch((error) => {
-      console.warn("[vitrine] world panorama unavailable", error);
-      return undefined;
-    });
     const gltf = await new GLTFLoader().loadAsync(
       assetUrl,
     );
@@ -1124,21 +1096,7 @@ export class ArchiveScene {
     this.drawLabel(0);
     this.scene.add(this.model);
     this.model.position.copy(this.cellPosition(poolCell(this.selectedSlot)));
-    const worldCarousel = await panorama;
-    if (worldCarousel) {
-      this.worldCarousel = worldCarousel;
-      this.scene.add(worldCarousel.overlay);
-      worldCarousel.setVisible(this.worldVisible);
-    }
     this.loaded = true;
-  }
-
-  /** The Minecraft gallery belongs to the home ring only. */
-  setWorldVisible(visible: boolean) {
-    if (this.worldVisible === visible) return;
-    this.worldVisible = visible;
-    this.worldCarousel?.setVisible(visible);
-    this.renderState.invalidate();
   }
 
   setMode(mode: "hidden" | "archive" | "detail") {
@@ -1779,8 +1737,6 @@ export class ArchiveScene {
     const dt = Math.min(elapsed, 0.05);
     this.last = time;
     this.clock = time;
-    this.frameDt = dt;
-    this.frameElapsed = Math.min(30, Math.max(0.001, elapsed));
     if (!this.loaded) return;
     this.flushHover();
     const step = !this.motion.surfaceTransitions ? 1 : Math.min(elapsed, .25) / 1.1;
@@ -1788,9 +1744,6 @@ export class ArchiveScene {
     this.renderer.domElement.style.opacity = String(THREE.MathUtils.clamp(this.presence / .16, 0, 1));
     this.theme.beginFrame();
     themeEnvironment(this.scene, this.renderer, this.themeAmount, this.deepSpace());
-    if (this.homeRim) {
-      this.homeRim.intensity = this.worldVisible ? 0.32 + this.themeAmount * 1.05 : 0;
-    }
     if (this.stageOn && this.stage) {
       this.updateStage(time, dt);
       return;
@@ -2329,18 +2282,6 @@ export class ArchiveScene {
   }
   /** Depth of field, the identical-frame check, the shadow map and the render itself (shared by the old grid and the stage). */
   private finishFrame(invalid: boolean, focus: THREE.Vector3, detail: number) {
-    if (this.worldCarousel && this.worldVisible) {
-      this.worldCarousel.setReduced(this.reduced);
-      this.worldCarousel.update(
-        this.frameDt,
-        this.frameElapsed,
-        this.camera,
-        this.camera.aspect,
-        this.themeAmount,
-        this.deepSpace(),
-      );
-      invalid ||= this.worldCarousel.animating;
-    }
     const fog = this.scene.fog as THREE.Fog;
     const focalPoint = focus
       .clone()
@@ -2411,10 +2352,6 @@ export class ArchiveScene {
       if (object instanceof THREE.InstancedMesh) shadow.add(object.count, object.instanceMatrix.version);
     });
     this.renderer.shadowMap.needsUpdate = shadow.end() || this.light.shadow.needsUpdate;
-    // Paint the off-screen room before the main beauty pass. Its full-screen
-    // overlay is the first opaque object in the scene, so the ring, cards and
-    // glass are always composited in front of the photographs.
-    if (this.worldCarousel && this.worldVisible) this.worldCarousel.render(this.renderer);
     if (this.superPerformance) this.renderer.render(this.scene, this.camera);
     else this.composer.render();
   }

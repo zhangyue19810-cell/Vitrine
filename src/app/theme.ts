@@ -10,22 +10,22 @@
 export type ThemeSetting = "auto" | "light" | "dark";
 
 const PALETTE = {
-  ink: ["#080a08", "#ece5d6"],
-  muted: ["#77756d", "#8f897c"],
-  line: ["#aaa59a", "#3e392f"],
-  paper: ["#eae5e1", "#050507"],
-  panel: ["#edebe4", "#0e0e11"],
-  field: ["#e7e3d9", "#17171b"],
-  glass: ["#f7f1e5", "#14120e"],
-  "glass-strong": ["#fff9ee", "#201a11"],
-  rim: ["#ffffff", "#f4dfb5"],
-  accent: ["#b27a22", "#e8b967"],
-  "accent-ink": ["#80530f", "#f4d08f"],
-  "on-accent": ["#ffffff", "#1a1205"],
-  danger: ["#b03a2e", "#ff8d78"],
-  "on-danger": ["#ffffff", "#2a0c08"],
-  warn: ["#b27618", "#e9b45a"],
-  ok: ["#288254", "#7fd3a0"],
+  ink: ["#080a08", "#e9e2d4"],
+  muted: ["#66635c", "#847d70"],
+  line: ["#918b80", "#2d2a24"],
+  paper: ["#ddd8d1", "#010102"],
+  panel: ["#e6e1d9", "#070708"],
+  field: ["#dcd6cb", "#0f0f12"],
+  glass: ["#f1ebe0", "#0a0908"],
+  "glass-strong": ["#fbf5e9", "#100d09"],
+  rim: ["#ffffff", "#eed8ae"],
+  accent: ["#a36b18", "#e2b25f"],
+  "accent-ink": ["#74490d", "#efc97f"],
+  "on-accent": ["#ffffff", "#171004"],
+  danger: ["#a9362c", "#f18a75"],
+  "on-danger": ["#ffffff", "#250b08"],
+  warn: ["#a36a14", "#dda74f"],
+  ok: ["#26784f", "#77c996"],
 } as const;
 
 type Rgb = [number, number, number];

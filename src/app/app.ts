@@ -13,7 +13,6 @@ import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
-import { WorldBackdrop } from "./world-backdrop";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { MusicDock } from "./music/dock";
@@ -93,9 +92,7 @@ export class App implements PerfApp {
   private selected = 0;
   private readonly laneMemory = new Map<number, number>();
   private splashActive = true;
-  private worldBackdrop?: WorldBackdrop;
   private transitionTimer = 0;
-  private blurTimer = 0;
   private entranceTimer = 0;
   private reduced = false;
   private dark = false;
@@ -193,7 +190,6 @@ export class App implements PerfApp {
     const stage = this.stage;
     stage.innerHTML = STAGE_TEMPLATE;
     stage.dataset.entered = "false";
-    this.worldBackdrop = new WorldBackdrop($("#world-backdrop"));
     document.title = `${PRODUCT.name} ${PRODUCT.nameCn}`;
     installLiquidGlass(stage);
     wireModals();
@@ -297,7 +293,7 @@ export class App implements PerfApp {
     this.stage.dataset.entered = "true";
     this.stage.classList.add("ui-entering");
     clearTimeout(this.entranceTimer);
-    this.entranceTimer = window.setTimeout(() => this.stage.classList.remove("ui-entering"), 1900);
+    this.entranceTimer = window.setTimeout(() => this.stage.classList.remove("ui-entering"), 2400);
     this.exposeDebug();
 
     if (!store.instances.length) toast("先点“新建实例”安装一个版本，或把整合包文件拖进窗口导入。", "info", 9000);
@@ -342,7 +338,6 @@ export class App implements PerfApp {
     this.controls.setSize(ui.cardSize);
     this.applyTheme(ui.theme, first);
     this.perf.refresh();
-    this.later("footer", 0, () => this.home.renderFooter());
   }
 
   private applyTheme(setting: Settings["ui"]["theme"], immediate = false) {
@@ -474,7 +469,6 @@ export class App implements PerfApp {
    */
   private pulsePageTransition() {
     const stage = this.stage;
-    stage.dataset.switching = "false";
     stage.dataset.staggering = "false";
     for (const page of stage.querySelectorAll<HTMLElement>(".home, .download, .detail")) {
       const top = new Map<HTMLElement, number>();
@@ -498,26 +492,19 @@ export class App implements PerfApp {
       }
     }
     // Force the old animation state to detach before applying the new one.
-    // Applying the attributes synchronously is important: requestAnimationFrame
-    // may be throttled while the 3D scene is regrouping, which would leave the
-    // page in the half-transparent blur state.
+    // The delay is intentionally not driven by requestAnimationFrame: the 3D
+    // scheduler can throttle a frame while it regroups the stage.
     void stage.offsetWidth;
-    stage.dataset.switching = "true";
     stage.dataset.staggering = "true";
-    clearTimeout(this.blurTimer);
     clearTimeout(this.transitionTimer);
-    this.blurTimer = window.setTimeout(() => {
-      delete stage.dataset.switching;
-    }, 420);
     this.transitionTimer = window.setTimeout(() => {
       delete stage.dataset.staggering;
-    }, 1400);
+    }, 1800);
   }
 
   private setView(view: View) {
     this.view = view;
     this.stage.dataset.view = view;
-    this.host.setWorldVisible(view === "home" && this.mode === "archive");
     this.setHover(null);
     this.updateInert();
     this.perf.refresh();
@@ -637,7 +624,6 @@ export class App implements PerfApp {
     this.mode = next;
     this.stage.dataset.mode = next;
     this.host.setMode(next);
-    this.host.setWorldVisible(this.view === "home" && next === "archive");
     this.setHover(null);
     clearTimeout(this.closeDetailTimer);
     if (next === "detail") {
@@ -725,7 +711,6 @@ export class App implements PerfApp {
         this.host.refreshRing();
         this.home.update(this.selected, "auto");
         this.home.renderNav({ windowControls: Boolean(this.bridge?.window) });
-        this.home.renderFooter();
       });
     };
     store.on("games", () => {

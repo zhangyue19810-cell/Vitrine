@@ -11,7 +11,7 @@ import { records } from "../data";
 
 const INK = "#171713";
 const MUTED = "#878476";
-const FONT = "MiSans, 'Microsoft YaHei', 'PingFang SC', sans-serif";
+const FONT = "'LXGW WenKai', MiSans, 'Microsoft YaHei', 'PingFang SC', sans-serif";
 
 function fit(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, start: number, min: number, weight: string): string {
   let size = start;

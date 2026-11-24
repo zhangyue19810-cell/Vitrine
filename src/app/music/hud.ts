@@ -381,7 +381,7 @@ export class MusicHud {
     context.fillRect(0, 0, size, size);
     if (!image) {
       context.fillStyle = "rgba(240,190,110,.75)";
-      context.font = `${Math.round(size * 0.42)}px sans-serif`;
+      context.font = `${Math.round(size * 0.42)}px "LXGW WenKai", sans-serif`;
       context.textAlign = "center";
       context.textBaseline = "middle";
       context.fillText("♪", size / 2, size / 2 + size * 0.03);

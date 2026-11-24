@@ -17,7 +17,6 @@ type RollingNumber = ReturnType<typeof createRollingNumber>;
 
 export const STAGE_TEMPLATE = `
   <div class="three-scene" id="three-scene"></div>
-  <div class="world-backdrop" id="world-backdrop" aria-hidden="true"></div>
   <div class="scene-aura" aria-hidden="true"></div>
   <div class="scene-atmosphere"></div>
   <svg id="inspection-marks" viewBox="0 0 1352 760" aria-hidden="true"><path id="inspection-lines"/><g id="inspection-corners"></g><circle id="inspection-point" r="1.8"/></svg>
@@ -70,8 +69,6 @@ const HOME_TEMPLATE = `
 `;
 
 const FOOTER_TEMPLATE = `
-  <span><i class="status-light" data-f="light"></i><span data-f="core"></span></span>
-  <span data-f="net"></span>
   <span class="push"><button data-act="open-about" title="关于">${PRODUCT.name.toUpperCase()} ${PRODUCT.nameCn} ↗</button></span>
 `;
 
@@ -100,7 +97,6 @@ export class HomeView {
     this.rollTotal = createRollingNumber(this.f("total"), { ...numberOptions, value: 0 });
     this.wireNav();
     this.renderNav();
-    this.renderFooter();
   }
 
   private f(name: string): HTMLElement {
@@ -258,16 +254,5 @@ export class HomeView {
     for (const button of buttons) width += button.offsetWidth;
     width += Math.max(0, buttons.length - 1) * 2;
     this.nav.style.setProperty("--nav-reveal-width", `${Math.ceil(width)}px`);
-  }
-
-  renderFooter() {
-    const core = store.connected ? `核心已连接${store.coreVersion ? ` · v${store.coreVersion}` : ""}` : "正在连接核心…";
-    this.text("core", core);
-    const light = this.f("light");
-    const state = !store.connected ? "off" : store.activeDownloads().length || store.launching ? "busy" : "ok";
-    if (light.dataset.state !== state) light.dataset.state = state;
-    const settings = store.ready ? store.settings : undefined;
-    const policy = { "official-first": "官方源优先", "mirror-first": "镜像源优先", "official-only": "仅官方源", "mirror-only": "仅镜像源" }[settings?.sources.policy ?? "official-first"];
-    this.text("net", settings ? `下载 ${policy} · ${settings.download.concurrency} 线程 × ${settings.download.segments} 分段` : "");
   }
 }
