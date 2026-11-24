@@ -59,7 +59,7 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
   · 启动游戏后，启动器的 3D 动画会暂停并让出显卡；你回到启动器窗口时自动恢复。
   · 窗口失去焦点或最小化时默认也会暂停（可在设置里改成“降到 10 帧”或“保持不变”）。
   · 设置 → 外观与性能 可以调帧率上限、画质、是否释放显存、开屏动画长短；自动画质会结合显卡、CPU 核数和物理内存选择档位。
-  · 整个界面使用 LXGW WenKai 手写楷体，中文大标题使用 Ma Shan Zheng 毛笔楷书；页面默认使用更深黑金液态玻璃主题；页面页签的当前项是一枚会滑动、拉伸并回弹的玻璃胶囊；右上角平时只显示账号总按钮，鼠标移上去才展开搜索、收藏、下载和设置。下载卡、Mod 卡、设置项和弹窗会随鼠标产生 3D 倾斜、深度阴影和动态渐变描边；反射与光晕遵守减少动态效果设置。
+  · 整个界面使用 LXGW WenKai 手写楷体，中文大标题使用 Ma Shan Zheng 毛笔楷书；开屏的 VITRINE 用 Kaushan Script 做逐字水墨落笔动画；页面默认使用更深黑金液态玻璃主题；页面页签的当前项是一枚会滑动、拉伸并回弹的玻璃胶囊；右上角平时只显示账号总按钮，鼠标移上去才展开搜索、收藏、下载和设置。下载卡、Mod 卡、设置项和弹窗会随鼠标产生 3D 倾斜、深度阴影和动态渐变描边；反射与光晕遵守减少动态效果设置。
   · 切页不使用高斯模糊：旧页与新页交叉淡化，页面顶层元素按 100ms 间隔依次带轻微弹性上滑，面板子项再以更短间隔跟进。启动完成后品牌、导航、页签、主卡、计数器、方向控制与底栏从各自方向淡入。
   · “音乐”页使用更新包的黑洞/吸积盘和 3D 歌词，内置网易云网页版客户端，并支持创建/加入网易云“一起听”房间；3D 环改为黑色金属反光，整体是黑金风格。
   · 音乐播放依赖网易云网页版接口，可能需要网络和登录；服务不可用时会在页面提示，不影响启动器其它功能。
@@ -102,5 +102,5 @@ Vitrine 琉匣 0.1.0 —— Minecraft 启动器（Windows 64 位便携版）
 
 九、许可
   Vitrine 以 MIT 许可发布（LICENSE.vitrine.txt）。界面基于 LBEILC 的 RhineLabUI（MIT）。
-  第三方组件、字体（LXGW WenKai、Ma Shan Zheng、Source Serif 4、MiSans）与 Electron / Chromium 的许可见 NOTICE.txt、THIRD-PARTY-LICENSES.txt、
+  第三方组件、字体（LXGW WenKai、Ma Shan Zheng、Kaushan Script、Source Serif 4）与 Electron / Chromium 的许可见 NOTICE.txt、THIRD-PARTY-LICENSES.txt、
   LICENSE 与 LICENSES.chromium.html。

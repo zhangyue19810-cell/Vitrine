@@ -35,7 +35,7 @@ export interface LyricLook {
   font: string;
 }
 
-export const LYRIC_FONT = "MiSans, 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif";
+export const LYRIC_FONT = "'LXGW WenKai', 'Microsoft YaHei', 'PingFang SC', 'Noto Sans CJK SC', sans-serif";
 
 export const DEFAULT_LOOK: LyricLook = { ink: "#171713", sung: "#b8843a", size: 34, transSize: 18, weight: "bold", align: "left", outline: 0, font: LYRIC_FONT };
 

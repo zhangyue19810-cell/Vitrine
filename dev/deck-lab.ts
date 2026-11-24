@@ -118,4 +118,4 @@ if (!params.has("manual")) requestAnimationFrame(frame);
   },
 };
 window.addEventListener("resize", () => deck.resize());
-document.fonts?.load("bold 32px MiSans", "夜航星歌词测试").then(() => deck.repaintAll());
+document.fonts?.load("32px \"LXGW WenKai\"", "夜航星歌词测试").then(() => deck.repaintAll());

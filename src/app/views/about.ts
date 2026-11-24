@@ -18,7 +18,7 @@ export function openAbout() {
     </dl>
     <div class="muted" style="font-size:12px;line-height:1.85">
       ${PRODUCT.name} 是一个独立编写的启动器，核心（下载、安装、启动、账号、整合包、崩溃分析）为原创实现，<b>没有使用 PCL2 的源代码</b>；官方源与镜像源（BMCLAPI、MCIM）的地址与 PCL2 使用的相同，只是调用公开接口。<br />
-      界面基于 <a class="link" data-link="https://github.com/LBEILC/RhineLabUI">RhineLabUI</a>（MIT © 2026 LBEILC）修改；字体 LXGW WenKai、Ma Shan Zheng、Source Serif 4（均为 SIL OFL 1.1）；3D 渲染 three.js（MIT）。<br />
+      界面基于 <a class="link" data-link="https://github.com/LBEILC/RhineLabUI">RhineLabUI</a>（MIT © 2026 LBEILC）修改；字体 LXGW WenKai、Ma Shan Zheng、Kaushan Script、Source Serif 4（均为 SIL OFL 1.1）；3D 渲染 three.js（MIT）。<br />
       “Minecraft”是 Mojang Studios / Microsoft 的商标，本软件与其无隶属关系。
     </div>
     <div class="toolbar"><button class="btn sm soft" data-copy>复制系统信息</button></div>`.value;

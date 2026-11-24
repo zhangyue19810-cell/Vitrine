@@ -484,7 +484,7 @@ function buildAbout(host: HTMLElement) {
     <div class="toolbar" style="margin-top:20px"><button class="btn sm soft" data-about="cache">清除缓存</button></div>
     <div class="section-title">开源与致谢</div>
     <div class="muted" style="font-size:12.5px;line-height:1.9">
-      界面基于 <a class="link" data-about-link="https://github.com/LBEILC/RhineLabUI">RhineLabUI</a>（MIT © 2026 LBEILC）改造；3D 渲染使用 three.js；界面字体为 LXGW WenKai、Ma Shan Zheng 与 Source Serif 4。<br />
+      界面基于 <a class="link" data-about-link="https://github.com/LBEILC/RhineLabUI">RhineLabUI</a>（MIT © 2026 LBEILC）改造；3D 渲染使用 three.js；界面字体为 LXGW WenKai、Ma Shan Zheng、Kaushan Script 与 Source Serif 4。<br />
       本启动器的后端为原创实现，使用与 PCL 相同的官方源（Mojang、Fabric、Forge、NeoForge、Modrinth、CurseForge）和镜像源（BMCLAPI、MCIM），不包含 PCL 的任何源代码。<br />
       Minecraft 是 Mojang Studios 的商标，本项目与 Mojang、Microsoft 无关。
     </div>`,

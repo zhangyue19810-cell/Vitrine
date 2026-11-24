@@ -2,7 +2,8 @@ import { MARK_LOOPS, PRODUCT } from "../brand";
 import { escapeHtml } from "../html";
 
 /**
- * The opening animation: the two loops of the mark draw themselves and interlock, the name rises letter by letter.
+ * The opening animation: the two loops of the mark draw themselves and interlock, then the name is written in wet ink,
+ * letter by letter, with a soft wash and a brush underline.
  * It is pure CSS (see styles/boot.css); this file only builds the markup, shows the real start-up step under it, and
  * lets the player skip. The splash never delays real work: it waits for the boot to finish, not the other way round.
  */
@@ -18,7 +19,7 @@ export interface Splash {
 
 export function showSplash(root: HTMLElement, style: "full" | "short"): Splash {
   const letters = [...PRODUCT.name.toUpperCase()]
-    .map((letter, index) => `<span style="animation-delay:${((style === "short" ? 0.05 : 0.95) + index * (style === "short" ? 0.02 : 0.07)).toFixed(2)}s">${escapeHtml(letter)}</span>`)
+    .map((letter, index) => `<span style="animation-delay:${((style === "short" ? 0.04 : 0.45) + index * (style === "short" ? 0.03 : 0.11)).toFixed(2)}s">${escapeHtml(letter)}</span>`)
     .join("");
   const element = document.createElement("div");
   element.className = "splash";

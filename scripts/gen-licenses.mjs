@@ -15,7 +15,7 @@ const out = [
   "Vitrine 琉匣 — licences of bundled third-party packages",
   "",
   "Vitrine itself: LICENSE. RhineLabUI (the interface this project is derived from): MIT, see LICENSE.",
-  "MiSans fonts: Xiaomi, see public/fonts/NOTICE.txt and MiSans-license.pdf. Electron / Chromium: LICENSE and LICENSES.chromium.html",
+  "LXGW WenKai, Ma Shan Zheng, Kaushan Script and Source Serif 4 are SIL OFL 1.1; their licence texts live next to the fonts in public/fonts. Electron / Chromium: LICENSE and LICENSES.chromium.html",
   "in the Windows package. The npm packages below are reproduced with the licence file they ship with.",
   "",
 ];

@@ -517,7 +517,7 @@ async function smoke() {
       perf: document.documentElement.dataset.perf,
       title: document.title,
       ipc: info && info.ok ? { version: info.result.version, os: info.result.os && info.result.os.name } : info,
-      fontsLoaded: document.fonts.check('16px MiSans'),
+      fontsLoaded: document.fonts.check('16px "LXGW WenKai"'),
       text: document.body.innerText.slice(0, 160).replace(/\\s+/g, ' '),
     };
   })()`).catch((error: Error) => ({ error: String(error) }));

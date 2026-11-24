@@ -10,27 +10,27 @@ together with the following third-party work. Their licences stay with them.
    and the interaction design) is derived from RhineLabUI and changed into a launcher front end.
    The licence text is reproduced in LICENSE.
 
-2. MiSans — Xiaomi / 小米科技有限责任公司
-   Copyright (c) 2020-2025 Beijing Xiaomi Mobile Software Co., Ltd. All Rights Reserved.
-   Distributed unmodified as split web-font shards (misans-webfont 4.3.1 by mobeicanyue) and used under the
-   MiSans font licence. See public/fonts/NOTICE.txt and public/fonts/MiSans-license.pdf
-   (in the packaged app: resources/app.asar → dist/fonts/).
-
-3. Source Serif 4 — Adobe — https://github.com/adobe-fonts/source-serif
+2. Source Serif 4 — Adobe — https://github.com/adobe-fonts/source-serif
    SIL Open Font License 1.1, Copyright 2014 The Source Serif 4 Project Authors.
    Distributed unmodified as public/fonts/vitrine-display/source-serif-4-latin.woff2 and
    source-serif-4-italic-latin.woff2; the licence text is next to the fonts in
    public/fonts/vitrine-display/OFL-SourceSerif4.txt.
 
-4. LXGW WenKai / 霞鹜文楷 — https://github.com/lxgw/LxgwWenKai
+3. LXGW WenKai / 霞鹜文楷 — https://github.com/lxgw/LxgwWenKai
    SIL Open Font License 1.1, Copyright 2021-2023 LXGW and Copyright 2020 The Klee Project Authors.
-   Distributed unmodified as public/fonts/lxgw-wenkai/lxgw-wenkai-500.woff2 and
-   lxgw-wenkai-700.woff2; the licence text is next to the fonts in public/fonts/lxgw-wenkai/OFL.txt.
+   Distributed unmodified as public/fonts/lxgw-wenkai/lxgw-wenkai-500.woff2;
+   the licence text is next to the font in public/fonts/lxgw-wenkai/OFL.txt.
 
-5. Ma Shan Zheng / 马善政毛笔楷书 — https://github.com/googlefonts/mashanzheng
+4. Ma Shan Zheng / 马善政毛笔楷书 — https://github.com/googlefonts/mashanzheng
    SIL Open Font License 1.1, Copyright 2018 The MaShanZheng Project Authors.
    Distributed unmodified as public/fonts/ma-shan-zheng/ma-shan-zheng-400.woff2;
    the licence text is next to the font in public/fonts/ma-shan-zheng/OFL.txt.
+
+5. Kaushan Script — https://github.com/googlefonts/kaushan-script
+   SIL Open Font License 1.1, Copyright (c) 2011 Pablo Impallari and Igino Marini.
+   Distributed unmodified as public/fonts/kaushan-script/kaushan-script-400.woff2;
+   the licence text is next to the font in public/fonts/kaushan-script/OFL.txt.
+   Used for the ink-brush VITRINE writing in the opening animation.
 
 6. three.js 0.183 — https://threejs.org — MIT License, Copyright (c) 2010-2026 three.js authors.
 

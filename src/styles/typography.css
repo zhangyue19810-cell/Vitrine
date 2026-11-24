@@ -12,21 +12,21 @@
   font-family: "LXGW WenKai";
   src: url("/fonts/lxgw-wenkai/lxgw-wenkai-500.woff2") format("woff2");
   font-style: normal;
-  font-weight: 400 600;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "LXGW WenKai";
-  src: url("/fonts/lxgw-wenkai/lxgw-wenkai-700.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700 900;
+  font-weight: 400 900;
   font-display: swap;
 }
 
 @font-face {
   font-family: "Ma Shan Zheng";
   src: url("/fonts/ma-shan-zheng/ma-shan-zheng-400.woff2") format("woff2");
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Kaushan Script";
+  src: url("/fonts/kaushan-script/kaushan-script-400.woff2") format("woff2");
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -52,7 +52,7 @@
 
 :root {
   --font-display: "Vitrine Serif", "Ma Shan Zheng", "LXGW WenKai", "Source Serif 4", "Songti SC", STSong, SimSun, "Noto Serif CJK SC", serif;
-  --font: "LXGW WenKai", "MiSans", "Mi Sans", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --font: "LXGW WenKai", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
 }
 
 ::selection {
@@ -223,9 +223,9 @@ h3 {
 
 /* A restrained warm-metal wash, still Claude-like in its quietness. */
 .splash-word b {
-  font-family: var(--font-display);
-  font-weight: 600;
-  letter-spacing: 0.11em;
+  font-family: "Kaushan Script", "Ma Shan Zheng", var(--font-display);
+  font-weight: 400;
+  letter-spacing: 0;
 }
 
 .splash-word b span {
