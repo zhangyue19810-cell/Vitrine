@@ -13,6 +13,7 @@ import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
+import { WorldBackdrop } from "./world-backdrop";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { MusicDock } from "./music/dock";
@@ -92,6 +93,10 @@ export class App implements PerfApp {
   private selected = 0;
   private readonly laneMemory = new Map<number, number>();
   private splashActive = true;
+  private worldBackdrop?: WorldBackdrop;
+  private transitionTimer = 0;
+  private blurTimer = 0;
+  private entranceTimer = 0;
   private reduced = false;
   private dark = false;
   private hoverIndex: number | null = null;
@@ -187,6 +192,8 @@ export class App implements PerfApp {
   async boot() {
     const stage = this.stage;
     stage.innerHTML = STAGE_TEMPLATE;
+    stage.dataset.entered = "false";
+    this.worldBackdrop = new WorldBackdrop($("#world-backdrop"));
     document.title = `${PRODUCT.name} ${PRODUCT.nameCn}`;
     installLiquidGlass(stage);
     wireModals();
@@ -287,6 +294,10 @@ export class App implements PerfApp {
     this.perf.refresh();
     this.host.present(true);
     await splash?.finish();
+    this.stage.dataset.entered = "true";
+    this.stage.classList.add("ui-entering");
+    clearTimeout(this.entranceTimer);
+    this.entranceTimer = window.setTimeout(() => this.stage.classList.remove("ui-entering"), 1900);
     this.exposeDebug();
 
     if (!store.instances.length) toast("先点“新建实例”安装一个版本，或把整合包文件拖进窗口导入。", "info", 9000);
@@ -455,9 +466,58 @@ export class App implements PerfApp {
     void tryRpc("settings.update", { patch: { ui: { cardSize: size } } });
   }
 
+  /**
+   * Restart a short, ornamental page switch. Each page's top-level pieces are
+   * tagged with 100 ms offsets and their framed children with a faster second
+   * pass; the blur and stagger attributes are cleared independently so the
+   * interface lands sharp before the last child has finished settling.
+   */
+  private pulsePageTransition() {
+    const stage = this.stage;
+    stage.dataset.switching = "false";
+    stage.dataset.staggering = "false";
+    for (const page of stage.querySelectorAll<HTMLElement>(".home, .download, .detail")) {
+      const top = new Map<HTMLElement, number>();
+      let topIndex = 0;
+      for (const item of page.querySelectorAll<HTMLElement>(":scope > *")) {
+        top.set(item, topIndex * 100);
+        item.dataset.pageItem = "";
+        item.style.setProperty("--page-delay", `${topIndex * 100}ms`);
+        topIndex++;
+      }
+      for (const parent of page.querySelectorAll<HTMLElement>(".callout, .dl-bar, .detail-panel")) {
+        const parentDelay = top.get(parent) ?? 0;
+        let childIndex = 0;
+        for (const child of parent.children) {
+          if (!(child instanceof HTMLElement)) continue;
+          if (child.classList.contains("liquid-edge") || child.classList.contains("liquid-sheen")) continue;
+          child.dataset.pageItem = "";
+          child.style.setProperty("--page-delay", `${parentDelay + 60 + childIndex * 38}ms`);
+          childIndex++;
+        }
+      }
+    }
+    // Force the old animation state to detach before applying the new one.
+    // Applying the attributes synchronously is important: requestAnimationFrame
+    // may be throttled while the 3D scene is regrouping, which would leave the
+    // page in the half-transparent blur state.
+    void stage.offsetWidth;
+    stage.dataset.switching = "true";
+    stage.dataset.staggering = "true";
+    clearTimeout(this.blurTimer);
+    clearTimeout(this.transitionTimer);
+    this.blurTimer = window.setTimeout(() => {
+      delete stage.dataset.switching;
+    }, 420);
+    this.transitionTimer = window.setTimeout(() => {
+      delete stage.dataset.staggering;
+    }, 1400);
+  }
+
   private setView(view: View) {
     this.view = view;
     this.stage.dataset.view = view;
+    this.host.setWorldVisible(view === "home" && this.mode === "archive");
     this.setHover(null);
     this.updateInert();
     this.perf.refresh();
@@ -470,6 +530,7 @@ export class App implements PerfApp {
     if (id === "home") return this.showHome();
     // Without WebGL the download view renders its DOM rail instead. Music needs the 3D picture.
     if (!this.host.stage && id === "music") return void toast("音乐页要在 3D 画面里使用，现在没有 3D 画面。", "info", 5000);
+    this.pulsePageTransition();
     const from = this.tab;
     this.tab = id;
     this.renderTabs();
@@ -504,6 +565,7 @@ export class App implements PerfApp {
   private async openContent(kind: ContentKind, preset: { instanceId?: string; query?: string } = {}) {
     if (this.splashActive || modals.open || launchOverlay.open) return;
     if (this.mode === "detail") this.exitDetail();
+    this.pulsePageTransition();
     this.tab = kind;
     this.renderTabs();
     this.dock?.setBig(false);
@@ -514,6 +576,7 @@ export class App implements PerfApp {
   }
 
   private showHome() {
+    if (this.view !== "home") this.pulsePageTransition();
     this.tab = "home";
     this.renderTabs();
     this.dock?.setBig(false);
@@ -570,9 +633,11 @@ export class App implements PerfApp {
 
   private setMode(next: Mode) {
     if (this.mode === next) return;
+    this.pulsePageTransition();
     this.mode = next;
     this.stage.dataset.mode = next;
     this.host.setMode(next);
+    this.host.setWorldVisible(this.view === "home" && next === "archive");
     this.setHover(null);
     clearTimeout(this.closeDetailTimer);
     if (next === "detail") {

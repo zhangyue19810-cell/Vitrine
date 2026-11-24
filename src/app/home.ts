@@ -17,6 +17,8 @@ type RollingNumber = ReturnType<typeof createRollingNumber>;
 
 export const STAGE_TEMPLATE = `
   <div class="three-scene" id="three-scene"></div>
+  <div class="world-backdrop" id="world-backdrop" aria-hidden="true"></div>
+  <div class="scene-aura" aria-hidden="true"></div>
   <div class="scene-atmosphere"></div>
   <svg id="inspection-marks" viewBox="0 0 1352 760" aria-hidden="true"><path id="inspection-lines"/><g id="inspection-corners"></g><circle id="inspection-point" r="1.8"/></svg>
   <div id="inspection-text" aria-hidden="true"><span></span><strong></strong></div>

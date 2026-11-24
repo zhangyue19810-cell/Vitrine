@@ -39,7 +39,12 @@ together with the following third-party work. Their licences stay with them.
 7. Electron 45 (MIT, Copyright (c) Electron contributors and GitHub Inc.) and Chromium — the runtime shipped in
    the Windows package. Their licences are in the package: LICENSE and LICENSES.chromium.html.
 
-8. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
+8. Minecraft world-carousel screenshots — Xbox México / Wikimedia Commons
+   CC BY 3.0. Cropped, resized and colour-graded for the launcher background carousel.
+   The individual source pages and licence links are listed in
+   public/assets/worlds/NOTICE.txt (also inside dist/assets/worlds in the packaged app).
+
+9. Services Vitrine talks to (no code is redistributed from them): Mojang / Microsoft services,
    BMCLAPI (https://bmclapi2.bangbang93.com), MCIM (https://mod.mcimirror.top), Modrinth, CurseForge,
    Fabric / Quilt / Forge / NeoForge / OptiFine metadata and download hosts.
    Please respect their terms of use and rate limits.

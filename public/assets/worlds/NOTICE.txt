@@ -1,0 +1,56 @@
+Vitrine — Minecraft world carousel image credits
+
+The following Minecraft screenshots are bundled as public/assets/worlds/*.jpg.
+They were cropped, resized and colour-graded for the launcher background carousel.
+All are licensed CC BY 3.0 and are attributed to Xbox México via Wikimedia Commons.
+
+- world-01-mountains.jpg
+  Source: File:Minecraft - 1.18 mountains.jpg
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_1.18_mountains.jpg
+
+- world-02-deep-dark.jpg
+  Source: File:Minecraft - Deep Dark.png
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_Deep_Dark.png
+
+- world-03-end-city.jpg
+  Source: File:Minecraft - End city.jpg
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_End_city.jpg
+
+- world-04-frozen-ocean.jpg
+  Source: File:Minecraft - Frozen ocean.jpg
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_Frozen_ocean.jpg
+
+- world-05-jungle.jpg
+  Source: File:Minecraft - Jungle.jpg
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_Jungle.jpg
+
+- world-06-nether.jpg
+  Source: File:Minecraft - Piglins bartering.jpg
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_Piglins_bartering.jpg
+
+- world-07-taiga.jpg
+  Source: File:Minecraft - Taiga.jpg
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Minecraft_-_Taiga.jpg
+
+- world-08-diamonds.jpg
+  Source: File:Screenshot of a player mining for diamonds in Minecraft.png
+  Author: Xbox México
+  Licence: CC BY 3.0
+  Page: https://commons.wikimedia.org/wiki/File:Screenshot_of_a_player_mining_for_diamonds_in_Minecraft.png
+
+CC BY 3.0: https://creativecommons.org/licenses/by/3.0/
+Minecraft is a trademark of Mojang Synergies AB / Microsoft. This project is not affiliated with or endorsed by Mojang or Microsoft.
