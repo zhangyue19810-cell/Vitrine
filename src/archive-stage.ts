@@ -140,7 +140,11 @@ export const STAGE = {
 };
 
 const CARD = { mid: 1.85, midZ: 0.06, halfWidth: 2.5, height: 3.7 };
-const FACE = { width: 4.56, height: 3.3, z: 0.262 };
+/** How much the cassette's depth axis is stretched in scene.ts. */
+export const ARCHIVE_CARD_DEPTH_SCALE = 1.38;
+/** Decal faces sit just above the stretched front glass, never inside it. */
+export const ARCHIVE_FACE_Z = 0.312;
+const FACE = { width: 4.56, height: 3.3, z: ARCHIVE_FACE_Z };
 /** Archives on the band stand a little larger than the plates around them, so they read as the tabs of the card file. */
 const RING_CARD = { scale: 1.22, arc: 3.4 };
 

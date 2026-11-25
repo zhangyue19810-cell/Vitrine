@@ -3,7 +3,7 @@ import { ControlRail } from "./control-rail";
 import { ArchiveVisibility } from "./archive-visibility";
 import { ArchiveDrawCoverage, ArchiveShadowCoverage } from "./archive-draw-coverage";
 import { InstanceUpdates } from "./instance-updates";
-import { ArchiveStage, type FacePainter } from "./archive-stage";
+import { ArchiveStage, ARCHIVE_CARD_DEPTH_SCALE, ARCHIVE_FACE_Z, type FacePainter } from "./archive-stage";
 import { RenderState } from "./render-state";
 import { SharedDepthAO, SharedDepthBokeh } from "./shared-depth";
 import { disposeThreeTree } from "./three-resources";
@@ -919,7 +919,7 @@ export class ArchiveScene {
       const geom = mesh.geometry
         .clone()
         .applyMatrix4(mesh.matrixWorld)
-        .scale(1, 1, 1.38);
+        .scale(1, 1, ARCHIVE_CARD_DEPTH_SCALE);
       const source = mesh.material as THREE.MeshStandardMaterial;
       const name = source.name.replace(/\.\d+$/, "");
       // Promote every archive surface to a physical material: the edge and
@@ -1149,7 +1149,9 @@ export class ArchiveScene {
         depthWrite: false,
       }),
     );
-    label.position.set(-1.36, 3.04, 0.255);
+    // This separate selected-instance decal sits a hair in front of the staged
+    // faces; both must clear the stretched glass cover.
+    label.position.set(-1.36, 3.04, ARCHIVE_FACE_Z + 0.008);
     this.model.add(label);
     this.appearance.prepare(this.model);
     this.appearance.apply(this.model, 0);

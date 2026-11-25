@@ -19,8 +19,11 @@ materials on load so every surface can use clearcoat, transmission, sheen and
 iridescence. The front cover now has a thicker PBR stack: `thickness 0.78`,
 `ior 1.52`, low roughness, dispersion, a shorter attenuation distance and a
 soft iridescent layer. The model's depth axis is stretched to 1.38× so the
-thicker optical stack has a visible side wall. The instanced row keeps a
-lighter version for the download/Mod view while retaining the dense tint.
+thicker optical stack has a visible side wall. The painted face decals and the
+selected-instance label are moved outward with `ARCHIVE_FACE_Z`, keeping every
+project icon, instance label and music archive face in front of the cover
+instead of hidden inside its new volume. The instanced row keeps a lighter
+version for the download/Mod view while retaining the dense tint.
 
 `archiveEdgeFragment` ports the useful part of Lumina UI's liquid-glass shader
 to the card silhouette: a dark thick wall at grazing angles, a narrow inner
