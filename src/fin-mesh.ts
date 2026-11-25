@@ -137,6 +137,7 @@ export class FinMesh {
   /** The user-selected ring material, applied after the theme/deep-space blend. */
   private ringPreset?: RingMaterialPreset;
   private flowingWhite = false;
+  private flowStamp = -1;
   private readonly presetColor = new THREE.Color();
   /** How loud each halo plate is (smoothed, so a plate does not snap when the spectrum does). */
   private readonly levels: Float32Array;
@@ -205,6 +206,7 @@ export class FinMesh {
   setRingMaterial(preset: RingMaterialPreset | undefined) {
     this.ringPreset = preset;
     this.flowingWhite = preset?.id === "flow-white";
+    this.flowStamp = -1;
     this.paintMaterial();
     this.signature = "";
   }
@@ -281,8 +283,13 @@ export class FinMesh {
     const dt = Math.max(0, Math.min(0.25, state.dt ?? 1 / 60));
     const rise = 1 - Math.exp(-60 * dt);
     const fall = 1 - Math.exp(-9 * dt);
+    // White-light crests travel at 12 Hz; writing and uploading 360 instance
+    // colours every rendered frame is noticeably expensive on integrated GPUs.
+    const flowTick = this.flowingWhite ? Math.floor(state.clock * 12) : -1;
+    const flowingNow = this.flowingWhite && flowTick !== this.flowStamp;
+    if (flowingNow) this.flowStamp = flowTick;
     // While there is something that can tint a plate, every plate's colour is written each time; otherwise they are left alone.
-    const painting = Boolean(colors) && (Boolean(audio) || Boolean(world) || this.tinted || this.flowingWhite);
+    const painting = Boolean(colors) && (Boolean(audio) || Boolean(world) || this.tinted || flowingNow);
     let anyTint = false;
     const { a, b, c, matrix, basis, qa, qb, qt, pos, scale, dir, side, up, placed, placed2 } = this;
     const ringSize = BAND.plate;
@@ -438,7 +445,7 @@ export class FinMesh {
         // “流光白” carries a narrow silver-white crest around the band. It
         // lives in the per-instance glaze instead of a texture, so it follows
         // every plate through ring/row morphs and costs no extra draw call.
-        const flow = this.flowingWhite ? Math.pow(0.5 + 0.5 * Math.sin(base * Math.PI * 6 - state.clock * 1.75), 7) : 0;
+        const flow = flowingNow ? Math.pow(0.5 + 0.5 * Math.sin(base * Math.PI * 6 - (flowTick / 12) * 1.75), 7) : 0;
         if (flow > 0.001) anyTint = true;
         const cool = this.flowingWhite ? [0.84, 0.9, 1.0] : null;
         for (let channel = 0; channel < 3; channel++) {

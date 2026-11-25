@@ -302,6 +302,10 @@ export async function startMockNetease(options: MockNeteaseOptions = {}): Promis
     },
   };
 
+  // The production client prefers the current web-player route and falls
+  // back to the historical one; both should exercise the same fixture.
+  routes["cloudsearch/pc"] = routes["cloudsearch/get/web"];
+
   const audioCache = new Map<number, Buffer>();
   const wavOf = (id: number) => {
     let data = audioCache.get(id);

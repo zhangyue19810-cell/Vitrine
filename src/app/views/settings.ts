@@ -116,7 +116,7 @@ function sections(): Section[] {
         { name: "界面配色", path: "ui.theme", field: { kind: "seg", options: [["dark", "深空（暗色）"], ["light", "亮色"], ["auto", "跟随系统"]] } },
         { name: "动效", path: "ui.motion", field: { kind: "select", options: [["auto", "跟随系统的“减少动态效果”"], ["full", "完整动效"], ["reduced", "精简动效"]] }, desc: "精简动效会关闭滚动数字、选择涟漪等装饰，帧率上限降到 30。" },
         { name: "3D 帧率上限", path: "ui.fps", field: { kind: "select", options: [["auto", "自动（跟随显示器，最高 60）"], [30, "30 帧"], [60, "60 帧"], [120, "120 帧"]] }, desc: "停止操作 10 秒后会自动降到 30 帧，90 秒后降到 15 帧。" },
-        { name: "3D 画质", path: "ui.quality", field: { kind: "select", options: [["auto", "自动（卡顿时自动降级）"], ["high", "高"], ["medium", "中"], ["low", "低（省电）"]] }, desc: "自动档会结合显卡、处理器和物理内存选择档位；帧率持续偏低时再逐级降级。检测到游戏运行时，启动器会临时降到低档并把 GPU 让给游戏。" },
+        { name: "3D 画质", path: "ui.quality", field: { kind: "seg", options: [["auto", "自动"], ["high", "高"], ["medium", "中"], ["low", "低"]] }, desc: "自动档会结合显卡、处理器和物理内存选择档位；帧率持续偏低时再逐级降级。检测到游戏运行时，启动器会临时降到低档并把 GPU 让给游戏。" },
         { name: "启动游戏时暂停动画", path: "ui.pauseWhenGameRuns", field: { kind: "toggle" }, desc: "游戏启动和运行期间完全停止 3D 动画，让出 GPU。你回到启动器窗口时动画自动恢复（游戏仍在运行时降到 30 帧）。" },
         { name: "游戏运行时释放显存", path: "ui.releaseGpuWhenGameRuns", field: { kind: "toggle" }, desc: "游戏在运行、启动器隐藏超过 15 秒后，销毁 3D 场景把显存还给游戏；回来时约 1 秒重新载入。" },
         { name: "窗口失去焦点时", path: "ui.whenUnfocused", field: { kind: "select", options: [["pause", "暂停动画"], ["throttle", "降到 10 帧"], ["full", "保持不变"]] } },

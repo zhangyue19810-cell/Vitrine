@@ -178,3 +178,28 @@ follows the ring through its morphs and costs no extra draw call. Because the
 studio key is champagne, this preset explicitly lowers metalness and
 environment reflection and adds a restrained cool emissive; otherwise every
 gray surface reflects the warm room and reads brown.
+
+## Music search and renderer-stall fixes
+
+The public NetEase route `cloudsearch/get/web` began answering `50000005`
+for guest searches. The client now uses the current web-player route
+`cloudsearch/pc` first, keeps the old route as a fallback, and the mock server
+exercises both. A live search for `周杰伦` now returns 30 songs instead of an
+error toast.
+
+Quality selection is now a four-button segmented control instead of a native
+`<select>`. This removes the native popup path that could fall through to an
+unrelated file/folder dialog in the transparent Windows window and makes the
+change immediate and inspectable.
+
+Several renderer hotspots were reduced after the music→home regression:
+
+- the live SVG displacement filter is limited to small dialogs; the home
+  chrome and the large settings sheet use the cheaper frosted blur;
+- animated pseudo-layers no longer carry a per-frame `filter: blur()`;
+- nested settings rows no longer repeat a backdrop filter over the already
+  blurred sheet;
+- the flowing-white instance colours are uploaded at 12 Hz rather than every
+  rendered frame;
+- `instanceColor` versioning is still tracked so the flow remains animated,
+  but render-state reuse is no longer defeated at full frame rate.

@@ -372,7 +372,20 @@ export class NeteaseClient {
   async search(keywords: string, kind: "song", limit?: number, offset?: number, signal?: AbortSignal): Promise<SearchResult<MusicSong>>;
   async search(keywords: string, kind: "playlist", limit?: number, offset?: number, signal?: AbortSignal): Promise<SearchResult<MusicPlaylist>>;
   async search(keywords: string, kind: "song" | "playlist", limit = 30, offset = 0, signal?: AbortSignal): Promise<SearchResult<MusicSong> | SearchResult<MusicPlaylist>> {
-    const data = rec((await this.call("cloudsearch/get/web", { s: keywords, type: kind === "song" ? 1 : 1000, limit, offset, total: true }, signal)).result);
+    const payload = { s: keywords, type: kind === "song" ? 1 : 1000, limit, offset, total: true };
+    let data: Json;
+    try {
+      // The modern endpoint is what the current web player uses. The old
+      // `cloudsearch/get/web` route now answers 50000005 for many guests; keep
+      // it only as a fallback for older mirrors and test stand-ins.
+      data = rec((await this.call("cloudsearch/pc", payload, signal)).result);
+    } catch (first) {
+      try {
+        data = rec((await this.call("cloudsearch/get/web", payload, signal)).result);
+      } catch {
+        throw first;
+      }
+    }
     if (kind === "song") return { items: songsOf(arr(data.songs)), total: num(data.songCount) };
     return { items: playlistsOf(arr(data.playlists)), total: num(data.playlistCount) };
   }

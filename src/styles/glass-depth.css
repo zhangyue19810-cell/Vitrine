@@ -144,8 +144,8 @@
     inset 0 -18px 34px rgba(114, 144, 174, 0.07),
     inset 0 20px 32px rgba(255, 255, 255, 0.1),
     0 0 0 4px rgba(255, 255, 255, 0.045);
-  -webkit-backdrop-filter: blur(32px) saturate(1.82) brightness(1.045);
-  backdrop-filter: blur(32px) saturate(1.82) brightness(1.045);
+  -webkit-backdrop-filter: blur(24px) saturate(1.7) brightness(1.035);
+  backdrop-filter: blur(24px) saturate(1.7) brightness(1.035);
   background-clip: padding-box;
 }
 
@@ -197,6 +197,20 @@
   -webkit-backdrop-filter: blur(21px) saturate(1.6) brightness(1.025);
   backdrop-filter: blur(21px) saturate(1.6) brightness(1.025);
   background-clip: padding-box;
+}
+
+/* Nested rows sit on top of the already-frosted sheet or home panel. A second
+ * backdrop filter here re-blurs the same pixels and is a common source of
+ * compositor stalls while a render tier is being rebuilt. */
+:root:root .sheet .card,
+:root:root .sheet .setting,
+:root:root .sheet .material-option,
+:root:root .sheet .custom-download-status,
+:root:root .dl-bar .input,
+:root:root .dl-bar .select,
+:root:root .dl-bar .btn {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 
 :root:root .card:hover,
@@ -420,17 +434,10 @@
  * motion comes from the flowing light field below, not from wobbling the whole
  * interface. Browsers without SVG-in-backdrop-filter keep the frosted blur. */
 @supports ((backdrop-filter: url("#vitrine-glass-lens")) or (-webkit-backdrop-filter: url("#vitrine-glass-lens"))) {
-  :root:root .sheet,
+  /* A live animated 3D scene behind a displacement filter is expensive. Keep
+   * true refraction on the modal cards where the backdrop is already dimmed
+   * and blurred; the always-on home chrome uses the cheaper frosted blur. */
   :root:root .dialog,
-  :root:root .callout,
-  :root:root .detail-panel,
-  :root:root .dl-bar,
-  :root:root .menu,
-  :root:root .nav-reveal,
-  :root:root .system-nav,
-  :root:root .hud-capsule,
-  :root:root .hud-queue,
-  :root:root .material-option,
   :root:root .mod-update-dialog.dialog {
     -webkit-backdrop-filter: var(--glass-lens) blur(28px) saturate(1.82) brightness(1.045);
     backdrop-filter: var(--glass-lens) blur(28px) saturate(1.82) brightness(1.045);
