@@ -1,0 +1,150 @@
+/*
+ * Flowing-light card material.
+ *
+ * The older glass pass already gives every stable surface a travelling rim
+ * and a pointer-following specular sheet. This last layer makes that light
+ * live on the cards themselves instead of only while the pointer is over
+ * them: a masked edge highlight circles the card and a soft diagonal caustic
+ * drifts across the body behind the content.
+ *
+ * Only transforms/opacity animate, so the effect stays on the compositor and
+ * is paused with the rest of the decorative motion while a game is running.
+ */
+
+.liquid-edge-host {
+  /* Keeps the negative-z light layer inside this card, above its own
+     background but below its text and controls. */
+  isolation: isolate;
+}
+
+/* Cards now breathe even when the pointer is elsewhere. Pointer hover only
+ * brightens and speeds them up. */
+.liquid-edge-host > .liquid-edge {
+  animation-play-state: running;
+  opacity: 0.52;
+  filter: drop-shadow(0 0 3px rgba(var(--accent-rgb), 0.18));
+}
+
+.liquid-edge-host:hover > .liquid-edge,
+.liquid-edge-host:focus-within > .liquid-edge {
+  opacity: 1;
+  filter:
+    drop-shadow(0 0 5px rgba(255, 244, 214, 0.24))
+    drop-shadow(0 0 12px rgba(var(--accent-rgb), 0.14));
+}
+
+.liquid-edge-always > .liquid-edge {
+  opacity: 0.72;
+}
+
+.liquid-flow {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 82% -12%, rgba(var(--accent-rgb), 0.09), transparent 58%),
+    linear-gradient(148deg, rgba(255, 252, 243, 0.035), transparent 58%);
+  mix-blend-mode: screen;
+  opacity: 0.68;
+}
+
+.liquid-flow::before {
+  content: "";
+  position: absolute;
+  top: -42%;
+  bottom: -42%;
+  left: -68%;
+  width: 50%;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(255, 255, 255, 0.22), rgba(255, 244, 218, 0.08) 34%, transparent 70%),
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(var(--accent-rgb), 0.12) 28%,
+      rgba(255, 248, 226, 0.24) 49%,
+      rgba(var(--accent-rgb), 0.11) 69%,
+      transparent 100%
+    );
+  transform: skewX(-18deg) translate3d(0, 0, 0);
+  animation: liquid-card-flow 10.5s linear infinite;
+  animation-delay: var(--flow-delay, 0s);
+  will-change: transform, opacity;
+}
+
+.liquid-flow::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse 44% 120% at 8% 112%, rgba(var(--accent-rgb), 0.1), transparent 72%),
+    linear-gradient(112deg, transparent 24%, rgba(255, 255, 255, 0.05) 48%, transparent 72%);
+  opacity: 0.58;
+}
+
+.liquid-edge-host:hover > .liquid-flow,
+.liquid-edge-host:focus-within > .liquid-flow {
+  opacity: 0.9;
+}
+
+.liquid-edge-host:hover > .liquid-flow::before,
+.liquid-edge-host:focus-within > .liquid-flow::before {
+  animation-duration: 6.8s;
+}
+
+@keyframes liquid-card-flow {
+  0% {
+    transform: skewX(-18deg) translate3d(0, 0, 0);
+    opacity: 0;
+  }
+  9% {
+    opacity: 0.5;
+  }
+  50% {
+    opacity: 0.86;
+  }
+  90% {
+    opacity: 0.32;
+  }
+  100% {
+    transform: skewX(-18deg) translate3d(380%, 0, 0);
+    opacity: 0;
+  }
+}
+
+/* A game has the GPU: keep the light but stop repainting it. */
+:root[data-perf="economy"] .liquid-flow::before {
+  animation-play-state: paused !important;
+  opacity: 0.34;
+}
+
+:root[data-perf="economy"] .liquid-edge {
+  animation-play-state: paused !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-flow::before,
+  .liquid-edge {
+    animation: none !important;
+  }
+
+  .liquid-flow::before {
+    opacity: 0.28;
+    transform: skewX(-18deg) translate3d(180%, 0, 0);
+  }
+}
+
+#stage.reduce-motion .liquid-flow::before,
+#stage.reduce-motion .liquid-edge {
+  animation: none !important;
+}
+
+#stage.reduce-motion .liquid-flow::before {
+  opacity: 0.28;
+  transform: skewX(-18deg) translate3d(180%, 0, 0);
+}

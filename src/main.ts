@@ -10,6 +10,7 @@ import "./styles/liquid-glass.css";
 import "./styles/typography.css";
 import "./styles/cinematic.css";
 import "./styles/features.css";
+import "./styles/flowing-cards.css";
 import { startApp } from "./app/app";
 import { preloadVisualAssets } from "./app/warmup";
 

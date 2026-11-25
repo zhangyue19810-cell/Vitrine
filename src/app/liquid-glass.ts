@@ -25,6 +25,10 @@ const LIQUID_TARGET = [
   ".mod-update-row",
   ".mod-problem-trigger",
   ".mod-problem-popover",
+  ".material-option",
+  ".custom-download-status",
+  ".hud-capsule",
+  ".hud-queue",
   ".item",
   ".empty",
   ".logview",
@@ -122,13 +126,23 @@ export function installLiquidGlass(root: HTMLElement): () => void {
   };
 
   const ensureEdge = (target: HTMLElement) => {
-    if (!target.matches(EDGE_TARGET) || target.querySelector(":scope > .liquid-edge")) return;
+    if (!target.matches(EDGE_TARGET)) return;
     if (getComputedStyle(target).position === "static") target.style.position = "relative";
-    const edge = document.createElement("span");
-    edge.className = "liquid-edge";
-    edge.setAttribute("aria-hidden", "true");
-    edge.style.setProperty("--edge-delay", `${-(edgeSeed++ % 8) * 0.85}s`);
-    target.append(edge);
+    const seed = edgeSeed++;
+    if (!target.querySelector(":scope > .liquid-flow")) {
+      const flow = document.createElement("span");
+      flow.className = "liquid-flow";
+      flow.setAttribute("aria-hidden", "true");
+      flow.style.setProperty("--flow-delay", `${-(seed % 11) * 1.15}s`);
+      target.append(flow);
+    }
+    if (!target.querySelector(":scope > .liquid-edge")) {
+      const edge = document.createElement("span");
+      edge.className = "liquid-edge";
+      edge.setAttribute("aria-hidden", "true");
+      edge.style.setProperty("--edge-delay", `${-(seed % 8) * 0.85}s`);
+      target.append(edge);
+    }
     target.classList.add("liquid-edge-host");
     if (target.matches(EDGE_ALWAYS)) target.classList.add("liquid-edge-always");
   };
