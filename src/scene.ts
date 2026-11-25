@@ -301,6 +301,7 @@ export class ArchiveScene {
   installStage(painter: FacePainter) {
     if (this.stage) return this.stage;
     const stage = new ArchiveStage({ painter, anisotropy: Math.min(8, this.renderer.capabilities.getMaxAnisotropy()) });
+    if (this.ringMaterialPreset) stage.setRingMaterial(this.ringMaterialPreset);
     stage.group.visible = this.stageOn;
     this.scene.add(stage.group);
     this.stage = stage;
@@ -1219,6 +1220,7 @@ export class ArchiveScene {
   setRingMaterial(preset: RingMaterialPreset) {
     this.ringMaterialPreset = preset;
     this.appearance.setRingMaterial(preset);
+    this.stage?.setRingMaterial(preset);
     this.renderState.invalidate();
   }
 
@@ -2406,7 +2408,7 @@ export class ArchiveScene {
         for (const name of ['appearance', 'glassClarity', 'themeAmount', 'subduedIndex'])
           state.floats(object.userData[name]?.value ?? 0);
         if (object instanceof THREE.InstancedMesh)
-          state.add(object.count, object.instanceMatrix.version, this.themeAttribute?.version ?? 0);
+          state.add(object.count, object.instanceMatrix.version, this.themeAttribute?.version ?? 0, object.instanceColor?.version ?? 0);
       });
       if (!state.end()) { this.reusedFrames++; return; }
     }

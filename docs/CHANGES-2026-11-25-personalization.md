@@ -2,7 +2,7 @@
 
 ## Ring PBR materials
 
-`src/ring-materials.ts` defines nine looks: black-gold studio glass, crimson
+`src/ring-materials.ts` defines ten looks: black-gold studio glass, crimson
 lacquer, violet satin metal, azure chrome glass, pearl ceramic, jade enamel,
 rose copper, obsidian gold and matte carbon. Each preset sets independent
 colour, metalness, roughness, clearcoat, transmission, thickness, attenuation
@@ -152,3 +152,24 @@ underlying HUD cut through sharply.
 
 The SVG filter is adapted from the MIT-licensed source; attribution and the
 licence are in `docs/third-party/`.
+
+## Möbius ring size, material switching and flowing white
+
+The extracted archive at the ring opening used its own `HOLE.scale` of `2.1`
+while the band plates used `RING_CARD.scale` of `1.22`. One front-facing slab
+therefore towered over the evenly sized ring and made the silhouette read like
+a hedgehog. The opening card now uses the same `1.22` world scale as the band
+plates; perspective still makes the centre card readable, but it no longer
+breaks the ring's proportions.
+
+The PBR picker previously reached the archive shells but not `FinMesh`, the
+single instanced mesh that actually draws the dense Möbius fins. `FinMesh` now
+accepts the same `RingMaterialPreset` and applies its metal, roughness,
+clearcoat, environment intensity and emissive response after the theme/deep
+space blend. Switching a preset now visibly recolours the ring itself.
+
+A tenth look, **流光白**, was added. Its shell/glass families use cool pearl
+white, while the fin mesh keeps a silver-gray base and computes a narrow white
+crest per instance from the plate's position along the band and the scene
+clock. The crest follows the ring through its morphs and costs no extra draw
+call; a small cool emissive prevents the gold studio key from turning it beige.

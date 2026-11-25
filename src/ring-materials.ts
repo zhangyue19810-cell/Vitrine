@@ -7,7 +7,7 @@
  * keeps readable highlights and depth at every angle.
  */
 
-export type RingMaterialId = "black-gold" | "crimson" | "violet" | "azure" | "pearl" | "jade" | "copper" | "obsidian" | "carbon";
+export type RingMaterialId = "black-gold" | "crimson" | "violet" | "azure" | "pearl" | "jade" | "copper" | "obsidian" | "carbon" | "flow-white";
 
 export interface RingMaterialPreset {
   id: RingMaterialId;
@@ -193,6 +193,26 @@ export const RING_MATERIALS: readonly RingMaterialPreset[] = [
     thickness: 0.5,
     attenuation: "#3f3426",
     attenuationDistance: 0.9,
+  },
+  {
+    id: "flow-white",
+    label: "流光白",
+    tag: "PEARL / FLOW",
+    description: "冷白珠光玻璃，环体表面有沿莫比乌斯带流动的银白光带。",
+    swatch: "linear-gradient(135deg,#737b88,#f7f9ff 42%,#d6e8ff 68%,#ffffff)",
+    metal: "#c5cbd5",
+    glass: "#dbe1e9",
+    accent: "#ffffff",
+    dark: "#8b929d",
+    metalness: 0.34,
+    roughness: 0.26,
+    clearcoat: 0.86,
+    clearcoatRoughness: 0.1,
+    envMapIntensity: 2.05,
+    transmission: 0.46,
+    thickness: 0.38,
+    attenuation: "#eef3fb",
+    attenuationDistance: 1.9,
   },
   {
     id: "carbon",

@@ -30,6 +30,7 @@ import { DEFAULT_VIEW, DISK, lanePose, newLanePose, newSystem, systemOf, type Vi
 import { SHADOW } from "./space/geodesic";
 import { DiskView } from "./space/view";
 import { LyricsLayer, type LyricsState } from "./space/lyrics3d";
+import type { RingMaterialPreset } from "./ring-materials";
 import { Turntable } from "./deck/turntable";
 import { DECK_TILT } from "./deck/model";
 import type { WorldState } from "./fin-mesh";
@@ -1676,6 +1677,11 @@ export class ArchiveStage {
       lyrics: this.lyrics.active,
       ripples: this.ripples.items.length,
     };
+  }
+
+  /** Recolour the Möbius plates together with the archive shells. */
+  setRingMaterial(preset: RingMaterialPreset | undefined) {
+    this.fins.setRingMaterial(preset);
   }
 
   dispose() {

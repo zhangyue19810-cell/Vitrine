@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { BAND, BOUNCE, BandPath, TRACK, newPlate, plateAt, staggered, trackPlateAt, unrollOrder, type PlateFrame } from "./fin-band";
 import type { SpectrumField } from "./spectrum";
+import type { RingMaterialPreset } from "./ring-materials";
 import { cosmosPlate, hash as cosmosHash, newPlaced, type Eye, type KeepOut, type Placed } from "./space/cosmos";
 import { haloBand, haloPlate, haloSlot, type Halo } from "./space/halo";
 import type { RippleSet } from "./space/ripples";
@@ -57,6 +58,7 @@ const smooth = (t: number) => {
 
 /** What the plates are tinted towards when they hear something (multiplies the glaze: gold in either theme). */
 const GLOW: [number, number, number] = [1.75, 1.3, 0.62];
+const FLOW_WHITE: [number, number, number] = [1.0, 0.985, 0.96];
 
 /** The colour of the debris in deep space, whichever theme the rest of the picture is in: pale gold dust. */
 const ICE = new THREE.Color("#cdbb94");
@@ -132,6 +134,10 @@ export class FinMesh {
   private tinted = false;
   private amount = 0;
   private deep = 0;
+  /** The user-selected ring material, applied after the theme/deep-space blend. */
+  private ringPreset?: RingMaterialPreset;
+  private flowingWhite = false;
+  private readonly presetColor = new THREE.Color();
   /** How loud each halo plate is (smoothed, so a plate does not snap when the spectrum does). */
   private readonly levels: Float32Array;
   private readonly placed = newPlaced();
@@ -195,6 +201,14 @@ export class FinMesh {
     return this.count;
   }
 
+  /** Apply the same named PBR family the archive shells use to the Möbius fins. */
+  setRingMaterial(preset: RingMaterialPreset | undefined) {
+    this.ringPreset = preset;
+    this.flowingWhite = preset?.id === "flow-white";
+    this.paintMaterial();
+    this.signature = "";
+  }
+
   /** 0 (light) … 1 (dark). */
   setTheme(amount: number) {
     this.amount = THREE.MathUtils.clamp(amount, 0, 1);
@@ -222,6 +236,26 @@ export class FinMesh {
     m.clearcoatRoughness = THREE.MathUtils.lerp(THREE.MathUtils.lerp(0.35, 0.1, this.amount), 0.07, d);
     m.iridescence = 0.001 + 0.1 * d;
     m.envMapIntensity = THREE.MathUtils.lerp(THREE.MathUtils.lerp(1, 2.25, this.amount), 2.6, d);
+
+    const preset = this.ringPreset;
+    if (preset && !preset.original) {
+      const strength = 0.9;
+      this.presetColor.set(preset.metal);
+      m.color.lerp(this.presetColor, strength);
+      m.metalness = THREE.MathUtils.lerp(m.metalness, preset.metalness, 0.92);
+      m.roughness = THREE.MathUtils.lerp(m.roughness, preset.roughness, 0.88);
+      m.clearcoat = THREE.MathUtils.lerp(m.clearcoat, preset.clearcoat, 0.86);
+      m.clearcoatRoughness = THREE.MathUtils.lerp(m.clearcoatRoughness, preset.clearcoatRoughness, 0.82);
+      m.envMapIntensity = THREE.MathUtils.lerp(m.envMapIntensity, preset.envMapIntensity, 0.82);
+      m.iridescence = Math.max(m.iridescence, preset.id === "azure" || preset.id === "violet" ? 0.08 : 0.018);
+      if (preset.id === "flow-white") {
+        // The studio is deliberately warm; a small cool emissive keeps the
+        // white preset from turning beige under the gold key light.
+        this.presetColor.set("#86a9dd");
+        m.emissive.copy(this.presetColor).multiplyScalar(0.035 + 0.015 * this.deep);
+        m.iridescence = Math.max(m.iridescence, 0.16);
+      }
+    }
   }
 
   setVisible(visible: boolean) {
@@ -241,7 +275,7 @@ export class FinMesh {
     const rise = 1 - Math.exp(-60 * dt);
     const fall = 1 - Math.exp(-9 * dt);
     // While there is something that can tint a plate, every plate's colour is written each time; otherwise they are left alone.
-    const painting = Boolean(colors) && (Boolean(audio) || Boolean(world) || this.tinted);
+    const painting = Boolean(colors) && (Boolean(audio) || Boolean(world) || this.tinted || this.flowingWhite);
     let anyTint = false;
     const { a, b, c, matrix, basis, qa, qb, qt, pos, scale, dir, side, up, placed, placed2 } = this;
     const ringSize = BAND.plate;
@@ -394,9 +428,16 @@ export class FinMesh {
           heatTint(heat, hot);
           anyTint = true;
         }
+        // “流光白” carries a narrow silver-white crest around the band. It
+        // lives in the per-instance glaze instead of a texture, so it follows
+        // every plate through ring/row morphs and costs no extra draw call.
+        const flow = this.flowingWhite ? Math.pow(0.5 + 0.5 * Math.sin(base * Math.PI * 6 - state.clock * 1.75), 7) : 0;
+        if (flow > 0.001) anyTint = true;
         for (let channel = 0; channel < 3; channel++) {
-          const base = this.baseColors[at + channel] * level * (ew > 0.002 ? 1 + (hot[channel] - 1) * ew : 1);
-          colors[at + channel] = tint > 0.002 ? base + (GLOW[channel] - base) * Math.min(1, tint) : base;
+          let value = this.baseColors[at + channel] * level * (ew > 0.002 ? 1 + (hot[channel] - 1) * ew : 1);
+          if (tint > 0.002) value += (GLOW[channel] - value) * Math.min(1, tint);
+          if (flow > 0.001) value += (FLOW_WHITE[channel] - value) * flow * 0.92;
+          colors[at + channel] = value;
         }
         if (tint > 0.002) anyTint = true;
       }
