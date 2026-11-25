@@ -326,6 +326,12 @@ body {
 }
 
 /* ------------------------------------------------------------------------------------------ the top quick island */
+/*
+ * Ported geometry from Lumina UI's IslandChat: a pure-black capsule with a
+ * mirror rim, a tiny sensor light in the collapsed bar, and damped width /
+ * height / position / alpha springs driven from dynamic-island.ts. No CSS
+ * size transitions here — the spring owns every intermediate frame.
+ */
 
 .dynamic-island {
   position: absolute;
@@ -338,108 +344,53 @@ body {
   column-gap: 9px;
   row-gap: 1px;
   align-items: center;
-  width: max-content;
-  max-width: min(620px, 56%);
-  min-height: 42px;
-  padding: 7px 16px 7px 10px;
-  border: 1px solid rgba(var(--ambient-accent-rgb), 0.46);
-  border-radius: 999px;
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.24), transparent 36%, rgba(var(--ambient-accent-rgb), 0.2)),
-    radial-gradient(ellipse 44% 160% at 8% -35%, rgba(var(--ambient-flow-a-rgb), 0.34), transparent 68%),
-    linear-gradient(145deg, rgba(255, 255, 255, 0.16), rgba(var(--ambient-depth-rgb), 0.5));
+  width: var(--island-w, 58px);
+  height: var(--island-h, 13px);
+  max-width: calc(100% - 32px);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: var(--island-r, 6.5px);
+  background: linear-gradient(180deg, #000 0%, #0b0b10 100%);
   color: var(--ink);
   box-shadow:
-    0 16px 44px rgba(0, 0, 0, 0.3),
-    0 0 28px rgba(var(--ambient-accent-rgb), 0.16),
-    0 0 0 1px rgba(var(--ambient-accent-rgb), 0.1),
-    inset 0 1px 0 rgba(255, 249, 231, 0.55),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.24);
-  backdrop-filter: blur(24px) saturate(1.6) brightness(1.28);
-  -webkit-backdrop-filter: blur(24px) saturate(1.6) brightness(1.28);
-  opacity: 0;
+    0 10px 30px rgba(0, 0, 0, 0.58),
+    0 0 0 1px rgba(0, 0, 0, 0.72),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.035);
+  opacity: var(--island-a, 0);
   visibility: hidden;
+  transform: translate(-50%, var(--island-y, -24px));
+  transform-origin: 50% 50%;
+  cursor: pointer;
+  isolation: isolate;
+  will-change: width, height, transform, opacity;
+  transition: border-color 0.2s var(--ease), box-shadow 0.24s var(--ease);
+}
+
+.dynamic-island[data-state="open"] {
+  padding: 7px 16px 7px 10px;
+}
+
+.dynamic-island[data-state="bar"] {
+  padding: 0;
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.dynamic-island[data-state="hidden"] {
   pointer-events: none;
-  transform: translate(-50%, -92px) scale(0.9);
-  transform-origin: 50% 0;
-  transition:
-    transform 0.6s cubic-bezier(0.16, 1.32, 0.3, 1),
-    opacity 0.28s var(--ease),
-    visibility 0s linear 0.6s,
-    max-width 0.45s var(--ease),
-    min-height 0.45s var(--ease);
-}
-
-.dynamic-island[data-visible="true"] {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: translate(-50%, 0) scale(1);
-  transition:
-    transform 0.68s cubic-bezier(0.16, 1.42, 0.3, 1),
-    opacity 0.22s var(--ease),
-    visibility 0s,
-    max-width 0.45s var(--ease),
-    min-height 0.45s var(--ease);
-}
-
-/* On the near-black stage a plain glass token reads as a black pill. Keep the
- * smoked-glass body, but give it a visible inner light, a coloured refraction
- * and a slow sheen so it reads as material instead of a hole in the picture. */
-:root[data-dark-surface="true"] .dynamic-island {
-  background:
-    linear-gradient(118deg, rgba(255, 255, 255, 0.18), transparent 30%, rgba(var(--ambient-accent-rgb), 0.17)),
-    radial-gradient(ellipse 52% 180% at 6% -45%, rgba(var(--ambient-flow-a-rgb), 0.28), transparent 66%),
-    radial-gradient(ellipse 44% 150% at 94% 140%, rgba(var(--ambient-flow-b-rgb), 0.2), transparent 68%),
-    linear-gradient(145deg, rgba(138, 119, 82, 0.56), rgba(28, 23, 17, 0.5));
-  box-shadow:
-    0 16px 46px rgba(0, 0, 0, 0.38),
-    0 0 30px rgba(var(--ambient-accent-rgb), 0.14),
-    0 0 0 1px rgba(var(--ambient-accent-rgb), 0.08),
-    inset 0 1px 0 rgba(255, 249, 231, 0.58),
-    inset 0 0 24px rgba(var(--ambient-accent-rgb), 0.045),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.3);
 }
 
 .dynamic-island::before {
   content: "";
   position: absolute;
   inset: 1px;
-  z-index: -1;
-  overflow: hidden;
+  z-index: 0;
   border-radius: inherit;
   pointer-events: none;
   background:
-    conic-gradient(
-      from 220deg at 50% 50%,
-      transparent 0deg,
-      rgba(var(--ambient-flow-a-rgb), 0.09) 52deg,
-      rgba(255, 250, 235, 0.17) 86deg,
-      rgba(var(--ambient-accent-rgb), 0.13) 124deg,
-      transparent 196deg,
-      transparent 360deg
-    );
-  background-size: 180% 180%;
-  opacity: 0.72;
-  mix-blend-mode: screen;
-  animation: island-glass-flow 12s ease-in-out infinite alternate;
-}
-
-@keyframes island-glass-flow {
-  from { background-position: 0% 40%; transform: rotate(-1.2deg) scale(1.02); }
-  to { background-position: 100% 60%; transform: rotate(1.2deg) scale(1.02); }
-}
-
-.dynamic-island.island-spring {
-  animation: island-spring-in 0.72s cubic-bezier(0.16, 1.36, 0.3, 1) both;
-  animation-delay: 0.015s;
-}
-
-@keyframes island-spring-in {
-  0% { opacity: 0; transform: translate(-50%, -32px) scale(0.78); }
-  52% { opacity: 1; transform: translate(-50%, 4px) scale(1.045); }
-  74% { transform: translate(-50%, -2px) scale(0.99); }
-  100% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    radial-gradient(ellipse 62% 95% at 50% -55%, rgba(255, 255, 255, 0.17), transparent 68%),
+    radial-gradient(ellipse 44% 140% at 8% 130%, rgba(var(--ambient-accent-rgb), 0.07), transparent 66%);
 }
 
 .dynamic-island > * {
@@ -455,7 +406,7 @@ body {
   width: 24px;
   height: 24px;
   color: var(--ink);
-  filter: drop-shadow(0 0 7px rgba(var(--ambient-accent-rgb), 0.24));
+  filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.42));
 }
 
 .dynamic-island .island-mark svg {
@@ -464,15 +415,65 @@ body {
   height: 100%;
 }
 
+/* The sensor dot is the only content of the collapsed bar, as in the mod. */
+.dynamic-island > .island-sensor {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  z-index: 2;
+  display: none;
+  width: 5px;
+  height: 5px;
+  margin-top: -2.5px;
+  border-radius: 50%;
+  background: #111820;
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 6px rgba(111, 168, 255, 0.35);
+}
+
+.dynamic-island > .island-sensor::after {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  border-radius: 50%;
+  background: #6fa8ff;
+  opacity: 0.68;
+}
+
+.dynamic-island[data-state="bar"] > :not(.island-sensor) {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.dynamic-island[data-state="bar"] > .island-sensor {
+  display: block;
+}
+
+.dynamic-island[data-mode="complete"][data-state="bar"] > .island-sensor::after {
+  background: #62d99a;
+}
+
+.dynamic-island[data-mode="error"][data-state="bar"] > .island-sensor::after {
+  background: var(--danger);
+}
+
+.dynamic-island.show-lyrics .island-sensor {
+  display: none;
+}
+
 .dynamic-island .island-eyebrow {
   grid-column: 2;
   grid-row: 1;
   align-self: end;
-  color: rgba(var(--ink-rgb), 0.54);
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.48);
   font-size: 8.5px;
   line-height: 1.1;
   letter-spacing: 1.9px;
+  text-overflow: ellipsis;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 
 .dynamic-island .island-title {
@@ -481,7 +482,7 @@ body {
   align-self: start;
   max-width: 360px;
   overflow: hidden;
-  color: var(--ink);
+  color: #f8f6f1;
   font-size: 13px;
   font-weight: 600;
   line-height: 1.25;
@@ -495,7 +496,7 @@ body {
   grid-row: 1 / 3;
   max-width: 180px;
   overflow: hidden;
-  color: rgba(var(--ink-rgb), 0.56);
+  color: rgba(255, 255, 255, 0.5);
   font-size: 10px;
   letter-spacing: 0.45px;
   text-overflow: ellipsis;
@@ -510,7 +511,7 @@ body {
   height: 2px;
   overflow: hidden;
   border-radius: 999px;
-  background: rgba(var(--ink-rgb), 0.12);
+  background: rgba(255, 255, 255, 0.12);
 }
 
 .dynamic-island .island-progress i {
@@ -535,12 +536,7 @@ body {
 }
 
 .dynamic-island[data-mode="music"] {
-  min-width: min(540px, 56%);
-  min-height: 74px;
   grid-template-rows: 12px auto;
-  border-radius: 24px;
-  padding-top: 8px;
-  padding-bottom: 8px;
 }
 
 .dynamic-island[data-mode="music"] .island-title,
@@ -552,9 +548,8 @@ body {
   grid-column: 2 / 4;
   grid-row: 1;
   max-width: 430px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  color: rgba(255, 255, 255, 0.44);
+  letter-spacing: 1.45px;
 }
 
 .dynamic-island[data-mode="music"] .island-lyrics {
@@ -572,22 +567,22 @@ body {
 
 .dynamic-island .island-lyrics span {
   height: 13px;
-  color: rgba(var(--ink-rgb), 0.36);
+  color: rgba(255, 255, 255, 0.3);
   font-size: 9.5px;
   line-height: 13px;
   letter-spacing: 0.25px;
 }
 
 .dynamic-island .island-lyrics strong {
-  color: var(--ink);
+  color: #fffdf7;
   font-size: 14px;
   font-weight: 650;
   line-height: 1.45;
   letter-spacing: 0.55px;
   text-shadow:
-    0 0 16px rgba(var(--ambient-accent-rgb), 0.28),
-    0 0 2px rgba(255, 249, 231, 0.22);
-  background: linear-gradient(92deg, var(--ink) 8%, rgba(var(--ambient-accent-rgb), 1) 54%, var(--ink) 92%);
+    0 0 16px rgba(255, 255, 255, 0.16),
+    0 0 2px rgba(255, 255, 255, 0.22);
+  background: linear-gradient(92deg, #fffdf7 8%, rgb(var(--ambient-accent-rgb)) 54%, #fffdf7 92%);
   background-size: 220% 100%;
   -webkit-background-clip: text;
   background-clip: text;
@@ -617,12 +612,26 @@ body {
   border-color: rgba(115, 208, 154, 0.42);
 }
 
-.dynamic-island[data-mode="complete"] .island-progress i {
-  background: linear-gradient(90deg, #4fba82, #a7f1c8);
+.dynamic-island[data-mode="error"] {
+  border-color: rgba(var(--danger-rgb), 0.5);
 }
 
-.dynamic-island[data-mode="error"] {
-  border-color: rgba(var(--danger-rgb), 0.48);
+@media (max-width: 700px) {
+  .dynamic-island {
+    top: 8px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dynamic-island .island-lyrics strong,
+  .dynamic-island .island-lyrics strong.island-lyric-pop {
+    animation: none;
+  }
+}
+
+#stage.reduce-motion .dynamic-island .island-lyrics strong,
+#stage.reduce-motion .dynamic-island .island-lyrics strong.island-lyric-pop {
+  animation: none !important;
 }
 
 /* ------------------------------------------------------------------------------------------ personalisation section */
@@ -827,41 +836,6 @@ body {
   color: var(--danger);
 }
 
-@media (max-width: 700px) {
-  .dynamic-island {
-    max-width: calc(100% - 32px);
-    top: 8px;
-  }
-
-  .dynamic-island[data-mode="music"] {
-    min-width: min(460px, calc(100% - 32px));
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dynamic-island,
-  .dynamic-island.island-spring {
-    animation: none !important;
-    transition-duration: 0.001s !important;
-  }
-
-  .dynamic-island .island-lyrics strong {
-    animation: none;
-  }
-}
-
-#stage.reduce-motion .dynamic-island.island-spring,
-#stage.reduce-motion .dynamic-island .island-lyrics strong,
-#stage.reduce-motion .dynamic-island::before {
-  animation: none !important;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dynamic-island::before {
-    animation: none;
-  }
-}
-
 
 /* The glass sheets sit over a dense stage; keep their body copy opaque enough
  * to read, and let the island step aside while a modal owns the input. */
@@ -885,9 +859,9 @@ body {
 }
 
 #stage:has(.modal-root[data-open="true"]) .dynamic-island {
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 /* The quick island owns the very top centre; the page tabs sit just below it,

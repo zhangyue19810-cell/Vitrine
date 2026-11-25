@@ -51,15 +51,23 @@ atomic rename). It appears in the normal task manager and the top island.
 Mirror availability varies by repository; an HTML landing page or a 404 from a
 mirror is expected to be skipped when that mirror does not carry the asset.
 
-## Quick island
+## Quick island (ported from Lumina UI's IslandChat)
 
-The top island appears on input, shows active non-launch tasks, reports a
-completed download for exactly three seconds and collapses after ten seconds
-without real input. The animation timers are not reset by progress events, so
-a long download cannot keep a static bright element on screen indefinitely.
-While a song plays, input reveals a three-line lyric view with a damped spring
-transition on the current line. The home view tabs were moved below the island
-and checked at 1352, 1024 and 960 px widths for non-overlap.
+The launcher island now follows the geometry and motion of the user's earlier
+`/storage/emulated/0/luminaui` mod: a pure-black capsule with a thin mirror
+rim and a tiny blue sensor dot in the collapsed bar. Width, height, vertical
+position and alpha are four damped springs (stiffness 240/240/200/120), so
+opening, collapsing and leaving overshoot and settle like the in-game island
+instead of switching CSS sizes.
+
+Input opens it for five seconds, then it collapses to the sensor bar; ten
+seconds after the last real input it leaves completely. Progress and lyric
+events update content but do not reset inactivity. A finished download opens
+for exactly three seconds, then collapses to the sensor bar and leaves on the
+same ten-second rule. While a song plays and the user is active, the island
+shows the previous/current/next lyric lines; the current line uses its own
+spring reveal. The home view tabs were moved below the island and checked at
+1352, 1024 and 960 px widths for non-overlap.
 
 ## Startup warm-up and game resources
 
