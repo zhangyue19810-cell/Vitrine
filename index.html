@@ -16,7 +16,10 @@
       body {
         margin: 0;
         height: 100%;
-        background: #010102;
+        /* The frameless Electron window is transparent so #viewport's round
+           corners are real window corners, not a rounded rectangle painted on
+           top of a square surface. #viewport paints the dark paper itself. */
+        background: transparent;
       }
     </style>
   </head>

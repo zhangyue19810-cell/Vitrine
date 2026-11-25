@@ -10,6 +10,7 @@ import { inspectJava } from "./java/detect";
 import { JVM_PRESETS, recommendJvmPreset, recommendMemory, resolveJvmPreset } from "./mc/jvm";
 import { NeteaseError } from "./music/netease";
 import { pingServer } from "./net/mc-ping";
+import { startCustomDownload, type CustomDownloadMode } from "./net/custom-download";
 import { listExportCandidates } from "./pack/export";
 import { previewPack, readPackState } from "./pack/install";
 import { latestPackVersion } from "./pack/online";
@@ -156,6 +157,17 @@ export function buildRpc(core: Core): RpcTable {
     const url = str(params, "url", 2000);
     if (!/^https?:\/\//i.test(url)) throw new RpcError("只能打开 http / https 链接", "bad-params");
     await needHost("openExternal")(url);
+  });
+
+  // ---------------- custom downloads
+  def("customDownload.start", (params) => {
+    const url = str(params, "url", 4096);
+    if (!/^https?:\/\//i.test(url)) throw new RpcError("下载地址必须以 http:// 或 https:// 开头", "bad-params");
+    const folder = str(params, "folder", 2000);
+    const mode = (params.mode === undefined ? "auto" : oneOf(params, "mode", ["auto", "direct", "github", "aliyun", "huaqing"] as const)) as CustomDownloadMode;
+    const filename = optStr(params, "filename", 240);
+    const segments = optNum(params, "segments", 1, 16);
+    return startCustomDownload(core, { url, folder, filename, mode, segments: segments === undefined ? undefined : Math.round(segments) });
   });
 
   // ---------------- versions & loaders

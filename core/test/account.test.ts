@@ -124,7 +124,7 @@ async function startMicrosoftMock(state: MsState): Promise<{ server: MockServer;
     }
     if (url === "/xsts") {
       if (state.mode === "no-xbox") return json(401, { XErr: 2148916233 });
-      return json(200, { Token: "XSTS", DisplayClaims: { xui: [{ uhs: "uhs1" }] } });
+      return json(200, { Token: "XSTS", DisplayClaims: { xui: [{ uhs: "uhs1", xid: "2535400000000001" }] } });
     }
     if (url === "/login") {
       assert.equal(JSON.parse(body).identityToken, "XBL3.0 x=uhs1;XSTS");
@@ -170,6 +170,7 @@ describe("Microsoft sign-in chain", () => {
     assert.equal(tokens.session.profile.skinVariant, "slim");
     assert.equal(tokens.session.profile.skinUrl, "https://textures.example/skin.png");
     assert.equal(tokens.session.profile.capeUrl, "https://textures.example/cape.png");
+    assert.equal(tokens.session.xuid, "2535400000000001", "the XSTS Xbox user id is available for auth_xuid");
     assert.ok(tokens.session.expiresAt > Date.now() + 80_000_000);
     assert.ok(state.tokenCalls >= 3, "pending and slow_down answers keep polling");
   });
@@ -261,6 +262,8 @@ describe("account manager", () => {
     const first = await m.prepareLaunch(account.id);
     assert.equal(first.launch.userType, "msa");
     assert.equal(first.launch.accessToken, "mc-token-0");
+    assert.equal(first.launch.xuid, "2535400000000001");
+    assert.equal(first.launch.clientId, "client-123");
     assert.equal(state.tokenCalls, before, "a fresh token needs no refresh");
 
     clock += 2 * 86400_000; // token expired
@@ -273,6 +276,27 @@ describe("account manager", () => {
     clock += 2 * 86400_000;
     state.refreshBad = true;
     await assert.rejects(m.prepareLaunch(account.id), (e: unknown) => e instanceof AuthError && e.reason === "expired");
+  });
+
+  it("repairs an older Microsoft account that has no auth_xuid before launch", async () => {
+    const state = newState({ pendingPolls: 0 });
+    const { endpoints } = await startMicrosoftMock(state);
+    const secrets = new MemorySecretStore();
+    const m = manager(endpoints, secrets);
+    const account = await (await m.beginMicrosoft()).done;
+    const file = join(tmp, "accounts.json");
+    const data = JSON.parse(await readFile(file, "utf8"));
+    delete data.accounts[0].xuid;
+    await writeFile(file, JSON.stringify(data));
+    const before = state.tokenCalls;
+    // A real update restarts the launcher; the old file has no xuid and only
+    // the Microsoft access-token secret survives.
+    const reloaded = manager(endpoints, secrets);
+    const ready = await reloaded.prepareLaunch(account.id);
+    assert.equal(state.tokenCalls, before + 1, "the missing Xbox identity triggers one refresh");
+    assert.equal(ready.launch.xuid, "2535400000000001");
+    assert.equal(ready.launch.clientId, "client-123");
+    assert.equal(JSON.parse(await readFile(file, "utf8")).accounts[0].xuid, "2535400000000001", "the repaired id is persisted");
   });
 
   it("keeps an older account's issuer and falls back when its recorded client id is stale", async () => {

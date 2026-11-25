@@ -9,7 +9,12 @@ import "./styles/music-hud.css";
 import "./styles/liquid-glass.css";
 import "./styles/typography.css";
 import "./styles/cinematic.css";
+import "./styles/features.css";
 import { startApp } from "./app/app";
+import { preloadVisualAssets } from "./app/warmup";
+
+// Kick off the animation-resource cache immediately; the splash renders while it runs.
+preloadVisualAssets();
 
 startApp().catch((error: unknown) => {
   console.error("Vitrine failed to start", error);

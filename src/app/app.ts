@@ -20,6 +20,9 @@ import { LyricsFeed } from "./music/lyrics-feed";
 import { MusicView } from "./music/music-view";
 import type { MusicPlayer } from "./music/player";
 import { createMusicPlayer } from "./music/service";
+import { BackgroundView } from "./background";
+import { DynamicIsland } from "./dynamic-island";
+import { visualPreferences } from "./visuals";
 import { Perf, type PerfApp } from "./perf";
 import { RailBus } from "./rail-bus";
 import { SceneHost, detectRendererName } from "./scene-host";
@@ -73,6 +76,8 @@ export class App implements PerfApp {
   private perf!: Perf;
   private readonly fader = new ThemeFader();
   private inspection?: InspectionOverlay;
+  private background?: BackgroundView;
+  private island?: DynamicIsland;
 
   private download!: DownloadView;
   /** The plates drawn in the 3D scene (view tabs, archive size, the music page's sources, the transport next to the disc). */
@@ -215,6 +220,11 @@ export class App implements PerfApp {
       navigate: (axis, direction) => this.canBrowse() && (axis === "lane" ? this.stepLane(direction) : this.stepFile(direction)),
       hover: (index) => this.setHover(index),
     });
+    this.background = new BackgroundView(this.stage, this.bridge, {
+      media: (media, aspect) => this.host.setWallpaperMedia(media, aspect),
+      look: (settings) => this.host.setWallpaperLook({ dim: settings.dim, blur: settings.blur, depth: settings.depth }),
+    });
+    this.host.setRingMaterial(visualPreferences.material);
     this.host.stageHandlers = {
       select: (index) => this.onStageSelect(index),
       activate: () => this.onStageActivate(),
@@ -235,6 +245,7 @@ export class App implements PerfApp {
     this.stage.dataset.view = "home";
     this.renderTabs();
     this.host.setDark(this.dark, true);
+    visualPreferences.subscribe((state) => this.host.setRingMaterial(visualPreferences.material));
     this.perf = new Perf(this, detectRendererName());
     this.registerActions();
     this.layout.onChange = () => {
@@ -258,6 +269,11 @@ export class App implements PerfApp {
     }
     splash?.status("正在布置展柜…", 0.5);
     this.player = createMusicPlayer();
+    this.island = new DynamicIsland(this.stage, this.player, {
+      downloads: () => void import("./views/downloads").then(({ openDownloads }) => openDownloads()),
+      music: () => void this.showView("music"),
+      customDownload: () => void import("./views/custom-download").then(({ openCustomDownload }) => openCustomDownload()),
+    });
     this.lyrics = new LyricsFeed(this.player);
     this.music = new MusicView(this.host, this.bus, this.player, this.stage);
     this.dock = new MusicDock(this.host, this.bus, this.player, { open: () => void this.showView("music") });
@@ -291,6 +307,7 @@ export class App implements PerfApp {
     this.host.present(true);
     await splash?.finish();
     this.stage.dataset.entered = "true";
+    this.island?.start();
     this.stage.classList.add("ui-entering");
     clearTimeout(this.entranceTimer);
     this.entranceTimer = window.setTimeout(() => this.stage.classList.remove("ui-entering"), 2400);
@@ -684,6 +701,7 @@ export class App implements PerfApp {
     set("#download", front || this.mode === "detail" || this.view !== "browse" || this.tab === "music");
     set("#view-tabs", front || this.mode === "detail");
     set("#detail", front || this.mode !== "detail");
+    set(".dynamic-island", front);
   }
 
   // ------------------------------------------------------------------------------------------ events
@@ -749,6 +767,7 @@ export class App implements PerfApp {
 
   /** Toasts and sounds when background work ends (launches have their own screen). */
   private onTask(task: TaskSnapshot) {
+    this.island?.onTask(task);
     const before = this.taskStates.get(task.id);
     if (before === task.state) return;
     this.taskStates.set(task.id, task.state);
@@ -864,7 +883,16 @@ export class App implements PerfApp {
     action("open-search", () => this.openSearch(false));
     action("open-favorites", () => this.openSearch(true));
     action("open-downloads", async () => (await import("./views/downloads")).openDownloads());
+    action("open-custom-download", async () => (await import("./views/custom-download")).openCustomDownload());
     action("open-accounts", async () => (await import("./views/accounts")).openAccounts());
+    action("fix-launch-account", (element) => {
+      const instanceId = element.dataset.instance;
+      if (!instanceId) return;
+      launchOverlay.close(true);
+      if (!this.selectById(instanceId)) return;
+      this.enterDetail();
+      setTimeout(() => this.detail.show("config"), 100);
+    });
     action("open-settings", async () => (await import("./views/settings")).openSettings());
     action("open-settings-accounts", async () => (await import("./views/settings")).openSettings("accounts"));
     action("open-about", async () => (await import("./views/about")).openAbout());
@@ -884,6 +912,9 @@ export class App implements PerfApp {
       music: this.music,
       player: this.player,
       dock: this.dock,
+      island: this.island,
+      background: this.background,
+      visuals: visualPreferences,
       bus: this.bus,
       perf: this.perf,
       store,

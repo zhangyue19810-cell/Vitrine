@@ -206,6 +206,7 @@ export class HomeView {
         <button class="nav-button" data-act="open-search" title="搜索实例 (/)"><span class="glyph">⌕</span><span>搜索</span><span class="key">/</span></button>
         <button class="nav-button" data-act="open-favorites" title="收藏的实例"><span class="glyph">★</span><span>收藏</span><span class="count">${favorites}</span></button>
         <button class="nav-button" data-act="open-downloads" title="${first?.stageLabel ?? "下载与任务"}${first?.progress ? ` · ${formatSpeed(first.progress.speed)}` : ""} (D)"><span class="glyph">⇩</span><span>下载</span><span class="count">${downloads.length ? `${progress ? `${progress} · ` : ""}${formatSpeed(speed)}` : ""}</span><i class="dot" data-busy="${downloads.length > 0}"></i></button>
+        <button class="nav-button" data-act="open-custom-download" title="从网址下载文件"><span class="glyph">↧</span><span>自定义下载</span></button>
         <button class="nav-button" data-act="open-settings" title="设置 (Ctrl+,)"><span class="glyph">⚙</span><span>设置</span></button>
       </div>
       ${options.windowControls ? html`<div class="window-controls"><button data-act="win-minimize" aria-label="最小化">–</button><button data-act="win-maximize" aria-label="最大化">▢</button><button data-act="win-close" aria-label="关闭">✕</button></div>` : ""}`.value;

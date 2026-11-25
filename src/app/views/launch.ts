@@ -116,7 +116,7 @@ export function openLaunch(taskId: string, instanceId: string) {
       setHtml(
         f("error"),
         html`<div class="notice danger"><div style="flex:1"><b>启动失败</b><div style="margin-top:6px;white-space:pre-wrap;line-height:1.7">${task.error ?? "未知错误"}</div>
-          <div class="toolbar" style="margin-top:12px">${accountProblem ? html`<button class="btn sm" data-act="open-accounts">打开账号管理</button>` : ""}<button class="btn sm soft" data-act="open-downloads">查看任务日志</button></div></div></div>`,
+          <div class="toolbar" style="margin-top:12px">${accountProblem ? html`<button class="btn sm" data-act="open-accounts">打开账号管理</button><button class="btn sm soft" data-act="fix-launch-account" data-instance="${state.instanceId}">实例设置 · 使用账号</button>` : ""}<button class="btn sm soft" data-act="open-downloads">查看任务日志</button></div></div></div>`,
       );
       f("hint").textContent = "";
     } else if (task.state === "cancelled") {

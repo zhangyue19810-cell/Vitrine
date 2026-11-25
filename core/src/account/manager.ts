@@ -141,6 +141,7 @@ export class AccountManager {
         name: profile.name,
         uuid: profile.id,
         clientId: tokens.clientId,
+        xuid: tokens.session.xuid,
         skinUrl: profile.skinUrl,
         skinVariant: profile.skinVariant,
         capeUrl: profile.capeUrl,
@@ -257,7 +258,10 @@ export class AccountManager {
     }
     if (record.type === "microsoft") {
       let access = await this.options.secrets.get(`ms:${id}:access`);
-      if (!access || !record.expiresAt || record.expiresAt <= this.now() + 120_000) {
+      // Older builds did not store the Xbox user id. Minecraft's auth_xuid then fell back to
+      // "0", which makes online launches fail session verification. Refresh once so the
+      // Xbox -> XSTS handshake can populate it (and record the issuing Azure client id too).
+      if (!access || !record.expiresAt || record.expiresAt <= this.now() + 120_000 || !record.xuid) {
         const refresh = await this.options.secrets.get(`ms:${id}:refresh`);
         if (!refresh) throw new AuthError("这个微软账户需要重新登录。", "expired");
         const tokens = await this.refreshMicrosoft(record, refresh, signal);
@@ -265,7 +269,7 @@ export class AccountManager {
         access = tokens.session.accessToken;
       }
       record = await stamp(record);
-      return { record, launch: { name: record.name, uuid: record.uuid, accessToken: access, userType: "msa", xuid: record.xuid } };
+      return { record, launch: { name: record.name, uuid: record.uuid, accessToken: access, userType: "msa", xuid: record.xuid, clientId: record.clientId } };
     }
     // authlib
     const root = record.server!;

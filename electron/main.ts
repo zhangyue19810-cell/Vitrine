@@ -5,9 +5,11 @@
  *  - The page gets no Node: `preload.ts` exposes `window.vitrine` (call / abort / events / window controls).
  *  - No port is ever opened; the WebSocket transport in core/src/ws-server.ts is for development only.
  */
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, nativeTheme, protocol, safeStorage, session, shell, Tray, type IpcMainEvent, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions } from "electron";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
-import { readFile } from "node:fs/promises";
+import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, protocol, safeStorage, session, shell, Tray, type IpcMainEvent, type IpcMainInvokeEvent, type OpenDialogOptions, type SaveDialogOptions } from "electron";
+import { existsSync, readFileSync, writeFileSync, createReadStream } from "node:fs";
+import { readFile, stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
+import { Readable } from "node:stream";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { plainCipher, type Cipher } from "../core/src/account/secrets";
 import { Core, type HostBridge } from "../core/src/core";
@@ -67,7 +69,10 @@ function selectDataDir(): void {
 }
 selectDataDir();
 
-protocol.registerSchemesAsPrivileged([{ scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
+protocol.registerSchemesAsPrivileged([
+  { scheme: "app", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+  { scheme: "vitrine-media", privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } },
+]);
 app.commandLine.appendSwitch("ignore-gpu-blocklist");
 // If a Windows driver, VM or remote-desktop session cannot provide a hardware
 // WebGL context, let Chromium fall back to SwiftShader instead of dropping the
@@ -118,7 +123,28 @@ const MIME: Record<string, string> = {
   ".txt": "text/plain; charset=utf-8",
   ".pdf": "application/pdf",
   ".wasm": "application/wasm",
+  ".mp4": "video/mp4",
+  ".m4v": "video/mp4",
+  ".webm": "video/webm",
+  ".ogv": "video/ogg",
+  ".ogg": "video/ogg",
+  ".mov": "video/quicktime",
+  ".gif": "image/gif",
+  ".avif": "image/avif",
+  ".bmp": "image/bmp",
 };
+
+/** Files the user explicitly picked as a wallpaper. The renderer receives an opaque token URL, never a file:// URL. */
+const mediaTokens = new Map<string, string>();
+const MEDIA_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".avif", ".gif", ".bmp", ".mp4", ".m4v", ".webm", ".ogv", ".ogg", ".mov"]);
+function isMediaPath(path: string): boolean {
+  return /^(?:[A-Za-z]:[\\/]|\\\\|\/)/.test(path) && MEDIA_EXTENSIONS.has(extname(path).toLowerCase());
+}
+function mediaToken(path: string): string {
+  const token = createHash("sha256").update(path).digest("hex").slice(0, 32);
+  mediaTokens.set(token, path);
+  return token;
+}
 
 /**
  * The page needs: its own scripts and styles, blob/data images and https icons (Modrinth / CurseForge), the music's own servers for the
@@ -128,10 +154,10 @@ const CSP = [
   "default-src 'none'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob: https:",
+  "img-src 'self' data: blob: https: vitrine-media:",
   "font-src 'self' data:",
   "connect-src 'self' blob: data: https://aidemo.youdao.com https://api.mymemory.translated.net",
-  "media-src 'self' blob: data: https://*.music.126.net",
+  "media-src 'self' blob: data: https://*.music.126.net vitrine-media:",
   "worker-src 'self' blob:",
   "object-src 'none'",
   "base-uri 'none'",
@@ -162,6 +188,48 @@ function registerAppProtocol() {
       headers.set("x-content-type-options", "nosniff");
       if (pathname === "/index.html") headers.set("content-security-policy", CSP);
       return new Response(data, { status: 200, headers });
+    } catch {
+      return new Response("not found", { status: 404 });
+    }
+  });
+
+  // Wallpaper videos need byte ranges for seeking, and images/videos need CORS
+  // so the renderer can sample a frame and derive the adaptive UI palette.
+  protocol.handle("vitrine-media", async (request) => {
+    try {
+      const url = new URL(request.url);
+      if (url.hostname !== "media") return new Response("not found", { status: 404 });
+      const token = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+      const file = mediaTokens.get(token);
+      if (!file) return new Response("not found", { status: 404 });
+      const info = await stat(file);
+      if (!info.isFile()) return new Response("not found", { status: 404 });
+      const type = MIME[extname(file).toLowerCase()] ?? "application/octet-stream";
+      const headers = new Headers({
+        "content-type": type,
+        "accept-ranges": "bytes",
+        "access-control-allow-origin": "*",
+        "cross-origin-resource-policy": "cross-origin",
+        "cache-control": "private, max-age=3600",
+      });
+      const range = request.headers.get("range");
+      let start = 0;
+      let end = info.size - 1;
+      let status = 200;
+      if (range) {
+        const match = /^bytes=(\d+)-(\d*)$/i.exec(range.trim());
+        if (!match) return new Response("bad range", { status: 416, headers: { "content-range": `bytes */${info.size}` } });
+        start = Number(match[1]);
+        end = match[2] ? Math.min(info.size - 1, Number(match[2])) : info.size - 1;
+        if (!Number.isFinite(start) || start > end || start >= info.size) return new Response("bad range", { status: 416, headers: { "content-range": `bytes */${info.size}` } });
+        headers.set("content-range", `bytes ${start}-${end}/${info.size}`);
+        headers.set("content-length", String(end - start + 1));
+        status = 206;
+      } else {
+        headers.set("content-length", String(info.size));
+      }
+      const stream = Readable.toWeb(createReadStream(file, { start, end })) as ReadableStream<Uint8Array>;
+      return new Response(stream, { status, headers });
     } catch {
       return new Response("not found", { status: 404 });
     }
@@ -313,8 +381,9 @@ function createWindow() {
     frame: false,
     roundedCorners: true,
     hasShadow: true,
+    transparent: true,
     title: "Vitrine 琉匣",
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#11181b" : "#eae5e1",
+    backgroundColor: "#00000000",
     ...(icon ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
@@ -471,6 +540,12 @@ function registerIpc() {
   });
 
   ipcMain.handle("vitrine:window-state", (event) => (trusted(event) ? windowState() : { focused: false, visible: false }));
+
+  ipcMain.handle("vitrine:media-url", async (event, path: unknown) => {
+    if (!trusted(event) || typeof path !== "string" || !isMediaPath(path) || !existsSync(path)) return null;
+    const token = mediaToken(path);
+    return `vitrine-media://media/${token}`;
+  });
 
   ipcMain.on("vitrine:window-control", (event, action: unknown) => {
     if (!trusted(event) || !win || win.isDestroyed()) return;

@@ -8,6 +8,8 @@ import { store } from "../store";
 import { memoryOptions } from "../ui-bits";
 import type { JavaInstall, Settings } from "../types";
 import { PRODUCT } from "../../brand";
+import { RING_MATERIALS, type RingMaterialId } from "../../ring-materials";
+import { visualPreferences } from "../visuals";
 
 /**
  * Settings. Every control saves as soon as it changes (text after a short pause) and the core validates the value; what
@@ -92,7 +94,7 @@ function sections(): Section[] {
       rows: [
         { name: "游戏内存", path: "launch.memory", field: { kind: "select", options: () => memoryOptions(store.settings.launch.memory) }, desc: "“自动”会按物理内存、当前空闲内存和整合包大小估算。实例设置里可以单独覆盖。" },
         { name: "JVM 预设", path: "launch.jvmPreset", field: { kind: "select", options: () => store.jvmPresets.map((p) => [p.id, p.label] as Opt) }, desc: presetDesc() },
-        { name: "启动优化", path: "launch.optimize", field: { kind: "toggle" }, desc: "启动前清理启动器缓存、请求回收内存，并尝试提高游戏进程优先级；同时为 G1 补充低停顿和空闲内存回收参数。" },
+        { name: "启动优化", path: "launch.optimize", field: { kind: "toggle" }, desc: "启动前清理启动器缓存、请求回收内存，并尝试提高游戏进程优先级；G1 区域大小会随实际分配内存动态调整，避免小内存实例背负过大的 GC 区域。" },
         { name: "额外 JVM 参数", path: "launch.jvmArgs", field: { kind: "area", mono: true, placeholder: "-XX:+UseZGC …" }, block: true },
         { name: "额外游戏参数", path: "launch.gameArgs", field: { kind: "area", mono: true, placeholder: "--fullscreen …" }, block: true },
         { name: "窗口宽度", path: "launch.width", field: { kind: "number", min: 0, max: 16384, unit: "px", placeholder: "0 = 默认" } },
@@ -114,7 +116,7 @@ function sections(): Section[] {
         { name: "界面配色", path: "ui.theme", field: { kind: "seg", options: [["dark", "深空（暗色）"], ["light", "亮色"], ["auto", "跟随系统"]] } },
         { name: "动效", path: "ui.motion", field: { kind: "select", options: [["auto", "跟随系统的“减少动态效果”"], ["full", "完整动效"], ["reduced", "精简动效"]] }, desc: "精简动效会关闭滚动数字、选择涟漪等装饰，帧率上限降到 30。" },
         { name: "3D 帧率上限", path: "ui.fps", field: { kind: "select", options: [["auto", "自动（跟随显示器，最高 60）"], [30, "30 帧"], [60, "60 帧"], [120, "120 帧"]] }, desc: "停止操作 10 秒后会自动降到 30 帧，90 秒后降到 15 帧。" },
-        { name: "3D 画质", path: "ui.quality", field: { kind: "select", options: [["auto", "自动（卡顿时自动降级）"], ["high", "高"], ["medium", "中"], ["low", "低（省电）"]] }, desc: "自动档会结合显卡、处理器和物理内存选择档位；帧率持续偏低时再逐级降级。" },
+        { name: "3D 画质", path: "ui.quality", field: { kind: "select", options: [["auto", "自动（卡顿时自动降级）"], ["high", "高"], ["medium", "中"], ["low", "低（省电）"]] }, desc: "自动档会结合显卡、处理器和物理内存选择档位；帧率持续偏低时再逐级降级。检测到游戏运行时，启动器会临时降到低档并把 GPU 让给游戏。" },
         { name: "启动游戏时暂停动画", path: "ui.pauseWhenGameRuns", field: { kind: "toggle" }, desc: "游戏启动和运行期间完全停止 3D 动画，让出 GPU。你回到启动器窗口时动画自动恢复（游戏仍在运行时降到 30 帧）。" },
         { name: "游戏运行时释放显存", path: "ui.releaseGpuWhenGameRuns", field: { kind: "toggle" }, desc: "游戏在运行、启动器隐藏超过 15 秒后，销毁 3D 场景把显存还给游戏；回来时约 1 秒重新载入。" },
         { name: "窗口失去焦点时", path: "ui.whenUnfocused", field: { kind: "select", options: [["pause", "暂停动画"], ["throttle", "降到 10 帧"], ["full", "保持不变"]] } },
@@ -124,8 +126,124 @@ function sections(): Section[] {
         { name: "界面缩放", path: "ui.scale", field: { kind: "range", min: 0.75, max: 1.5, step: 0.05, format: (v) => `${Math.round(v * 100)}%` }, desc: "在窗口自适应缩放的基础上再放大或缩小整个界面。" },
       ],
     },
+    {
+      id: "personalize",
+      label: "个性化",
+      rows: [
+        { name: "莫比乌斯环材质", desc: "每个预设都会分别调整玻璃、金属、嵌线和边缘的 PBR 参数；原始黑金保留现有工作室反射。", custom: buildPersonalization, block: true },
+      ],
+    },
     { id: "about", label: "关于", rows: [{ name: "", custom: buildAbout, block: true }] },
   ];
+}
+
+function buildPersonalization(host: HTMLElement) {
+  const state = visualPreferences.get();
+  host.innerHTML = html`
+    <div class="personalization">
+      <div class="personalization-head">
+        <div>
+          <div class="name">环体 PBR 材质</div>
+          <div class="desc">实时应用到首页莫比乌斯环，重新打开启动器后仍会保留。</div>
+        </div>
+        <div class="personalization-current">
+          <i style="background:${visualPreferences.material.swatch}"></i>
+          <span data-material-name>${visualPreferences.material.label}</span>
+        </div>
+      </div>
+      <div class="material-grid" role="radiogroup" aria-label="莫比乌斯环材质">
+        ${RING_MATERIALS.map((material) => html`<button class="material-option" type="button" role="radio" data-material="${material.id}" aria-checked="${String(material.id === state.ringMaterial)}" title="${material.description}">
+          <i style="background:${material.swatch}"></i>
+          <span><b>${material.label}</b><small>${material.tag}</small></span>
+        </button>`)}
+      </div>
+
+      <div class="personalization-divider"></div>
+      <div class="personalization-head">
+        <div>
+          <div class="name">背景壁纸 / 视频</div>
+          <div class="desc">导入图片或视频后自动采样主色，卡片描边和流光会跟随背景变化；景深滑杆控制视差与聚焦晕影。</div>
+        </div>
+        <div class="background-current" data-bg-current>${state.background.kind === "none" ? "未设置" : state.background.name}</div>
+      </div>
+      <div class="background-actions">
+        <button class="btn sm soft" type="button" data-import-bg="image">导入图片…</button>
+        <button class="btn sm soft" type="button" data-import-bg="video">导入视频…</button>
+        <button class="btn sm ghost" type="button" data-clear-bg ${state.background.kind === "none" ? "disabled" : ""}>清除背景</button>
+        <button class="btn sm ghost" type="button" data-pause-bg ${state.background.kind !== "video" ? "disabled" : ""} aria-pressed="${String(state.background.paused)}">${state.background.paused ? "继续播放" : "暂停视频"}</button>
+      </div>
+      <div class="background-sliders" data-bg-controls data-disabled="${String(state.background.kind === "none")}">
+        <label>景深 <input class="range" type="range" data-bg="depth" min="0" max="100" step="1" value="${Math.round(state.background.depth * 100)}" /><output data-out="depth">${Math.round(state.background.depth * 100)}%</output></label>
+        <label>暗化 <input class="range" type="range" data-bg="dim" min="0" max="90" step="1" value="${Math.round(state.background.dim * 100)}" /><output data-out="dim">${Math.round(state.background.dim * 100)}%</output></label>
+        <label>柔化 <input class="range" type="range" data-bg="blur" min="0" max="36" step="1" value="${Math.round(state.background.blur)}" /><output data-out="blur">${Math.round(state.background.blur)}px</output></label>
+      </div>
+      <div class="hint-text">视频会在启动器隐藏或游戏运行时自动暂停，避免和游戏争抢解码器与显存。</div>
+    </div>`.value;
+
+  const refresh = () => {
+    const next = visualPreferences.get();
+    host.querySelectorAll<HTMLElement>("[data-material]").forEach((button) => button.setAttribute("aria-checked", String(button.dataset.material === next.ringMaterial)));
+    const name = host.querySelector<HTMLElement>("[data-material-name]");
+    if (name) name.textContent = visualPreferences.material.label;
+    const current = host.querySelector<HTMLElement>("[data-bg-current]");
+    if (current) current.textContent = next.background.kind === "none" ? "未设置" : next.background.name;
+    const clear = host.querySelector<HTMLButtonElement>("[data-clear-bg]");
+    if (clear) clear.disabled = next.background.kind === "none";
+    const pause = host.querySelector<HTMLButtonElement>("[data-pause-bg]");
+    if (pause) {
+      pause.disabled = next.background.kind !== "video";
+      pause.setAttribute("aria-pressed", String(next.background.paused));
+      pause.textContent = next.background.paused ? "继续播放" : "暂停视频";
+    }
+    const controls = host.querySelector<HTMLElement>("[data-bg-controls]");
+    if (controls) controls.dataset.disabled = String(next.background.kind === "none");
+  };
+
+  host.addEventListener("click", async (event) => {
+    const target = event.target as HTMLElement;
+    const material = target.closest<HTMLElement>("[data-material]");
+    if (material?.dataset.material) {
+      visualPreferences.setRingMaterial(material.dataset.material as RingMaterialId);
+      refresh();
+      return;
+    }
+    const importButton = target.closest<HTMLElement>("[data-import-bg]");
+    if (importButton) {
+      const kind = importButton.dataset.importBg === "video" ? "video" : "image";
+      const file = await pickPath("file", {
+        title: kind === "video" ? "选择背景视频" : "选择背景图片",
+        filters: kind === "video"
+          ? [{ name: "视频", extensions: ["mp4", "m4v", "webm", "ogv", "ogg", "mov"] }]
+          : [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp"] }],
+        hint: "当前不是桌面版，请粘贴背景文件的完整路径。",
+      });
+      if (!file) return;
+      const name = file.split(/[\/]/).pop() ?? file;
+      visualPreferences.importBackground(kind, file, name);
+      refresh();
+      toast(kind === "video" ? "背景视频已导入，正在生成自适应配色。" : "背景图片已导入，卡片颜色会随画面变化。", "ok");
+      return;
+    }
+    if (target.closest("[data-clear-bg]")) {
+      visualPreferences.clearBackground();
+      refresh();
+      return;
+    }
+    if (target.closest("[data-pause-bg]")) {
+      visualPreferences.setBackground({ paused: !visualPreferences.get().background.paused });
+      refresh();
+    }
+  });
+
+  host.addEventListener("input", (event) => {
+    const input = (event.target as HTMLElement).closest<HTMLInputElement>("input[data-bg]");
+    if (!input) return;
+    const key = input.dataset.bg as "depth" | "dim" | "blur";
+    const value = Number(input.value);
+    const output = host.querySelector<HTMLOutputElement>(`[data-out="${key}"]`);
+    if (output) output.value = key === "blur" ? `${Math.round(value)}px` : `${Math.round(value)}%`;
+    visualPreferences.setBackground(key === "depth" || key === "dim" ? { [key]: value / 100 } : { blur: value });
+  });
 }
 
 function presetDesc(): string {

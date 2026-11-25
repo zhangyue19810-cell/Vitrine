@@ -4,6 +4,9 @@ import type { DiscSpec, RailEvents } from "../control-rail";
 import { records, setArchive } from "../data";
 import { fullMotion, reducedMotion } from "../motion-preferences";
 import { normalizeQuality, qualityPresets, type RenderQuality } from "../render-quality";
+import { ringMaterialById, type RingMaterialPreset } from "../ring-materials";
+import { LinearFilter, SRGBColorSpace, Texture, VideoTexture } from "three";
+import { waitForVisualAssets } from "./warmup";
 import type { PlateGroup } from "../rail/model";
 import { ArchiveScene } from "../scene";
 import type { SpectrumField } from "../spectrum";
@@ -98,6 +101,11 @@ export class SceneHost {
   private railDisc: DiscSpec | null = null;
   private spectrum: SpectrumField | null = null;
   private cardSize: CardSize = "medium";
+  private ringMaterial: RingMaterialPreset = ringMaterialById("black-gold");
+  private wallpaperMedia?: HTMLImageElement | HTMLVideoElement;
+  private wallpaperTexture?: Texture;
+  private wallpaperAspect = 16 / 9;
+  private wallpaperLook = { dim: 0.4, blur: 10, depth: 0.72 };
 
   constructor(
     private readonly container: HTMLElement,
@@ -132,6 +140,9 @@ export class SceneHost {
     this.error = undefined;
     console.info(`[vitrine] WebGL renderer: ${detectRendererName()}`);
     await this.loadFonts();
+    // The splash started this warm-up cache before the first await; wait for
+    // the cassette bytes now so the scene does not issue a duplicate request.
+    await waitForVisualAssets();
     // Most machines get the full-quality context. Some newer GPU drivers reject the high-performance/MSAA request
     // specifically; retry with a conservative default context before giving up and showing the DOM-only view.
     const profiles: { label: string; options: { antialias?: boolean; powerPreference?: WebGLPowerPreference } }[] = [
@@ -152,6 +163,8 @@ export class SceneHost {
           return false;
         }
         next.setMotion(this.reduced ? reducedMotion() : fullMotion());
+        next.setRingMaterial(this.ringMaterial);
+        next.setWallpaper(this.wallpaperTexture ?? null, this.wallpaperAspect, this.wallpaperLook);
         next.setQuality(TIER_QUALITY[this.tier]);
         next.setSuperPerformance(this.tier === "minimal");
         next.setMode(this.mode);
@@ -386,6 +399,39 @@ export class SceneHost {
     if (this.reduced === reduced) return;
     this.reduced = reduced;
     this.scene?.setMotion(reduced ? reducedMotion() : fullMotion());
+  }
+
+  /**
+   * Give the scene the image/video the player picked as wallpaper. The DOM
+   * layer remains the fallback; when WebGL is live the texture is drawn inside
+   * the scene so the ring and glass always occlude it correctly.
+   */
+  setWallpaperMedia(media: HTMLImageElement | HTMLVideoElement | null, aspect = 16 / 9) {
+    this.wallpaperMedia = media ?? undefined;
+    this.wallpaperTexture?.dispose();
+    this.wallpaperTexture = undefined;
+    this.wallpaperAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
+    if (media) {
+      const texture = media instanceof HTMLVideoElement ? new VideoTexture(media) : new Texture(media);
+      texture.colorSpace = SRGBColorSpace;
+      texture.minFilter = LinearFilter;
+      texture.magFilter = LinearFilter;
+      texture.generateMipmaps = false;
+      texture.needsUpdate = true;
+      this.wallpaperTexture = texture;
+    }
+    this.scene?.setWallpaper(this.wallpaperTexture ?? null, this.wallpaperAspect, this.wallpaperLook);
+  }
+
+  setWallpaperLook(look: { dim: number; blur: number; depth: number }) {
+    this.wallpaperLook = { ...look };
+    this.scene?.setWallpaperLook(this.wallpaperLook);
+  }
+
+  /** Switch the Möbius ring's PBR family. Kept here so a rebuilt GPU scene gets the same material. */
+  setRingMaterial(preset: RingMaterialPreset) {
+    this.ringMaterial = preset;
+    this.scene?.setRingMaterial(preset);
   }
 
   setTier(tier: QualityTier) {

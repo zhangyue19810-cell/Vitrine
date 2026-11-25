@@ -94,6 +94,7 @@ export interface RpcMap {
   "host.pickFolder": [{ title?: string }, string | undefined];
   "host.saveFile": [{ title?: string; defaultPath?: string; filters?: FileFilter[] }, string | undefined];
   "host.openExternal": [{ url: string }, null];
+  "customDownload.start": [{ url: string; folder: string; filename?: string; mode?: "auto" | "direct" | "github" | "aliyun" | "huaqing"; segments?: number }, { taskId: string }];
   "versions.list": [{ force?: boolean }, VersionList];
   "loaders.list": [{ kind: string; mcVersion: string }, LoaderVersion[]];
   "loaders.overview": [{ mcVersion: string }, LoaderOverview];

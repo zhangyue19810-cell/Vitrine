@@ -2,21 +2,128 @@ import * as THREE from "three";
 import { glassRevealGLSL, frostedTransmissionGLSL, FROSTED_ROUGHNESS } from "./glass-reveal.ts";
 import { internalOpticsFragment } from "./internal-optics.ts";
 import { themeMaterial } from "./theme-material";
+import type { RingMaterialPreset } from "./ring-materials";
 
 type Surface = THREE.MeshPhysicalMaterial;
 type Palette = { high: Surface; low?: Surface };
+
+interface SurfaceSnapshot {
+  color: THREE.Color;
+  metalness: number;
+  roughness: number;
+  transmission?: number;
+  thickness?: number;
+  attenuationColor?: THREE.Color;
+  attenuationDistance?: number;
+  clearcoat?: number;
+  clearcoatRoughness?: number;
+  envMapIntensity: number;
+  emissive?: THREE.Color;
+  emissiveIntensity?: number;
+}
 
 // The array and selected file share geometry. Morph their surface properties
 // on one mesh so transparent shells never overlap during a quality change.
 export class CardAppearance {
   private palettes = new Map<string, Palette>();
+  private readonly tracked = new Map<Surface, { name: string; base: SurfaceSnapshot }>();
+  private materialStyle?: RingMaterialPreset;
+
   disposeSources() {
     for (const palette of this.palettes.values()) { palette.high.dispose(); palette.low?.dispose(); }
     this.palettes.clear();
+    this.tracked.clear();
   }
 
   register(name: string, high: Surface, low?: Surface) {
     this.palettes.set(name, { high, low });
+    this.track(high, name);
+    if (low) this.track(low, name);
+  }
+
+  /** Adopt a runtime material created by a quality tier (e.g. its fast clone). */
+  trackSurface(material: Surface, name: string) {
+    this.track(material, name);
+  }
+
+  /** Set the PBR look of the ring. Original black-gold restores the studio materials. */
+  setRingMaterial(preset: RingMaterialPreset) {
+    this.materialStyle = preset;
+    for (const [material, entry] of this.tracked) {
+      this.restore(material, entry.base);
+      if (!preset.original) this.style(material, entry.name, 1);
+      material.needsUpdate = true;
+    }
+  }
+
+  /** Clone a palette source at its original PBR values, then reapply the active preset. */
+  private cloneSource(material: Surface): Surface {
+    const clone = material.clone();
+    const baseline = this.tracked.get(material)?.base;
+    if (baseline) this.restore(clone, baseline);
+    return clone;
+  }
+
+  private snapshot(material: Surface): SurfaceSnapshot {
+    return {
+      color: material.color.clone(),
+      metalness: material.metalness,
+      roughness: material.roughness,
+      transmission: material.transmission,
+      thickness: material.thickness,
+      attenuationColor: material.attenuationColor?.clone(),
+      attenuationDistance: material.attenuationDistance,
+      clearcoat: material.clearcoat,
+      clearcoatRoughness: material.clearcoatRoughness,
+      envMapIntensity: material.envMapIntensity,
+      emissive: material.emissive?.clone(),
+      emissiveIntensity: material.emissiveIntensity,
+    };
+  }
+
+  private track(material: Surface, name: string) {
+    if (this.tracked.has(material)) return;
+    this.tracked.set(material, { name, base: this.snapshot(material) });
+    if (this.materialStyle && !this.materialStyle.original) this.style(material, name, 1);
+  }
+
+  private restore(material: Surface, base: SurfaceSnapshot) {
+    material.color.copy(base.color);
+    material.metalness = base.metalness;
+    material.roughness = base.roughness;
+    if (base.transmission !== undefined) material.transmission = base.transmission;
+    if (base.thickness !== undefined) material.thickness = base.thickness;
+    if (base.attenuationColor && material.attenuationColor) material.attenuationColor.copy(base.attenuationColor);
+    if (base.attenuationDistance !== undefined) material.attenuationDistance = base.attenuationDistance;
+    if (base.clearcoat !== undefined) material.clearcoat = base.clearcoat;
+    if (base.clearcoatRoughness !== undefined) material.clearcoatRoughness = base.clearcoatRoughness;
+    material.envMapIntensity = base.envMapIntensity;
+    if (base.emissive && material.emissive) material.emissive.copy(base.emissive);
+    if (base.emissiveIntensity !== undefined) material.emissiveIntensity = base.emissiveIntensity;
+  }
+
+  /** Blend a surface towards the preset while preserving the per-card lift/quality animation underneath. */
+  private style(material: Surface, name: string, strength: number) {
+    const preset = this.materialStyle;
+    if (!preset || preset.original || name === "Printed_Canvas" || name === "Printed_Label") return;
+    const glass = name === "Frosted_Polymer" || name === "Subsurface_Optics" || name === "Optical_Diffuser";
+    const accent = name === "Index_Inlay";
+    const ink = name === "Carbon_Ink";
+    const target = new THREE.Color(ink ? preset.dark : glass ? preset.glass : accent ? preset.accent : preset.metal);
+    material.color.lerp(target, 0.8 * strength);
+    const metalness = ink ? 0.08 : glass ? Math.min(0.18, preset.metalness * 0.16) : accent ? Math.max(0.42, preset.metalness * 0.68) : preset.metalness;
+    const roughness = ink ? Math.max(0.48, preset.roughness) : glass ? Math.max(0.08, preset.roughness * 0.62) : preset.roughness;
+    material.metalness = THREE.MathUtils.lerp(material.metalness, metalness, 0.72 * strength);
+    material.roughness = THREE.MathUtils.lerp(material.roughness, roughness, 0.72 * strength);
+    if (material.clearcoat !== undefined) material.clearcoat = THREE.MathUtils.lerp(material.clearcoat, ink ? 0.12 : preset.clearcoat, 0.68 * strength);
+    if (material.clearcoatRoughness !== undefined) material.clearcoatRoughness = THREE.MathUtils.lerp(material.clearcoatRoughness, preset.clearcoatRoughness, 0.68 * strength);
+    material.envMapIntensity = THREE.MathUtils.lerp(material.envMapIntensity, preset.envMapIntensity, 0.75 * strength);
+    if (glass && material.transmission !== undefined && material.thickness !== undefined) {
+      material.transmission = THREE.MathUtils.lerp(material.transmission, preset.transmission, 0.7 * strength);
+      material.thickness = THREE.MathUtils.lerp(material.thickness, preset.thickness, 0.7 * strength);
+      if (material.attenuationColor) material.attenuationColor.lerp(new THREE.Color(preset.attenuation), 0.68 * strength);
+      if (material.attenuationDistance !== undefined) material.attenuationDistance = THREE.MathUtils.lerp(material.attenuationDistance, preset.attenuationDistance, 0.65 * strength);
+    }
   }
 
   prepare(group: THREE.Group) {
@@ -28,7 +135,7 @@ export class CardAppearance {
         mesh.userData.themeAmount = themeMaterial(mesh.material as THREE.Material, "Printed_Canvas");
         continue;
       }
-      const mat = palette.high.clone();
+      const mat = this.cloneSource(palette.high);
       const amount = { value: 0 };
       const clarity = { value: 0 };
       mesh.material = mat;
@@ -85,6 +192,7 @@ export class CardAppearance {
       };
       mat.customProgramCacheKey = () =>
         `archive-surface-clarity-${name}-${Boolean(palette.low)}`;
+      this.track(mat, name);
       mesh.userData.subduedIndex = { value: 0 };
       mesh.userData.themeAmount = themeMaterial(mat, name, false, mesh.userData.subduedIndex);
     }
@@ -179,6 +287,7 @@ export class CardAppearance {
       // Keep the same transmission shader/pass throughout the transition.
       if (high.transmission > 0)
         mat.transmission = Math.max(0.000001, mat.transmission);
+      this.style(mat, String(mesh.userData.surface), 1);
     }
   }
 

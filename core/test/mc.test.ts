@@ -322,6 +322,9 @@ describe("JVM presets and memory advice", () => {
   it("only applies a preset when it fits the Java version and user flags", () => {
     assert.deepEqual(presetArgs("default", 17), []);
     assert.ok(presetArgs("large-modpack", 21).includes("-XX:G1HeapRegionSize=32M"));
+    assert.ok(presetArgs("large-modpack", 21, [], { javaMajor: 21, modCount: 80, maxMemoryMB: 4096 }).includes("-XX:G1HeapRegionSize=8M"));
+    assert.ok(presetArgs("large-modpack", 21, [], { javaMajor: 21, modCount: 120, maxMemoryMB: 8192 }).includes("-XX:G1HeapRegionSize=16M"));
+    assert.ok(presetArgs("large-modpack", 21, [], { javaMajor: 21, modCount: 220, maxMemoryMB: 12288 }).includes("-XX:G1HeapRegionSize=32M"));
     assert.deepEqual(presetArgs("zgc", 17), []);
     assert.ok(presetArgs("zgc", 21).includes("-XX:+ZGenerational"));
     assert.deepEqual(presetArgs("zgc", 25), ["-XX:+UseZGC"]);

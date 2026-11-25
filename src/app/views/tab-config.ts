@@ -67,7 +67,7 @@ function sections(javaMajor: number | undefined): Section[] {
         { key: "height", name: "窗口高度", kind: "number", min: 0, max: 16384, placeholder: "默认" },
         { key: "fullscreen", name: "全屏启动", kind: "toggle" },
         { key: "autoJoin", name: "启动后自动加入服务器", kind: "text", mono: true, placeholder: "play.example.com:25565", desc: "留空则正常进入主菜单。" },
-        { key: "accountId", name: "使用的账号", kind: "select", options: [["", "跟随全局选择"], ...store.accounts.map((account): Opt => [account.id, `${account.name}（${ACCOUNT_TYPE_LABEL[account.type] ?? account.type}）`])], desc: "给这个实例固定使用某个账号，比如离线测试号。" },
+        { key: "accountId", name: "使用的账号", kind: "select", options: [["", "跟随全局选择"], ...store.accounts.map((account): Opt => [account.id, `${account.name}（${ACCOUNT_TYPE_LABEL[account.type] ?? account.type}）`])], desc: "给这个实例固定使用某个账号。微软账号启动时，如果这里的固定账号已过期或与当前账号不一致，改成“跟随全局选择”或重新选择当前微软账号即可。" },
       ],
     },
     {

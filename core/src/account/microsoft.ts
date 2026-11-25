@@ -25,6 +25,8 @@ export const MS_SCOPE = "XboxLive.signin offline_access";
 
 export interface MinecraftSession {
   accessToken: string;
+  /** Xbox user id used by modern launch arguments (auth_xuid). */
+  xuid?: string;
   /** Unix ms. */
   expiresAt: number;
   profile: { id: string; name: string; skinUrl?: string; skinVariant?: "classic" | "slim"; capeUrl?: string };
@@ -179,8 +181,10 @@ export class MicrosoftAuth {
       if (known) throw new AuthError(known[1], known[0], xsts.json);
       throw new AuthError(`Xbox 授权失败（HTTP ${xsts.status}）`, "unknown", xsts.json);
     }
-    const hash = (xsts.json.DisplayClaims?.xui?.[0]?.uhs as string | undefined) ?? userHash;
+    const xstsClaims = xsts.json.DisplayClaims?.xui?.[0] as { uhs?: string; xid?: string } | undefined;
+    const hash = xstsClaims?.uhs ?? userHash;
     if (!hash) throw new AuthError("Xbox 授权响应缺少用户哈希", "unknown", xsts.json);
+    const xuid = xstsClaims?.xid ?? (xbl.json.DisplayClaims?.xui?.[0]?.xid as string | undefined);
 
     const login = await send(this.http, this.endpoints.mcLogin, {
       body: JSON.stringify({ identityToken: `XBL3.0 x=${hash};${xsts.json.Token}` }),
@@ -203,6 +207,7 @@ export class MicrosoftAuth {
     const cape = (profile.json.capes as { state: string; url: string }[] | undefined)?.find((c) => c.state === "ACTIVE");
     return {
       accessToken,
+      xuid,
       expiresAt,
       profile: {
         id: formatUuid(profile.json.id),

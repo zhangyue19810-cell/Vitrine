@@ -21,6 +21,7 @@ import { Cinema } from "./cinema";
 import { normalizeQuality, type RenderQuality } from "./render-quality";
 import { applyTextureQuality, resizeQuality } from "./quality-renderer";
 import { CardAppearance } from "./appearance";
+import type { RingMaterialPreset } from "./ring-materials";
 import { configureInternalOptics } from "./internal-optics";
 import { DecryptionController } from "./decryption";
 import { fileAtSlot, fileLocation } from "./data";
@@ -41,6 +42,7 @@ import { labelMarkSvg } from "./brand";
 import { archiveFraming } from "./viewport-layout";
 import { ArchiveDrag, ArchivePlaneMomentum, type DragAxis, type DragProjection, type DragPosition } from "./archive-drag";
 import { assetUrl as publicAsset } from "./asset-url";
+import { takeVisualAsset } from "./app/warmup";
 import { fullMotion, reducedMotion, type MotionPreferences } from "./motion-preferences";
 import {
   archiveWave,
@@ -115,16 +117,19 @@ export class ArchiveScene {
       const original = (inst.userData.fullMaterial ??= inst.material) as THREE.MeshPhysicalMaterial;
       if (enabled && !inst.userData.fastMaterial) {
         const fast = original.clone();
+        const surface = original.name.replace(/\.\d+$/, "");
         fast.onBeforeCompile = original.onBeforeCompile;
         fast.customProgramCacheKey = original.customProgramCacheKey.bind(original);
         fast.transmission = 0;
         fast.clearcoat = 0;
         fast.roughness = Math.max(.45, original.roughness);
+        this.appearance.trackSurface(fast, surface);
         inst.userData.fastMaterial = fast;
       }
       inst.material = enabled ? inst.userData.fastMaterial : original;
       inst.visible = !enabled || original.name.replace(/\.\d+$/, "") !== "Titanium_Fasteners";
     }
+    if (this.wallpaperMaterial) this.wallpaperMaterial.uniforms.uBlurPx.value = enabled ? 0 : this.wallpaperLook.blur;
     this.resize();
   }
   setSelectedIndexAccent(onlySelected: boolean) { this.selectedIndexOnly = onlySelected; }
@@ -201,6 +206,12 @@ export class ArchiveScene {
   setArchiveCoverage(extra: boolean) { this.extraCoverage = extra; }
   private model = new THREE.Group();
   private appearance = new CardAppearance();
+  private ringMaterialPreset?: RingMaterialPreset;
+  private wallpaperMesh!: THREE.Mesh;
+  private wallpaperMaterial!: THREE.ShaderMaterial;
+  private wallpaperAspect = 16 / 9;
+  private wallpaperLook = { dim: 0.4, blur: 10, depth: 0.72 };
+  private wallpaperPointer = new THREE.Vector2();
   private decryption = new DecryptionController();
   private cursor = new THREE.Vector2();
   private raycaster = new THREE.Raycaster();
@@ -805,6 +816,19 @@ export class ArchiveScene {
       "三维实例架，点击选择，左右拖动切换分组，上下拖动或滚轮切换分组内的实例",
     );
     container.appendChild(this.renderer.domElement);
+    this.renderer.domElement.addEventListener("pointermove", (event) => {
+      if (!this.wallpaperMesh?.visible) return;
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      this.wallpaperPointer.set(
+        Math.max(-1, Math.min(1, ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1)),
+        Math.max(-1, Math.min(1, ((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1)),
+      );
+      this.renderState.invalidate();
+    }, { signal: this.inputEvents.signal, passive: true });
+    this.renderer.domElement.addEventListener("pointerleave", () => {
+      this.wallpaperPointer.set(0, 0);
+      this.renderState.invalidate();
+    }, { signal: this.inputEvents.signal });
     this.controls = new ControlRail(container);
     this.renderer.domElement.addEventListener('webglcontextrestored', () => {
       this.renderState.invalidate();
@@ -815,6 +839,7 @@ export class ArchiveScene {
     // beauty, normal, depth and transmission renders reuse those same matrices.
     this.scene.matrixWorldAutoUpdate = false;
     this.scene.fog = new THREE.Fog("#eae5e1", 22, 47);
+    this.installWallpaperLayer();
     this.light = createArchiveLighting(this.renderer, this.scene, lightingLook);
     this.light.castShadow = true;
     Object.assign(this.light.shadow.camera, {
@@ -891,9 +916,11 @@ export class ArchiveScene {
   async load(assetUrl = publicAsset("assets/archive-cassette.glb")) {
     this.labelMark.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(labelMarkSvg)}`;
     await this.labelMark.decode();
-    const gltf = await new GLTFLoader().loadAsync(
-      assetUrl,
-    );
+    const loader = new GLTFLoader();
+    const cached = takeVisualAsset(assetUrl);
+    const gltf = cached
+      ? await loader.parseAsync(cached.slice(0), assetUrl)
+      : await loader.loadAsync(assetUrl);
     gltf.scene.updateMatrixWorld(true);
     const meshes: THREE.Mesh[] = [];
     gltf.scene.traverse((o) => {
@@ -1093,6 +1120,7 @@ export class ArchiveScene {
     this.model.add(label);
     this.appearance.prepare(this.model);
     this.appearance.apply(this.model, 0);
+    if (this.ringMaterialPreset) this.appearance.setRingMaterial(this.ringMaterialPreset);
     this.drawLabel(0);
     this.scene.add(this.model);
     this.model.position.copy(this.cellPosition(poolCell(this.selectedSlot)));
@@ -1152,6 +1180,130 @@ export class ArchiveScene {
     // Disabling the reveal animation preserves the material state of each mode.
     return this.motion.modelDecryption ? this.decryption.clarity : this.targetDetail;
   }
+  /**
+   * A full-screen background drawn inside the WebGL pass. Keeping the image
+   * behind the ring in the same renderer gives true occlusion, physically
+   * correct glass reflections and one shared frame — unlike a DOM layer above
+   * a black canvas. The fallback DOM wallpaper remains available when WebGL
+   * cannot start.
+   */
+  private installWallpaperLayer() {
+    this.wallpaperMaterial = new THREE.ShaderMaterial({
+      name: "Vitrine_Wallpaper",
+      depthTest: false,
+      depthWrite: false,
+      toneMapped: false,
+      uniforms: {
+        uMap: { value: null },
+        uHasMap: { value: 0 },
+        uScreenAspect: { value: 16 / 9 },
+        uImageAspect: { value: 16 / 9 },
+        uDim: { value: this.wallpaperLook.dim },
+        uBlurPx: { value: this.wallpaperLook.blur },
+        uDepth: { value: this.wallpaperLook.depth },
+        uResolutionY: { value: 760 },
+        uPointer: { value: new THREE.Vector2() },
+      },
+      vertexShader: /* glsl */ `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = vec4(position.xy, 1.0, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform sampler2D uMap;
+        uniform float uHasMap;
+        uniform float uScreenAspect;
+        uniform float uImageAspect;
+        uniform float uDim;
+        uniform float uBlurPx;
+        uniform float uDepth;
+        uniform float uResolutionY;
+        uniform vec2 uPointer;
+        varying vec2 vUv;
+
+        vec2 coverUv(vec2 uv) {
+          vec2 p = uv - 0.5;
+          if (uScreenAspect > uImageAspect) p.y *= uImageAspect / uScreenAspect;
+          else p.x *= uScreenAspect / uImageAspect;
+          return p + 0.5;
+        }
+
+        vec3 sampleBg(vec2 uv) {
+          vec2 r = vec2(max(0.0, uBlurPx) / uResolutionY);
+          if (r.x < 0.00001) return texture2D(uMap, uv).rgb;
+          vec3 c = texture2D(uMap, uv).rgb * 0.28;
+          c += texture2D(uMap, uv + vec2( r.x, 0.0)).rgb * 0.12;
+          c += texture2D(uMap, uv + vec2(-r.x, 0.0)).rgb * 0.12;
+          c += texture2D(uMap, uv + vec2(0.0,  r.x)).rgb * 0.12;
+          c += texture2D(uMap, uv + vec2(0.0, -r.x)).rgb * 0.12;
+          c += texture2D(uMap, uv + vec2( r.x,  r.x) * 0.7).rgb * 0.06;
+          c += texture2D(uMap, uv + vec2(-r.x,  r.x) * 0.7).rgb * 0.06;
+          c += texture2D(uMap, uv + vec2( r.x, -r.x) * 0.7).rgb * 0.06;
+          c += texture2D(uMap, uv + vec2(-r.x, -r.x) * 0.7).rgb * 0.06;
+          return c;
+        }
+
+        void main() {
+          if (uHasMap < 0.5) discard;
+          // The wallpaper drifts against the pointer by only a few virtual
+          // pixels: enough to feel like a room behind glass, never enough to
+          // pull the eye away from the archives.
+          vec2 parallax = uPointer * vec2(0.016, 0.010) * (0.45 + uDepth * 0.55);
+          vec2 uv = coverUv(vUv + parallax);
+          vec3 color = max(sampleBg(uv), vec3(0.0));
+          // Keep the central cabinet readable and let the perimeter recede.
+          float distance = length((vUv - 0.5) * vec2(1.6, 1.0));
+          float vignette = smoothstep(1.0, 0.28, distance);
+          color *= mix(0.38, 0.92, vignette * (0.82 + uDepth * 0.18));
+          color *= 1.0 - uDim * 0.72;
+          // The composer target is linear; decode the sRGB wallpaper explicitly.
+          color = pow(color, vec3(2.2));
+          gl_FragColor = vec4(color, 1.0);
+        }
+      `,
+    });
+    this.wallpaperMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.wallpaperMaterial);
+    this.wallpaperMesh.name = "vitrine-wallpaper";
+    this.wallpaperMesh.frustumCulled = false;
+    this.wallpaperMesh.renderOrder = -100000;
+    this.wallpaperMesh.visible = false;
+    this.scene.add(this.wallpaperMesh);
+  }
+
+  setWallpaper(texture: THREE.Texture | null, aspect = 16 / 9, look?: { dim: number; blur: number; depth: number }) {
+    if (look) this.wallpaperLook = { ...look };
+    const uniforms = this.wallpaperMaterial.uniforms;
+    uniforms.uMap.value = texture;
+    uniforms.uHasMap.value = texture ? 1 : 0;
+    this.wallpaperAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
+    uniforms.uImageAspect.value = this.wallpaperAspect;
+    uniforms.uDim.value = this.wallpaperLook.dim;
+    uniforms.uBlurPx.value = this.superPerformance ? 0 : this.wallpaperLook.blur;
+    uniforms.uDepth.value = this.wallpaperLook.depth;
+    uniforms.uScreenAspect.value = this.camera.aspect;
+    uniforms.uResolutionY.value = Math.max(1, this.container.clientHeight);
+    this.wallpaperMesh.visible = Boolean(texture);
+    this.renderState.invalidate();
+  }
+
+  setWallpaperLook(look: { dim: number; blur: number; depth: number }) {
+    this.wallpaperLook = { ...look };
+    const uniforms = this.wallpaperMaterial.uniforms;
+    uniforms.uDim.value = look.dim;
+    uniforms.uBlurPx.value = this.superPerformance ? 0 : look.blur;
+    uniforms.uDepth.value = look.depth;
+    this.renderState.invalidate();
+  }
+
+  /** Apply a PBR preset to the whole ring (glass, metal, inlay and edge families independently). */
+  setRingMaterial(preset: RingMaterialPreset) {
+    this.ringMaterialPreset = preset;
+    this.appearance.setRingMaterial(preset);
+    this.renderState.invalidate();
+  }
+
   setQuality(value: RenderQuality | boolean) {
     const quality =
       typeof value === "boolean"
@@ -1382,6 +1534,10 @@ export class ArchiveScene {
     });
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
+    if (this.wallpaperMaterial) {
+      this.wallpaperMaterial.uniforms.uScreenAspect.value = this.camera.aspect;
+      this.wallpaperMaterial.uniforms.uResolutionY.value = Math.max(1, h);
+    }
     this.controls.resize();
   }
   private canBrowse() {
@@ -1738,6 +1894,7 @@ export class ArchiveScene {
     this.last = time;
     this.clock = time;
     if (!this.loaded) return;
+    if (this.wallpaperMesh?.visible) this.wallpaperMaterial.uniforms.uPointer.value.copy(this.wallpaperPointer);
     this.flushHover();
     const step = !this.motion.surfaceTransitions ? 1 : Math.min(elapsed, .25) / 1.1;
     this.presence += Math.sign(this.presenceTarget - this.presence) * Math.min(step, Math.abs(this.presenceTarget - this.presence));

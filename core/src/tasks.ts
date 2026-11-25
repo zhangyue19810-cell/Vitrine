@@ -11,7 +11,7 @@ import { isAbort } from "./util/async";
  */
 
 export type TaskState = "queued" | "running" | "done" | "failed" | "cancelled";
-export type TaskKind = "install" | "modpack" | "content" | "repair" | "launch" | "java" | "export" | "update" | "import" | "other";
+export type TaskKind = "install" | "modpack" | "content" | "repair" | "launch" | "java" | "export" | "update" | "import" | "download" | "other";
 export type UiLevel = "active" | "background" | "hidden";
 
 export interface TaskStage {

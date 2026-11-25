@@ -1,5 +1,5 @@
 import { tryRpc } from "./api";
-import { QualityGovernor, initialTier, type PerfDecision, type UiLevel } from "./perf-policy";
+import { QualityGovernor, initialTier, type PerfDecision, type QualityTier, type UiLevel } from "./perf-policy";
 import { RenderScheduler } from "./scheduler";
 import type { SceneHost } from "./scene-host";
 import type { Settings } from "./types";
@@ -44,6 +44,8 @@ export class Perf {
   private graceUntil = 0;
   private level?: UiLevel;
   private levelTimer?: ReturnType<typeof setTimeout>;
+  /** The normal quality that was temporarily lowered while a game shares the GPU. */
+  private gameQuality?: QualityTier;
   /** Tiers the governor stepped down to during this run, for the debug hook and the footer. */
   readonly steps: { at: number; tier: string }[] = [];
 
@@ -98,6 +100,7 @@ export class Perf {
     const tier = initialTier(setting, this.rendererName, this.app.hardware?.());
     this.governor = new QualityGovernor(tier);
     this.app.host.setTier(tier);
+    this.syncGameQuality();
   }
 
   /** The scene was (re)built: let it settle before frame times count. */
@@ -106,6 +109,7 @@ export class Perf {
     this.lastFrame = 0;
     this.governor.reset();
     this.app.host.setTier(this.governor.tier);
+    this.syncGameQuality();
   }
 
   private frame(time: number) {
@@ -128,7 +132,26 @@ export class Perf {
     // The gap while paused must not look like one slow frame.
     this.lastFrame = 0;
     if (next.run && !previous?.run) this.governor.reset();
+    this.syncGameQuality();
     this.pushLevel(next.level);
+  }
+
+  /**
+   * While a game process is alive, temporarily step the launcher's WebGL tier
+   * down. The game gets the GPU bandwidth and the launcher still keeps a usable
+   * ring; when the game exits the quality chosen by the user/governor returns.
+   */
+  private syncGameQuality() {
+    const running = this.app.gameRunning();
+    if (running) {
+      this.gameQuality ??= this.governor.tier;
+      this.app.host.setTier(this.governor.tier === "minimal" ? "minimal" : "low");
+      return;
+    }
+    if (this.gameQuality) {
+      this.gameQuality = undefined;
+      this.app.host.setTier(this.governor.tier);
+    }
   }
 
   /** Tell the core how closely the interface is watching (it thins out progress events accordingly). */

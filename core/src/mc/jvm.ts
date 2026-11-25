@@ -106,6 +106,14 @@ export function presetArgs(preset: JvmPreset | undefined, javaMajor: number, use
   if (userArgs.some((arg) => GC_FLAG.test(arg))) return [];
   // JDK 23+ made ZGC generational by default and dropped the -XX:+ZGenerational switch's usefulness.
   if (info.id === "zgc" && javaMajor >= 24) return ["-XX:+UseZGC"];
+  // A fixed 32 MB G1 region is wasteful for a 4 GB heap and too coarse for a
+  // small young generation. Scale the region with the heap that this launch
+  // actually receives; without a memory context keep the historical default.
+  const heapMB = context?.maxMemoryMB ?? 0;
+  if (heapMB > 0) {
+    const regionMB = heapMB <= 4096 ? 8 : heapMB <= 8192 ? 16 : 32;
+    return info.args.map((arg) => arg === "-XX:G1HeapRegionSize=32M" ? `-XX:G1HeapRegionSize=${regionMB}M` : arg);
+  }
   return info.args;
 }
 
