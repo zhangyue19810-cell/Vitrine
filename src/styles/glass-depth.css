@@ -628,6 +628,72 @@
   text-shadow: 0 0 10px var(--glass-error-soft);
 }
 
+/* ------------------------------------------------------------------------------------------ music transport */
+
+/* The transport is the one bar that floats directly over the black hole. It
+ * gets a more transparent body than an ordinary card so the accretion light
+ * still reads through it, plus the same thick chromatic walls as the form
+ * reference. */
+:root {
+  --hud-glass-a: rgba(255, 255, 255, 0.4);
+  --hud-glass-b: rgba(223, 237, 252, 0.15);
+  --hud-border: rgba(255, 255, 255, 0.6);
+  --hud-shadow:
+    0 20px 48px rgba(52, 78, 104, 0.22),
+    0 4px 14px rgba(52, 78, 104, 0.13),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8),
+    inset 0 -1px 0 rgba(55, 76, 98, 0.24),
+    inset 2px 0 0 rgba(128, 184, 255, 0.34),
+    inset -2px 0 0 rgba(255, 183, 122, 0.24),
+    inset 0 0 34px rgba(255, 255, 255, 0.1);
+}
+
+:root[data-dark-surface="true"] {
+  --hud-glass-a: rgba(34, 38, 45, 0.55);
+  --hud-glass-b: rgba(7, 9, 12, 0.3);
+  --hud-border: rgba(198, 220, 244, 0.32);
+  --hud-shadow:
+    0 20px 48px rgba(0, 0, 0, 0.52),
+    0 4px 14px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.5),
+    inset 2px 0 0 rgba(105, 173, 255, 0.22),
+    inset -2px 0 0 rgba(255, 187, 104, 0.16),
+    inset 0 0 34px rgba(255, 255, 255, 0.04);
+}
+
+:root:root .hud-capsule {
+  overflow: hidden;
+  border: 1px solid var(--hud-border);
+  background:
+    radial-gradient(ellipse at 7% -78%, rgba(128, 184, 255, 0.3), transparent 52%),
+    radial-gradient(ellipse at 97% 165%, rgba(255, 193, 126, 0.2), transparent 48%),
+    radial-gradient(ellipse at 56% -38%, rgba(255, 255, 255, 0.23), transparent 61%),
+    linear-gradient(110deg, rgba(255, 255, 255, 0.17), transparent 21%, rgba(255, 255, 255, 0.045) 49%, transparent 73%, rgba(255, 255, 255, 0.14)),
+    linear-gradient(150deg, var(--hud-glass-a), var(--hud-glass-b));
+  -webkit-backdrop-filter: blur(30px) saturate(1.86) brightness(1.05);
+  backdrop-filter: blur(30px) saturate(1.86) brightness(1.05);
+  box-shadow: var(--hud-shadow);
+}
+
+:root:root .hud-capsule::before {
+  content: "";
+  position: absolute;
+  inset: 1px;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 48% -8%, rgba(255, 255, 255, 0.24), transparent 46%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), transparent 27%, transparent 72%, rgba(255, 255, 255, 0.05));
+  mix-blend-mode: screen;
+}
+
+:root:root .hud-capsule > :not(.liquid-flow):not(.liquid-edge):not(.liquid-sheen):not(.liquid-drop) {
+  position: relative;
+  z-index: 1;
+}
+
 /* ------------------------------------------------------------------------------------------ adaptive frost */
 
 /* When the governor has stepped the GPU down, spend less on live backdrop

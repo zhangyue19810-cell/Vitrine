@@ -81,7 +81,7 @@ const EDGE_TARGET = [
   ".toggle",
 ].join(",");
 
-const EDGE_ALWAYS = ".callout,.detail-panel,.dl-bar,.sheet,.dialog,.menu";
+const EDGE_ALWAYS = ".callout,.detail-panel,.dl-bar,.sheet,.dialog,.menu,.hud-capsule";
 
 /** Capsule controls get the circular water-fill reveal and a lighter light pass. */
 const DROP_TARGET = ".btn,.nav-button,.view-tab,.seg,.toggle,.system-nav,.view-tabs,.hud-capsule";

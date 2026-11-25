@@ -221,3 +221,25 @@ while" report:
   `idle-deep` states also pause purely decorative flow, resuming on the next
   pointer movement. This prevents a long-running launcher from accumulating
   compositor/GPU work after the first interaction has passed.
+
+## Native select removal and the glass transport
+
+Electron's native `<select>` popup was the remaining file-manager path: clicking
+动效 or 帧率 could flash the OS menu and hand focus to Explorer. Every existing
+`select.select` (including controls rendered later) is now intercepted by a
+delegated in-app menu. The original select still owns the value and dispatches
+`change`, so existing settings handlers are unchanged, but Chromium never opens
+a native popup. The menu uses the same glass `role="menu"` panel as the rest of
+the launcher and marks the current option with a check.
+
+The music transport capsule now has its own transparent pearl-glass body
+instead of inheriting the opaque card fill:
+
+- 30px live frost with higher saturation and brightness;
+- blue and warm refraction fields across the pill;
+- thick inset top/bottom walls and chromatic left/right edges;
+- an always-running soft rim plus the existing pointer water-fill;
+- a top sheen that keeps the controls readable over the black hole.
+
+The low/minimal load-shedding rules still override the frost when the quality
+governor has stepped down.
