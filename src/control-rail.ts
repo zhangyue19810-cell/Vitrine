@@ -47,6 +47,9 @@ interface PlateView {
   face: THREE.Mesh;
   body: THREE.Mesh;
   shadow: THREE.Mesh;
+  /** Circular water bead that grows over the face while hovered. */
+  fill: THREE.Mesh;
+  fillMaterial: THREE.ShaderMaterial;
   canvas: HTMLCanvasElement;
   texture: THREE.CanvasTexture;
   /** Springs, each 0…1. */
@@ -61,6 +64,34 @@ interface PlateView {
 const FOV = 28;
 const DEPTH = 6;
 const MAX_DPR = 2;
+
+const DROP_VERTEX = /* glsl */ `
+  varying vec2 vDropUv;
+  void main() {
+    vDropUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const DROP_FRAGMENT = /* glsl */ `
+  uniform float uAmount;
+  uniform vec2 uCenter;
+  uniform vec3 uCore;
+  uniform vec3 uEdge;
+  varying vec2 vDropUv;
+  void main() {
+    if (uAmount <= 0.001) discard;
+    float radius = uAmount * 1.7;
+    float d = distance(vDropUv, uCenter);
+    if (d > radius + 0.02) discard;
+    float inside = 1.0 - smoothstep(radius - 0.035, radius, d);
+    float ring = smoothstep(radius - 0.13, radius - 0.055, d) * (1.0 - smoothstep(radius - 0.02, radius + 0.01, d));
+    float core = 1.0 - smoothstep(0.0, radius * 0.62, d);
+    vec3 colour = mix(uCore, uEdge, ring);
+    float alpha = inside * 0.2 + ring * 0.52 + core * 0.085;
+    gl_FragColor = vec4(colour, alpha * clamp(uAmount, 0.0, 1.0));
+  }
+`;
 const ease = (amount: number) => amount * amount * (3 - 2 * amount);
 const follow = (value: number, target: number, rate: number, dt: number) => value + (target - value) * (1 - Math.exp(-rate * dt));
 
@@ -172,6 +203,10 @@ export class ControlRail {
     this.dark = dark;
     this.faceKey = "";
     this.ringKey = "";
+    for (const view of this.views.values()) {
+      (view.fillMaterial.uniforms.uCore.value as THREE.Color).set(this.dark ? "#fff7df" : "#ffffff");
+      (view.fillMaterial.uniforms.uEdge.value as THREE.Color).set(this.palette.accent);
+    }
     this.dirty = true;
   }
 
@@ -247,13 +282,29 @@ export class ControlRail {
     const face = new THREE.Mesh(unit, new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, depthWrite: false }));
     const body = new THREE.Mesh(unit, new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, color: 0x30343a, depthWrite: false }));
     const shadow = new THREE.Mesh(unit, new THREE.MeshBasicMaterial({ map: this.shadowTexture, transparent: true, opacity: 0.32, toneMapped: false, depthWrite: false }));
+    const fillMaterial = new THREE.ShaderMaterial({
+      vertexShader: DROP_VERTEX,
+      fragmentShader: DROP_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      depthTest: true,
+      toneMapped: false,
+      uniforms: {
+        uAmount: { value: 0 },
+        uCenter: { value: new THREE.Vector2(0.5, 0.35) },
+        uCore: { value: new THREE.Color(this.dark ? "#fff7df" : "#ffffff") },
+        uEdge: { value: new THREE.Color(this.palette.accent) },
+      },
+    });
+    const fill = new THREE.Mesh(unit, fillMaterial);
     face.renderOrder = 3;
     body.renderOrder = 2;
     shadow.renderOrder = 1;
+    fill.renderOrder = 4;
     const group = new THREE.Group();
-    group.add(shadow, body, face);
+    group.add(shadow, body, face, fill);
     this.scene.add(group);
-    return { spec, key: "", rect: this.rects.get(spec.id) ?? { x: 0, y: 0, w: spec.width, h: plateHeight(spec) }, group, face, body, shadow, canvas, texture, hover: 0, press: 0, appear: 0, cell: null, dead: false };
+    return { spec, key: "", rect: this.rects.get(spec.id) ?? { x: 0, y: 0, w: spec.width, h: plateHeight(spec) }, group, face, body, shadow, fill, fillMaterial, canvas, texture, hover: 0, press: 0, appear: 0, cell: null, dead: false };
   }
 
   private print(view: PlateView, caret: boolean) {
@@ -351,6 +402,7 @@ export class ControlRail {
       (view.face.material as THREE.Material).dispose();
       (view.body.material as THREE.Material).dispose();
       (view.shadow.material as THREE.Material).dispose();
+      view.fillMaterial.dispose();
       this.views.delete(id);
       this.dirty = true;
     }
@@ -380,6 +432,10 @@ export class ControlRail {
     view.face.scale.set(rect.w, rect.h, 1);
     view.body.scale.set(rect.w, rect.h, 1);
     view.body.position.set(0, -1.5, -DEPTH * this.scale);
+    view.fill.scale.set(rect.w, rect.h, 1);
+    view.fill.position.z = 0.012;
+    view.fillMaterial.uniforms.uAmount.value = view.hover;
+    (view.fillMaterial.uniforms.uCenter.value as THREE.Vector2).set(pointerX * 0.5 + 0.5, pointerY * 0.5 + 0.5);
     view.shadow.scale.set(rect.w * 1.14, rect.h * 1.5, 1);
     view.shadow.position.set(3, -9 * this.scale - hover * 8, -DEPTH * 2.4 * this.scale - hover * 10);
     (view.face.material as THREE.MeshBasicMaterial).opacity = lift;
@@ -388,6 +444,7 @@ export class ControlRail {
     const tint = 0.97 + 0.03 * hover;
     (view.face.material as THREE.MeshBasicMaterial).color.setScalar(tint);
     view.face.visible = view.body.visible = view.shadow.visible = lift > 0.001;
+    view.fill.visible = lift > 0.001 && view.hover > 0.001;
   }
 
   private updateDisc(dt: number): boolean {

@@ -11,8 +11,12 @@ import "./styles/typography.css";
 import "./styles/cinematic.css";
 import "./styles/features.css";
 import "./styles/flowing-cards.css";
+import "./styles/glass-depth.css";
 import { startApp } from "./app/app";
+import { installGlassLens } from "./liquid-glass-filter";
 import { preloadVisualAssets } from "./app/warmup";
+
+installGlassLens();
 
 // Kick off the animation-resource cache immediately; the splash renders while it runs.
 preloadVisualAssets();

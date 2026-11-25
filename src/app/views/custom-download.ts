@@ -54,9 +54,30 @@ export function openCustomDownload() {
     if (folder) field<HTMLInputElement>("folder").value = folder;
   });
 
-  field<HTMLInputElement>("url").addEventListener("input", () => {
+  const urlInput = field<HTMLInputElement>("url");
+  const folderInput = field<HTMLInputElement>("folder");
+  const clearInvalid = (input: HTMLInputElement) => {
+    input.removeAttribute("aria-invalid");
+    delete input.dataset.valid;
+  };
+
+  urlInput.addEventListener("input", () => {
     status.textContent = "";
     status.dataset.kind = "";
+    clearInvalid(urlInput);
+    const value = urlInput.value.trim();
+    if (!value) return;
+    try {
+      const parsed = new URL(value);
+      if ((parsed.protocol === "https:" || parsed.protocol === "http:") && !parsed.username && !parsed.password) urlInput.dataset.valid = "true";
+    } catch {
+      /* still being typed */
+    }
+  });
+
+  folderInput.addEventListener("input", () => {
+    clearInvalid(folderInput);
+    if (folderInput.value.trim()) folderInput.dataset.valid = "true";
   });
 
   const dialog = openDialog({
@@ -75,20 +96,33 @@ export function openCustomDownload() {
       const filename = field<HTMLInputElement>("name").value.trim();
       const mode = field<HTMLSelectElement>("mode").value as "auto" | "direct" | "github" | "aliyun" | "huaqing";
       const segmentsValue = Number(field<HTMLInputElement>("segments").value);
-      const fail = (message: string) => {
+      const clear = (input: HTMLInputElement) => {
+        input.removeAttribute("aria-invalid");
+        delete input.dataset.valid;
+      };
+      const fail = (message: string, input?: HTMLInputElement) => {
         status.textContent = message;
         status.dataset.kind = "error";
+        if (input) {
+          input.removeAttribute("data-valid");
+          input.setAttribute("aria-invalid", "true");
+          input.focus({ preventScroll: true });
+        }
         return false;
       };
-      if (!url) return fail("请填写文件地址");
+      clear(urlInput);
+      clear(folderInput);
+      if (!url) return fail("请填写文件地址", urlInput);
       try {
         const parsed = new URL(url);
-        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return fail("文件地址必须以 http:// 或 https:// 开头");
-        if (parsed.username || parsed.password) return fail("文件地址不能包含用户名或密码");
+        if (parsed.protocol !== "https:" && parsed.protocol !== "http:") return fail("文件地址必须以 http:// 或 https:// 开头", urlInput);
+        if (parsed.username || parsed.password) return fail("文件地址不能包含用户名或密码", urlInput);
+        urlInput.dataset.valid = "true";
       } catch {
-        return fail("文件地址不是有效的网址");
+        return fail("文件地址不是有效的网址", urlInput);
       }
-      if (!folder) return fail("请选择保存文件夹");
+      if (!folder) return fail("请选择保存文件夹", folderInput);
+      folderInput.dataset.valid = "true";
       busy = true;
       status.textContent = "正在提交下载任务…";
       status.dataset.kind = "busy";

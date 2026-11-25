@@ -1,0 +1,622 @@
+/*
+ * Deep glass card material.
+ *
+ * A card is not a flat translucent rectangle: it has a milky body, a bright
+ * top/left lens wall, a darker bottom/right wall, an inner rim and a soft
+ * coloured refraction inside the silhouette. These four families of shadows
+ * stay visible even when the scene behind the card is almost black, which is
+ * what makes the surface read as a thick piece of glass instead of a tinted
+ * panel.
+ *
+ * Colour remains theme-driven: light mode follows the supplied white reference
+ * (frosted white, blue-white refraction); dark mode uses smoked glass with the
+ * same physical edge stack.
+ */
+
+:root {
+  --glass-card-a: rgba(255, 255, 255, 0.72);
+  --glass-card-b: rgba(235, 241, 248, 0.46);
+  --glass-lens: url("#vitrine-glass-lens");
+  --glass-card-solid: rgba(246, 249, 252, 0.92);
+  --glass-control-a: rgba(255, 255, 255, 0.54);
+  --glass-control-b: rgba(233, 240, 247, 0.24);
+  --glass-edge-bright: rgba(255, 255, 255, 0.98);
+  --glass-edge-mid: rgba(145, 169, 194, 0.64);
+  --glass-row-edge: rgba(128, 156, 186, 0.58);
+  --glass-edge-dark: rgba(64, 89, 115, 0.28);
+  --glass-inner-glow: rgba(255, 255, 255, 0.42);
+  --glass-refract-blue: rgba(128, 184, 255, 0.3);
+  --glass-refract-warm: rgba(255, 193, 126, 0.18);
+  --glass-refract-mint: rgba(154, 236, 207, 0.14);
+  --glass-card-shadow:
+    0 34px 92px rgba(49, 72, 98, 0.24),
+    0 9px 24px rgba(49, 72, 98, 0.12),
+    0 1px 2px rgba(49, 72, 98, 0.12),
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    inset 1px 1px 0 var(--glass-edge-bright),
+    inset -1px -1px 0 var(--glass-edge-dark),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 0 34px rgba(255, 255, 255, 0.13);
+  --glass-row-shadow:
+    0 13px 34px rgba(65, 87, 110, 0.13),
+    0 3px 9px rgba(65, 87, 110, 0.05),
+    0 0 0 1px rgba(255, 255, 255, 0.36),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.82),
+    inset -1px -1px 0 rgba(87, 108, 130, 0.14),
+    inset 0 0 20px rgba(255, 255, 255, 0.1);
+  --glass-control-shadow:
+    0 6px 16px rgba(65, 87, 110, 0.1),
+    0 0 0 1px rgba(255, 255, 255, 0.42),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.8),
+    inset -1px -1px 0 rgba(75, 98, 120, 0.16);
+  --glass-focus: rgba(111, 157, 235, 0.62);
+  --glass-focus-soft: rgba(111, 157, 235, 0.16);
+  --glass-error: rgba(233, 105, 105, 0.8);
+  --glass-error-soft: rgba(233, 105, 105, 0.15);
+  --glass-ok: rgba(74, 177, 128, 0.75);
+  --glass-ok-soft: rgba(74, 177, 128, 0.14);
+}
+
+:root[data-dark-surface="true"] {
+  --glass-card-a: rgba(39, 36, 31, 0.86);
+  --glass-card-b: rgba(8, 9, 10, 0.6);
+  --glass-card-solid: rgba(18, 17, 15, 0.94);
+  --glass-control-a: rgba(58, 56, 51, 0.58);
+  --glass-control-b: rgba(18, 19, 20, 0.28);
+  --glass-edge-bright: rgba(255, 255, 255, 0.4);
+  --glass-edge-mid: rgba(174, 202, 226, 0.34);
+  --glass-row-edge: rgba(168, 196, 222, 0.26);
+  --glass-edge-dark: rgba(0, 0, 0, 0.58);
+  --glass-inner-glow: rgba(255, 255, 255, 0.13);
+  --glass-refract-blue: rgba(105, 173, 255, 0.18);
+  --glass-refract-warm: rgba(255, 187, 104, 0.13);
+  --glass-refract-mint: rgba(134, 223, 193, 0.07);
+  --glass-card-shadow:
+    0 32px 88px rgba(0, 0, 0, 0.54),
+    0 9px 24px rgba(0, 0, 0, 0.34),
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    inset 1px 1px 0 var(--glass-edge-bright),
+    inset -1px -1px 0 var(--glass-edge-dark),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    inset 0 0 42px rgba(255, 255, 255, 0.025);
+  --glass-row-shadow:
+    0 15px 42px rgba(0, 0, 0, 0.32),
+    0 3px 10px rgba(0, 0, 0, 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.13),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.3),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.45),
+    inset 0 0 24px rgba(255, 255, 255, 0.025);
+  --glass-control-shadow:
+    0 7px 20px rgba(0, 0, 0, 0.28),
+    0 0 0 1px rgba(255, 255, 255, 0.15),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.28),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.42);
+  --glass-focus: rgba(123, 176, 255, 0.72);
+  --glass-focus-soft: rgba(123, 176, 255, 0.2);
+  --glass-error: rgba(255, 125, 125, 0.82);
+  --glass-error-soft: rgba(255, 96, 96, 0.19);
+  --glass-ok: rgba(112, 218, 165, 0.76);
+  --glass-ok-soft: rgba(96, 210, 153, 0.16);
+}
+
+/* ------------------------------------------------------------------------------------------ large sheets */
+
+/* A sheet is a giant card, not the window itself: keep the rounded silhouette
+ * floating over the stage so its outer rim, side walls and blue refraction
+ * shadow are actually visible. */
+:root:root .sheet {
+  inset: clamp(12px, 2vw, 24px);
+  width: auto;
+  max-width: 1180px;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 32px;
+}
+
+:root:root .sheet,
+:root:root .dialog,
+:root:root .callout,
+:root:root .detail-panel,
+:root:root .dl-bar,
+:root:root .menu,
+:root:root .nav-reveal,
+:root:root .toast,
+:root:root .system-nav,
+:root:root .view-tabs,
+:root:root .hud-capsule,
+:root:root .hud-queue,
+:root:root .mod-update-dialog.dialog {
+  border: 1px solid var(--glass-edge-mid);
+  background:
+    radial-gradient(ellipse at 88% -8%, var(--glass-refract-blue), transparent 41%),
+    radial-gradient(ellipse at 4% 108%, var(--glass-refract-warm), transparent 46%),
+    radial-gradient(ellipse at 48% 104%, var(--glass-refract-mint), transparent 54%),
+    linear-gradient(var(--lg-sheen-angle, 135deg), rgba(255, 255, 255, 0.2), transparent 27%, rgba(255, 255, 255, 0.07) 55%, transparent 78%, rgba(255, 255, 255, 0.06)),
+    linear-gradient(145deg, var(--glass-card-a), var(--glass-card-b));
+  box-shadow:
+    var(--glass-card-shadow),
+    inset 0 1px 0 var(--glass-edge-bright),
+    inset 0 -1px 0 var(--glass-edge-dark),
+    inset 2px 0 0 rgba(128, 184, 255, 0.24),
+    inset -2px 0 0 rgba(255, 183, 122, 0.18),
+    inset 0 2px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(58, 79, 100, 0.17),
+    inset 0 -18px 34px rgba(114, 144, 174, 0.07),
+    inset 0 20px 32px rgba(255, 255, 255, 0.1),
+    0 0 0 4px rgba(255, 255, 255, 0.045);
+  -webkit-backdrop-filter: blur(32px) saturate(1.82) brightness(1.045);
+  backdrop-filter: blur(32px) saturate(1.82) brightness(1.045);
+  background-clip: padding-box;
+}
+
+/* A second, tighter highlight inside the outer wall produces the two-step
+ * lens edge visible on the reference card. */
+:root:root .sheet::before,
+:root:root .dialog::before,
+:root:root .callout::before,
+:root:root .detail-panel::before,
+:root:root .dl-bar::before,
+:root:root .menu::before,
+:root:root .nav-reveal::before,
+:root:root .system-nav::before {
+  background:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.3) 0%, transparent 16%, transparent 78%, rgba(255, 255, 255, 0.12) 100%),
+    radial-gradient(ellipse at 14% -10%, rgba(255, 255, 255, 0.3), transparent 48%),
+    linear-gradient(0deg, transparent 42%, rgba(255, 255, 255, 0.045) 100%);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------------------------------ cards + rows */
+
+:root:root .card,
+:root:root .notice,
+:root:root .problem,
+:root:root .stat,
+:root:root .settings .setting,
+:root:root .mod-row,
+:root:root .mod-update-row,
+:root:root .material-option,
+:root:root .custom-download-status,
+:root:root .list > .item,
+:root:root .empty,
+:root:root .logview {
+  border: 1px solid var(--glass-row-edge);
+  background:
+    radial-gradient(ellipse at 92% -10%, var(--glass-refract-blue), transparent 46%),
+    radial-gradient(ellipse at 6% 110%, var(--glass-refract-warm), transparent 50%),
+    radial-gradient(ellipse at 56% 104%, var(--glass-refract-mint), transparent 56%),
+    linear-gradient(var(--lg-sheen-angle, 135deg), rgba(255, 255, 255, 0.13), transparent 32%, rgba(255, 255, 255, 0.045) 68%, transparent),
+    linear-gradient(145deg, var(--glass-card-a), var(--glass-card-b));
+  box-shadow:
+    var(--glass-row-shadow),
+    inset 0 1px 0 var(--glass-edge-bright),
+    inset 0 -1px 0 var(--glass-edge-dark),
+    inset 2px 0 0 rgba(128, 184, 255, 0.18),
+    inset -2px 0 0 rgba(255, 183, 122, 0.13),
+    inset 0 2px 0 rgba(255, 255, 255, 0.26);
+  -webkit-backdrop-filter: blur(21px) saturate(1.6) brightness(1.025);
+  backdrop-filter: blur(21px) saturate(1.6) brightness(1.025);
+  background-clip: padding-box;
+}
+
+:root:root .card:hover,
+:root:root .stat:hover,
+:root:root .settings .setting:hover,
+:root:root .mod-row:hover,
+:root:root .material-option:hover {
+  border-color: rgba(255, 255, 255, 0.72);
+  box-shadow:
+    var(--glass-row-shadow),
+    0 0 0 1px rgba(255, 255, 255, 0.3),
+    0 0 24px rgba(var(--accent-rgb), 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.94);
+}
+
+/* A second glass wall, painted above the body but only around the rim. This
+ * is the bright multi-layer edge that survives even when the card sits on a
+ * black scene. Reserving it as ::after avoids extra DOM nodes. */
+:root:root .sheet::after,
+:root:root .dialog::after,
+:root:root .detail-panel::after,
+:root:root .dl-bar::after,
+:root:root .menu::after,
+:root:root .nav-reveal::after,
+:root:root .card::after,
+:root:root .stat::after,
+:root:root .settings .setting::after,
+:root:root .mod-row::after,
+:root:root .mod-update-row::after,
+:root:root .material-option::after,
+:root:root .custom-download-status::after,
+:root:root .hud-capsule::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.5),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.42),
+    inset -1px -1px 0 rgba(83, 108, 134, 0.2),
+    inset 2px 0 0 rgba(128, 184, 255, 0.18),
+    inset -2px 0 0 rgba(255, 183, 122, 0.13),
+    inset 0 2px 0 rgba(255, 255, 255, 0.28),
+    inset 0 -2px 0 rgba(71, 96, 121, 0.13);
+}
+
+:root[data-dark-surface="true"] .sheet::after,
+:root[data-dark-surface="true"] .dialog::after,
+:root[data-dark-surface="true"] .detail-panel::after,
+:root[data-dark-surface="true"] .dl-bar::after,
+:root[data-dark-surface="true"] .menu::after,
+:root[data-dark-surface="true"] .nav-reveal::after,
+:root[data-dark-surface="true"] .card::after,
+:root[data-dark-surface="true"] .stat::after,
+:root[data-dark-surface="true"] .settings .setting::after,
+:root[data-dark-surface="true"] .mod-row::after,
+:root[data-dark-surface="true"] .mod-update-row::after,
+:root[data-dark-surface="true"] .material-option::after,
+:root[data-dark-surface="true"] .custom-download-status::after,
+:root[data-dark-surface="true"] .hud-capsule::after {
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.2),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.25),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.46),
+    inset 2px 0 0 rgba(128, 184, 255, 0.12),
+    inset -2px 0 0 rgba(255, 183, 122, 0.09),
+    inset 0 2px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.28);
+}
+
+/* A floating sheet needs a real depth plane behind it. Without this layer the
+ * Firefox/Chromium backdrop filter can leave the underlying home HUD razor
+ * sharp through a translucent sheet; blurring and dimming the stage gives the
+ * card the same separated frosted background as the reference. */
+#stage:has(.modal-root[data-open="true"]) > .three-scene,
+#stage:has(.modal-root[data-open="true"]) > .scene-aura,
+#stage:has(.modal-root[data-open="true"]) > .scene-atmosphere,
+#stage:has(.modal-root[data-open="true"]) > .brand,
+#stage:has(.modal-root[data-open="true"]) > .system-nav,
+#stage:has(.modal-root[data-open="true"]) > .view-tabs,
+#stage:has(.modal-root[data-open="true"]) > .home,
+#stage:has(.modal-root[data-open="true"]) > .download,
+#stage:has(.modal-root[data-open="true"]) > .detail,
+#stage:has(.modal-root[data-open="true"]) > .system-footer {
+  filter: blur(11px) saturate(0.78) brightness(0.94);
+  opacity: 0.33;
+  transition: filter 0.32s var(--ease), opacity 0.32s var(--ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #stage:has(.modal-root[data-open="true"]) > .three-scene,
+  #stage:has(.modal-root[data-open="true"]) > .scene-aura,
+  #stage:has(.modal-root[data-open="true"]) > .scene-atmosphere,
+  #stage:has(.modal-root[data-open="true"]) > .brand,
+  #stage:has(.modal-root[data-open="true"]) > .system-nav,
+  #stage:has(.modal-root[data-open="true"]) > .view-tabs,
+  #stage:has(.modal-root[data-open="true"]) > .home,
+  #stage:has(.modal-root[data-open="true"]) > .download,
+  #stage:has(.modal-root[data-open="true"]) > .detail,
+  #stage:has(.modal-root[data-open="true"]) > .system-footer {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ fields and controls */
+
+:root:root .input,
+:root:root .select,
+:root:root .textarea {
+  border: 1px solid var(--glass-row-edge);
+  border-radius: 13px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), transparent 48%),
+    linear-gradient(145deg, var(--glass-control-a), var(--glass-control-b));
+  box-shadow:
+    var(--glass-control-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.82),
+    inset 1px 0 0 rgba(255, 255, 255, 0.38),
+    inset -1px 0 0 rgba(94, 123, 151, 0.15),
+    inset 0 -1px 0 rgba(88, 113, 138, 0.22),
+    inset 0 0 14px rgba(255, 255, 255, 0.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.45);
+  backdrop-filter: blur(18px) saturate(1.45);
+}
+
+:root:root .input::placeholder,
+:root:root .textarea::placeholder {
+  color: rgba(var(--ink-rgb), 0.4);
+}
+
+:root:root .input:focus,
+:root:root .select:focus,
+:root:root .textarea:focus,
+:root:root .input:focus-visible,
+:root:root .select:focus-visible,
+:root:root .textarea:focus-visible {
+  outline: none;
+  border-color: var(--glass-focus);
+  box-shadow:
+    0 0 0 2px var(--glass-focus-soft),
+    0 0 22px var(--glass-focus-soft),
+    var(--glass-control-shadow),
+    inset 0 0 14px rgba(255, 255, 255, 0.12);
+}
+
+:root:root .input[aria-invalid="true"],
+:root:root .select[aria-invalid="true"],
+:root:root .textarea[aria-invalid="true"] {
+  border-color: var(--glass-error) !important;
+  box-shadow:
+    0 0 0 2px var(--glass-error-soft),
+    0 0 22px var(--glass-error-soft),
+    var(--glass-control-shadow),
+    inset 0 0 16px rgba(255, 150, 150, 0.12);
+}
+
+:root:root .custom-download-status[data-kind="ok"],
+:root:root .custom-download-status[data-kind="done"] {
+  border-color: var(--glass-ok) !important;
+  box-shadow:
+    0 0 0 2px var(--glass-ok-soft),
+    0 0 22px var(--glass-ok-soft),
+    var(--glass-control-shadow);
+}
+
+:root:root .btn:not(.accent):not(.primary) {
+  border: 1px solid var(--glass-row-edge);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), transparent 48%),
+    linear-gradient(145deg, var(--glass-control-a), var(--glass-control-b));
+  box-shadow: var(--glass-control-shadow), inset 0 1px 0 var(--glass-edge-bright);
+  -webkit-backdrop-filter: blur(16px) saturate(1.45);
+  backdrop-filter: blur(16px) saturate(1.45);
+}
+
+:root:root .btn.accent {
+  border: 1px solid rgba(var(--accent-rgb), 0.68);
+  background:
+    radial-gradient(ellipse at 84% 8%, rgba(143, 192, 255, 0.22), transparent 42%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 44%),
+    linear-gradient(135deg, var(--accent), var(--accent-ink));
+  box-shadow:
+    0 14px 34px rgba(var(--accent-rgb), 0.24),
+    0 0 0 1px rgba(255, 255, 255, 0.22),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.62),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.16);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+}
+
+:root:root .toggle[aria-checked="true"] {
+  border-color: rgba(255, 255, 255, 0.4);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.36), transparent 48%),
+    linear-gradient(145deg, rgba(var(--accent-rgb), 0.94), rgba(var(--accent-ink-rgb, 116, 73, 13), 0.78));
+  box-shadow:
+    0 0 0 1px rgba(var(--accent-rgb), 0.3),
+    0 0 20px rgba(var(--accent-rgb), 0.22),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.6),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.18);
+}
+
+/* The account capsule sits over the scene, so it keeps an extra internal
+ * darkening layer to preserve the contrast of the user name. */
+:root:root .system-nav .nav-master {
+  border-color: rgba(255, 255, 255, 0.44);
+  background:
+    radial-gradient(ellipse at 92% -20%, rgba(var(--accent-rgb), 0.2), transparent 56%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.12), transparent 44%),
+    linear-gradient(145deg, var(--glass-control-a), var(--glass-control-b));
+  color: var(--ink);
+  box-shadow:
+    0 9px 24px rgba(0, 0, 0, 0.24),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.62),
+    inset -1px -1px 0 rgba(0, 0, 0, 0.26);
+}
+
+/* Real backdrop displacement on the large glass planes. The filter is static:
+ * motion comes from the flowing light field below, not from wobbling the whole
+ * interface. Browsers without SVG-in-backdrop-filter keep the frosted blur. */
+@supports ((backdrop-filter: url("#vitrine-glass-lens")) or (-webkit-backdrop-filter: url("#vitrine-glass-lens"))) {
+  :root:root .sheet,
+  :root:root .dialog,
+  :root:root .callout,
+  :root:root .detail-panel,
+  :root:root .dl-bar,
+  :root:root .menu,
+  :root:root .nav-reveal,
+  :root:root .system-nav,
+  :root:root .hud-capsule,
+  :root:root .hud-queue,
+  :root:root .material-option,
+  :root:root .mod-update-dialog.dialog {
+    -webkit-backdrop-filter: var(--glass-lens) blur(28px) saturate(1.82) brightness(1.045);
+    backdrop-filter: var(--glass-lens) blur(28px) saturate(1.82) brightness(1.045);
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ light-theme reference */
+
+/* The supplied form reference uses a cool blue-white action surface. Dark
+ * mode keeps the launcher's black-gold identity; light mode follows the
+ * reference while keeping the same thick glass edge system. */
+:root:not([data-dark-surface="true"]) .btn.accent {
+  color: #1d2a3d;
+  border-color: rgba(255, 255, 255, 0.78);
+  background:
+    radial-gradient(ellipse at 84% 4%, rgba(255, 255, 255, 0.64), transparent 42%),
+    radial-gradient(ellipse at 22% 100%, rgba(205, 222, 255, 0.38), transparent 48%),
+    linear-gradient(145deg, rgba(226, 237, 255, 0.9), rgba(176, 199, 236, 0.74));
+  box-shadow:
+    0 14px 32px rgba(91, 125, 181, 0.22),
+    0 0 0 1px rgba(255, 255, 255, 0.5),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.95),
+    inset -1px -1px 0 rgba(74, 103, 145, 0.18),
+    inset 0 -10px 18px rgba(174, 198, 236, 0.16);
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.35);
+}
+
+:root:not([data-dark-surface="true"]) .btn.accent:hover:not(:disabled) {
+  color: #162238;
+  border-color: rgba(255, 255, 255, 0.9);
+  background:
+    radial-gradient(ellipse at 84% 4%, rgba(255, 255, 255, 0.78), transparent 44%),
+    radial-gradient(ellipse at 20% 100%, rgba(208, 226, 255, 0.48), transparent 50%),
+    linear-gradient(145deg, rgba(236, 244, 255, 0.96), rgba(187, 209, 242, 0.82));
+  box-shadow:
+    0 18px 38px rgba(91, 125, 181, 0.26),
+    0 0 0 1px rgba(255, 255, 255, 0.6),
+    inset 1px 1px 0 rgba(255, 255, 255, 1),
+    inset -1px -1px 0 rgba(74, 103, 145, 0.16),
+    0 0 26px rgba(158, 192, 244, 0.22);
+}
+
+:root:not([data-dark-surface="true"]) .toggle[aria-checked="true"] {
+  border-color: rgba(255, 255, 255, 0.72);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.4), transparent 48%),
+    linear-gradient(145deg, #7ca4ff, #486fe0);
+  box-shadow:
+    0 0 0 1px rgba(106, 145, 230, 0.34),
+    0 0 19px rgba(100, 145, 255, 0.32),
+    inset 1px 1px 0 rgba(255, 255, 255, 0.62),
+    inset -1px -1px 0 rgba(34, 67, 142, 0.25);
+}
+
+:root:not([data-dark-surface="true"]) .toggle[aria-checked="true"]::after {
+  background: #f8fbff;
+  box-shadow:
+    0 2px 5px rgba(40, 70, 130, 0.26),
+    0 0 0 1px rgba(255, 255, 255, 0.6);
+}
+
+:root:not([data-dark-surface="true"]) .custom-download-status[data-kind="ok"],
+:root:not([data-dark-surface="true"]) .custom-download-status[data-kind="done"] {
+  border-color: var(--glass-ok);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.38), transparent 46%),
+    linear-gradient(145deg, rgba(225, 250, 237, 0.64), rgba(196, 236, 216, 0.3));
+  box-shadow:
+    0 0 0 2px var(--glass-ok-soft),
+    0 0 22px var(--glass-ok-soft),
+    var(--glass-control-shadow);
+}
+
+:root:not([data-dark-surface="true"]) .field:has(.input[aria-invalid="true"]) .hint-text,
+:root:not([data-dark-surface="true"]) .field:has(.textarea[aria-invalid="true"]) .hint-text {
+  color: #c74c4c;
+  text-shadow: 0 0 10px rgba(225, 96, 96, 0.18);
+}
+
+/* ------------------------------------------------------------------------------------------ fallbacks */
+
+@media (prefers-reduced-transparency: reduce) {
+  :root:root .sheet,
+  :root:root .dialog,
+  :root:root .callout,
+  :root:root .detail-panel,
+  :root:root .dl-bar,
+  :root:root .menu,
+  :root:root .nav-reveal,
+  :root:root .toast,
+  :root:root .card,
+  :root:root .stat,
+  :root:root .settings .setting,
+  :root:root .mod-row,
+  :root:root .material-option,
+  :root:root .input,
+  :root:root .select,
+  :root:root .textarea {
+    background: var(--glass-card-solid);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root:root .sheet,
+  :root:root .dialog,
+  :root:root .callout,
+  :root:root .detail-panel,
+  :root:root .dl-bar,
+  :root:root .menu,
+  :root:root .nav-reveal,
+  :root:root .card,
+  :root:root .stat,
+  :root:root .settings .setting,
+  :root:root .mod-row,
+  :root:root .input,
+  :root:root .select,
+  :root:root .textarea {
+    background: var(--glass-card-solid);
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ field states */
+
+/* The reference form makes validation legible without adding another panel:
+ * labels become ordinary bold form labels, a valid field gets a thin green
+ * ring and check, and an invalid field gets the red lens ring and cross. */
+:root:root .sheet .field > label,
+:root:root .dialog .field > label,
+:root:root .custom-download .field > label {
+  margin-bottom: 1px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.2px;
+  text-transform: none;
+}
+
+:root:root .sheet .field > .hint-text,
+:root:root .dialog .field > .hint-text,
+:root:root .custom-download .field > .hint-text {
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+:root:root .input[data-valid="true"] {
+  border-color: var(--glass-ok) !important;
+  box-shadow:
+    0 0 0 2px var(--glass-ok-soft),
+    0 0 20px var(--glass-ok-soft),
+    var(--glass-control-shadow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+:root:root .input[data-valid="true"] {
+  padding-right: 36px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='M4.2 10.2 8.1 14l7.7-8' fill='none' stroke='%236fbe91' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), transparent 48%),
+    linear-gradient(145deg, var(--glass-control-a), var(--glass-control-b));
+  background-position: calc(100% - 11px) 50%, 0 0, 0 0;
+  background-size: 16px 16px, auto, auto;
+  background-repeat: no-repeat;
+}
+
+:root:root .input[aria-invalid="true"] {
+  padding-right: 36px;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20'%3E%3Cpath d='m5 5 10 10M15 5 5 15' fill='none' stroke='%23d86262' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.48), transparent 48%),
+    linear-gradient(145deg, var(--glass-control-a), var(--glass-control-b));
+  background-position: calc(100% - 11px) 50%, 0 0, 0 0;
+  background-size: 15px 15px, auto, auto;
+  background-repeat: no-repeat;
+}
+
+:root:root .row-flex > .input[data-valid="true"],
+:root:root .row-flex > .input[aria-invalid="true"] {
+  flex: 1;
+  min-width: 0;
+}
+
+:root:root .field:has(> .input[aria-invalid="true"]) > .hint-text,
+:root:root .field:has(> .row-flex > .input[aria-invalid="true"]) > .hint-text {
+  color: var(--glass-error);
+  font-weight: 600;
+  text-shadow: 0 0 10px var(--glass-error-soft);
+}

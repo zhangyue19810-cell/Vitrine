@@ -49,7 +49,7 @@
     radial-gradient(ellipse at 82% -12%, rgba(var(--accent-rgb), 0.09), transparent 58%),
     linear-gradient(148deg, rgba(255, 252, 243, 0.035), transparent 58%);
   mix-blend-mode: screen;
-  opacity: 0.68;
+  opacity: 0.82;
 }
 
 .liquid-flow::before {
@@ -82,14 +82,17 @@
   inset: 0;
   pointer-events: none;
   background:
-    radial-gradient(ellipse 44% 120% at 8% 112%, rgba(var(--accent-rgb), 0.1), transparent 72%),
-    linear-gradient(112deg, transparent 24%, rgba(255, 255, 255, 0.05) 48%, transparent 72%);
-  opacity: 0.58;
+    radial-gradient(circle at 88% 14%, rgba(126, 184, 255, 0.15), transparent 28%),
+    radial-gradient(circle at 82% 82%, rgba(255, 185, 108, 0.13), transparent 34%),
+    radial-gradient(circle at 63% 43%, rgba(145, 238, 197, 0.09), transparent 38%),
+    radial-gradient(ellipse 44% 120% at 8% 112%, rgba(var(--accent-rgb), 0.11), transparent 72%),
+    linear-gradient(112deg, transparent 24%, rgba(255, 255, 255, 0.075) 48%, transparent 72%);
+  opacity: 0.74;
 }
 
 .liquid-edge-host:hover > .liquid-flow,
 .liquid-edge-host:focus-within > .liquid-flow {
-  opacity: 0.9;
+  opacity: 0.96;
 }
 
 .liquid-edge-host:hover > .liquid-flow::before,
@@ -147,4 +150,230 @@
 #stage.reduce-motion .liquid-flow::before {
   opacity: 0.28;
   transform: skewX(-18deg) translate3d(180%, 0, 0);
+}
+
+/* ------------------------------------------------------------------------------------------ button light */
+
+/* Buttons carry the same drifting body light as cards, but quieter; the
+ * reference is the soft colour bloom that sits inside a wide capsule. */
+.liquid-light-control > .liquid-flow {
+  opacity: 0.56;
+}
+
+.liquid-light-control > .liquid-flow::before {
+  width: 45%;
+  animation-duration: 12s;
+}
+
+.liquid-light-control > .liquid-flow::after {
+  background:
+    radial-gradient(circle at 88% 22%, rgba(118, 194, 255, 0.24), transparent 24%),
+    radial-gradient(circle at 82% 76%, rgba(255, 174, 92, 0.2), transparent 29%),
+    radial-gradient(circle at 68% 46%, rgba(158, 244, 202, 0.14), transparent 33%),
+    linear-gradient(112deg, transparent 25%, rgba(255, 255, 255, 0.065) 49%, transparent 73%);
+  filter: blur(4px);
+  opacity: 0.74;
+  animation: liquid-control-bloom 11s ease-in-out infinite alternate;
+}
+
+.liquid-light-control > .liquid-edge {
+  opacity: 0.34;
+}
+
+.liquid-light-control:hover > .liquid-edge,
+.liquid-light-control:focus-visible > .liquid-edge {
+  opacity: 0.9;
+}
+
+.liquid-light-control:hover > .liquid-flow,
+.liquid-light-control:focus-visible > .liquid-flow {
+  opacity: 0.82;
+}
+
+@keyframes liquid-control-bloom {
+  from {
+    transform: translate3d(-2%, 2%, 0) scale(0.96);
+  }
+  to {
+    transform: translate3d(3%, -2%, 0) scale(1.08);
+  }
+}
+
+/* ------------------------------------------------------------------------------------------ water-drop capsule reveal */
+
+/* A capsule does not unfold like a card: the light/water starts as a small
+ * circular bead at the pointer, then grows evenly in every direction until
+ * it has filled the whole pill. There is deliberately no translateY/downward
+ * travel: the bead is water sitting in the UI bar, not a falling drop. */
+.liquid-drop {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  border-radius: inherit;
+  pointer-events: none;
+  overflow: hidden;
+  opacity: 0;
+  clip-path: circle(0% at var(--drop-x, 50%) var(--drop-y, 35%));
+  background:
+    radial-gradient(circle at var(--drop-x, 50%) var(--drop-y, 35%), rgba(255, 255, 255, 0.24), rgba(255, 246, 220, 0.12) 32%, rgba(var(--accent-rgb), 0.1) 57%, transparent 76%),
+    linear-gradient(145deg, rgba(255, 255, 255, 0.04), transparent 50%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  transition:
+    clip-path 0.72s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.2s var(--ease);
+}
+
+.liquid-drop::after {
+  content: "";
+  position: absolute;
+  inset: 22%;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  filter: blur(8px);
+  opacity: 0;
+  transform: scale(0.4);
+  transition: opacity 0.3s var(--ease), transform 0.72s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.liquid-drop-host:hover > .liquid-drop,
+.liquid-drop-host:focus-visible > .liquid-drop,
+.liquid-drop-host:active > .liquid-drop {
+  opacity: 0.9;
+  clip-path: circle(155% at var(--drop-x, 50%) var(--drop-y, 35%));
+}
+
+.liquid-drop-host:hover > .liquid-drop::after,
+.liquid-drop-host:focus-visible > .liquid-drop::after,
+.liquid-drop-host:active > .liquid-drop::after {
+  opacity: 0.7;
+  transform: scale(1);
+}
+
+/* Reduced motion keeps the water tint but removes the expansion. */
+@media (prefers-reduced-motion: reduce) {
+  .liquid-light-control > .liquid-flow::after {
+    animation: none;
+  }
+
+  .liquid-drop {
+    transition: opacity 0.12s linear;
+    clip-path: circle(155% at 50% 35%);
+  }
+}
+
+#stage.reduce-motion .liquid-light-control > .liquid-flow::after {
+  animation: none !important;
+}
+
+/* The bar itself ripples beneath its child buttons; its rim stays quieter
+ * than a standalone button's so the two layers do not fight. */
+.system-nav.liquid-edge-host > .liquid-edge,
+.view-tabs.liquid-edge-host > .liquid-edge {
+  opacity: 0.34;
+}
+
+.system-nav.liquid-edge-host:hover > .liquid-edge,
+.view-tabs.liquid-edge-host:hover > .liquid-edge {
+  opacity: 0.74;
+}
+
+/* ------------------------------------------------------------------------------------------ uneven colour light */
+
+/* The light must not be one uniform white wash. A wide sheet carries several
+ * offset fields — cool blue at the upper right, mint in the middle and peach
+ * at the lower edge — that drift at different rates. On a dark backdrop they
+ * screen; on the light reference they switch to normal blending so the colour
+ * stays visible instead of being erased by white. */
+.liquid-flow::after {
+  background:
+    radial-gradient(circle at 88% 14%, rgba(112, 176, 255, 0.2), transparent 30%),
+    radial-gradient(circle at 72% 86%, rgba(255, 176, 101, 0.17), transparent 34%),
+    radial-gradient(circle at 46% 42%, rgba(119, 235, 192, 0.12), transparent 42%),
+    radial-gradient(circle at 20% 12%, rgba(203, 166, 255, 0.1), transparent 35%),
+    radial-gradient(ellipse 44% 120% at 8% 112%, rgba(var(--accent-rgb), 0.11), transparent 72%),
+    linear-gradient(112deg, transparent 24%, rgba(255, 255, 255, 0.085) 48%, transparent 72%);
+  filter: blur(2px);
+  opacity: 0.82;
+  animation: liquid-aurora-drift 16s ease-in-out infinite alternate;
+}
+
+.liquid-flow::before {
+  background:
+    radial-gradient(ellipse at 50% 48%, rgba(255, 255, 255, 0.32), rgba(255, 244, 218, 0.11) 34%, transparent 70%),
+    linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(109, 173, 255, 0.16) 25%,
+      rgba(255, 250, 237, 0.34) 47%,
+      rgba(255, 188, 118, 0.15) 65%,
+      transparent 100%
+    );
+}
+
+:root:not([data-dark-surface="true"]) .liquid-flow {
+  background:
+    var(--liquid-grain),
+    radial-gradient(ellipse at 82% -12%, rgba(var(--accent-rgb), 0.09), transparent 58%),
+    linear-gradient(148deg, rgba(255, 255, 255, 0.06), transparent 58%);
+  background-size: 160px 160px, auto, auto;
+  background-blend-mode: soft-light, normal, normal;
+  mix-blend-mode: normal;
+  opacity: 0.78;
+}
+
+:root:not([data-dark-surface="true"]) .liquid-flow::after {
+  background:
+    radial-gradient(circle at 88% 14%, rgba(92, 160, 248, 0.18), transparent 31%),
+    radial-gradient(circle at 72% 86%, rgba(246, 155, 79, 0.13), transparent 35%),
+    radial-gradient(circle at 46% 42%, rgba(92, 206, 161, 0.1), transparent 43%),
+    radial-gradient(circle at 20% 12%, rgba(179, 143, 240, 0.09), transparent 36%),
+    radial-gradient(ellipse 44% 120% at 8% 112%, rgba(196, 151, 83, 0.08), transparent 74%),
+    linear-gradient(112deg, transparent 24%, rgba(255, 255, 255, 0.28) 48%, transparent 72%);
+  filter: blur(3px);
+  opacity: 0.9;
+}
+
+:root:not([data-dark-surface="true"]) .liquid-light-control > .liquid-flow {
+  opacity: 0.66;
+}
+
+:root:not([data-dark-surface="true"]) .liquid-light-control > .liquid-flow::after {
+  background:
+    radial-gradient(circle at 88% 20%, rgba(87, 163, 255, 0.24), transparent 25%),
+    radial-gradient(circle at 78% 78%, rgba(255, 171, 91, 0.2), transparent 30%),
+    radial-gradient(circle at 62% 44%, rgba(119, 224, 188, 0.14), transparent 34%),
+    linear-gradient(112deg, transparent 25%, rgba(255, 255, 255, 0.28) 49%, transparent 73%);
+  opacity: 0.9;
+}
+
+:root:not([data-dark-surface="true"]) .liquid-edge-host:hover > .liquid-flow,
+:root:not([data-dark-surface="true"]) .liquid-edge-host:focus-within > .liquid-flow {
+  opacity: 1;
+}
+
+@keyframes liquid-aurora-drift {
+  0% {
+    transform: translate3d(-1.5%, 1.2%, 0) scale(1);
+  }
+  52% {
+    transform: translate3d(1.8%, -0.7%, 0) scale(1.035);
+  }
+  100% {
+    transform: translate3d(2.8%, -1.8%, 0) scale(1.07);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .liquid-flow::after {
+    animation: none !important;
+  }
+}
+
+#stage.reduce-motion .liquid-flow::after {
+  animation: none !important;
+}
+
+:root[data-perf="economy"] .liquid-flow::after {
+  animation-play-state: paused !important;
 }

@@ -38,6 +38,7 @@ const LIQUID_TARGET = [
   ".tabs",
   ".btn",
   ".nav-button",
+  ".view-tab",
   ".chip",
   ".toggle",
   ".menu",
@@ -55,18 +56,36 @@ const EDGE_TARGET = [
   ".sheet",
   ".dialog",
   ".menu",
+  ".system-nav",
+  ".view-tabs",
   ".card",
   ".dl-flat-card",
   ".notice",
+  ".problem",
   ".mod-row",
+  ".mod-update-row",
   ".stat",
   ".setting",
+  ".material-option",
+  ".custom-download-status",
   ".mod-problem-popover",
   ".toast",
   ".together-room",
+  ".hud-capsule",
+  ".hud-queue",
+  ".btn",
+  ".nav-button",
+  ".view-tab",
+  ".seg",
+  ".seg button",
+  ".toggle",
 ].join(",");
 
 const EDGE_ALWAYS = ".callout,.detail-panel,.dl-bar,.sheet,.dialog,.menu";
+
+/** Capsule controls get the circular water-fill reveal and a lighter light pass. */
+const DROP_TARGET = ".btn,.nav-button,.view-tab,.seg,.toggle,.system-nav,.view-tabs,.hud-capsule";
+const CONTROL_TARGET = ".btn,.nav-button,.view-tab,.seg,.seg button,.toggle";
 
 /** The time constant of the optical follow; smaller is snappier. */
 const FOLLOW_MS = 52;
@@ -136,6 +155,14 @@ export function installLiquidGlass(root: HTMLElement): () => void {
       flow.style.setProperty("--flow-delay", `${-(seed % 11) * 1.15}s`);
       target.append(flow);
     }
+    if (target.matches(DROP_TARGET) && !target.querySelector(":scope > .liquid-drop")) {
+      const drop = document.createElement("span");
+      drop.className = "liquid-drop";
+      drop.setAttribute("aria-hidden", "true");
+      target.append(drop);
+      target.classList.add("liquid-drop-host");
+    }
+    if (target.matches(CONTROL_TARGET)) target.classList.add("liquid-light-control");
     if (!target.querySelector(":scope > .liquid-edge")) {
       const edge = document.createElement("span");
       edge.className = "liquid-edge";
@@ -161,6 +188,10 @@ export function installLiquidGlass(root: HTMLElement): () => void {
   };
   const edgeObserver = new MutationObserver((records) => {
     for (const record of records) {
+      // A surface that is populated by replacing innerHTML keeps its class but
+      // loses the light spans. Re-scan the container as well as its new
+      // children so the travelling rim and water bead are restored.
+      if (record.target instanceof Element) edgeQueue.add(record.target);
       for (const node of record.addedNodes) if (node instanceof Element) edgeQueue.add(node);
     }
     if (edgeQueue.size && !edgeFrame) edgeFrame = requestAnimationFrame(flushEdges);
@@ -207,6 +238,15 @@ export function installLiquidGlass(root: HTMLElement): () => void {
   const onPointerMove = (event: PointerEvent) => {
     if (event.pointerType === "touch") return;
     const resolver = (selector: string) => (event.target as Element | null)?.closest<HTMLElement>(selector) ?? null;
+
+    const dropTarget = resolver(DROP_TARGET);
+    if (dropTarget && root.contains(dropTarget)) {
+      const rect = dropTarget.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        dropTarget.style.setProperty("--drop-x", `${Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)).toFixed(2)}%`);
+        dropTarget.style.setProperty("--drop-y", `${Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)).toFixed(2)}%`);
+      }
+    }
 
     const target = resolver(LIQUID_TARGET);
     if (target && root.contains(target)) {
