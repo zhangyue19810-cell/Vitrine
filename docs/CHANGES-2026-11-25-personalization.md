@@ -131,9 +131,10 @@ The card layer was pushed closer to the supplied form reference. A sheet is
 now a floating 32px-radius card inset into the stage, not a full-window panel:
 the blurred stage behind it provides the frosted backdrop, while the card's
 outer drop shadow, white top/left wall and darker bottom/right wall produce
-real depth. Large sheets and dialogs also run the static SVG displacement
-lens from the supplied `liquid-glass` source, giving a genuine refractive
-backdrop without animating the whole interface.
+real depth. Dialogs run a lightweight radial-lens SVG filter based on the
+supplied shader: an inward seventh-power displacement map plus a 1.1px sample
+blur. It is pre-baked to a PNG once, so no turbulence is animated over the
+live 3D scene.
 
 Inside the card, the light is deliberately uneven: a cool blue field at the
 upper right, mint near the middle, peach at the lower edge and a lavender
@@ -203,3 +204,20 @@ Several renderer hotspots were reduced after the music→home regression:
   rendered frame;
 - `instanceColor` versioning is still tracked so the flow remains animated,
   but render-state reuse is no longer defeated at full frame rate.
+
+## Long-session memory and compositor load
+
+Two gradual-load paths were closed after the "fine at first, slower after a
+while" report:
+
+- `MusicView.covers` was an unbounded decoded-image map. It is now a 120-entry
+  LRU, trimmed to 60 covers when leaving the music page; repeated searches no
+  longer keep every cover image alive forever.
+- the quality governor now publishes its effective tier on
+  `document.documentElement` as `data-render-tier`. When it reaches `low` the
+  decorative flowing-light animations stop and live frost is reduced to a
+  15px blur; at `minimal` backdrop sampling and the decoration stop entirely,
+  while the layered colour/rim glass remains. The scheduler's `idle` and
+  `idle-deep` states also pause purely decorative flow, resuming on the next
+  pointer movement. This prevents a long-running launcher from accumulating
+  compositor/GPU work after the first interaction has passed.

@@ -627,3 +627,42 @@
   font-weight: 600;
   text-shadow: 0 0 10px var(--glass-error-soft);
 }
+
+/* ------------------------------------------------------------------------------------------ adaptive frost */
+
+/* When the governor has stepped the GPU down, spend less on live backdrop
+ * sampling before spending less on the actual archives. */
+:root:root[data-render-tier="low"] .sheet,
+:root:root[data-render-tier="low"] .dialog,
+:root:root[data-render-tier="low"] .callout,
+:root:root[data-render-tier="low"] .detail-panel,
+:root:root[data-render-tier="low"] .dl-bar,
+:root:root[data-render-tier="low"] .system-nav,
+:root:root[data-render-tier="low"] .view-tabs,
+:root:root[data-render-tier="low"] .menu,
+:root:root[data-render-tier="low"] .hud-capsule,
+:root:root[data-render-tier="low"] .hud-queue {
+  -webkit-backdrop-filter: blur(15px) saturate(1.45) brightness(1.02);
+  backdrop-filter: blur(15px) saturate(1.45) brightness(1.02);
+}
+
+/* Minimal is normally only reached on a software rasteriser or a machine
+ * under severe pressure. Keep the layered glass colour and rim, but stop
+ * sampling the live canvas behind every panel. */
+:root:root[data-render-tier="minimal"] .sheet,
+:root:root[data-render-tier="minimal"] .dialog,
+:root:root[data-render-tier="minimal"] .callout,
+:root:root[data-render-tier="minimal"] .detail-panel,
+:root:root[data-render-tier="minimal"] .dl-bar,
+:root:root[data-render-tier="minimal"] .system-nav,
+:root:root[data-render-tier="minimal"] .view-tabs,
+:root:root[data-render-tier="minimal"] .menu,
+:root:root[data-render-tier="minimal"] .hud-capsule,
+:root:root[data-render-tier="minimal"] .hud-queue,
+:root:root[data-render-tier="minimal"] .card,
+:root:root[data-render-tier="minimal"] .setting,
+:root:root[data-render-tier="minimal"] .material-option,
+:root:root[data-render-tier="minimal"] .dl-flat-card {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}

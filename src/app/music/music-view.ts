@@ -30,6 +30,7 @@ import { ListenTogether } from "./together";
 const PART = "music";
 const PAGE = 30;
 const COVER_CONCURRENCY = 4;
+const COVER_CACHE = 120;
 const POLL_MS = 1800;
 
 type Source = "recommended" | "toplists" | "daily" | "mine" | "search";
@@ -147,6 +148,7 @@ export class MusicView {
     this.stopPolling();
     this.coverQueue = [];
     this.loading = false;
+    this.trimCovers(60);
     this.bus.clear(PART);
   }
 
@@ -296,7 +298,20 @@ export class MusicView {
   /** undefined: not fetched yet (it will be), null: none to be had, or the decoded image. */
   private cover(url: string): CanvasImageSource | null | undefined {
     if (!url) return null;
-    return this.covers.get(url);
+    if (!this.covers.has(url)) return undefined;
+    // Touch on read: the map is an LRU, not an ever-growing image archive.
+    const image = this.covers.get(url)!;
+    this.covers.delete(url);
+    this.covers.set(url, image);
+    return image;
+  }
+
+  private trimCovers(limit = COVER_CACHE) {
+    while (this.covers.size > limit) {
+      const oldest = this.covers.keys().next().value;
+      if (oldest === undefined) break;
+      this.covers.delete(oldest);
+    }
   }
 
   private queueCovers() {
@@ -315,6 +330,7 @@ export class MusicView {
       void this.fetchCover(url).then((image) => {
         this.coverBusy--;
         this.covers.set(url, image);
+        this.trimCovers();
         this.refreshItems();
         this.pumpCovers();
       });

@@ -7,6 +7,8 @@ from the `liquid-glass` source supplied by the Vitrine author at
 - Author: Dominik Pawlikowski
 - License: MIT (see `liquid-glass-LICENSE.txt`)
 
-Only the `feTurbulence` + `feDisplacementMap` filter is reused. The React
-component, demo layout, drag system and control panel are not bundled.
-Vitrine retains its own DOM, animation, spring and interaction systems.
+The original radial displacement idea (`-dir * f * (d/r)^7` plus a light
+sample blur) informed Vitrine's pre-baked SVG displacement map. The React
+component, demo layout, drag system, control panel and runtime turbulence
+filter are not bundled. Vitrine retains its own DOM, animation, spring and
+interaction systems.

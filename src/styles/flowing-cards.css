@@ -374,3 +374,34 @@
 :root[data-perf="economy"] .liquid-flow::after {
   animation-play-state: paused !important;
 }
+
+/* ------------------------------------------------------------------------------------------ load shedding */
+
+/* The scheduler calls a quiet window "idle" after ten seconds and "idle-deep"
+ * after ninety. Freeze the decorative light then; the first pointer movement
+ * pokes the scheduler back to "active" and the animation resumes. */
+:root[data-perf="idle"] .liquid-flow::before,
+:root[data-perf="idle"] .liquid-flow::after,
+:root[data-perf="idle"] .liquid-edge,
+:root[data-perf="idle-deep"] .liquid-flow::before,
+:root[data-perf="idle-deep"] .liquid-flow::after,
+:root[data-perf="idle-deep"] .liquid-edge {
+  animation-play-state: paused !important;
+}
+
+/* The quality governor only steps down when real frame times stay low. At
+ * that point stop the compositor-only decoration as well instead of asking a
+ * struggling GPU to keep repainting it. */
+:root[data-render-tier="low"] .liquid-flow::before,
+:root[data-render-tier="low"] .liquid-flow::after,
+:root[data-render-tier="low"] .liquid-edge,
+:root[data-render-tier="minimal"] .liquid-flow::before,
+:root[data-render-tier="minimal"] .liquid-flow::after,
+:root[data-render-tier="minimal"] .liquid-edge {
+  animation: none !important;
+}
+
+:root[data-render-tier="minimal"] .liquid-flow,
+:root[data-render-tier="minimal"] .liquid-edge {
+  opacity: 0.34;
+}

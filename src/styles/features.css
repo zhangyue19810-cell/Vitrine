@@ -772,3 +772,43 @@ body {
 #stage.reduce-motion .system-nav.is-open .nav-reveal {
   animation: none !important;
 }
+
+/* Idle and low-tier load shedding for the ambient compositor decoration. */
+:root[data-perf="idle"] .scene-aura,
+:root[data-perf="idle"] .scene-aura::before,
+:root[data-perf="idle"] .scene-aura::after,
+:root[data-perf="idle"] .liquid-edge,
+:root[data-perf="idle"] .dynamic-island::before,
+:root[data-perf="idle"] .callout::after,
+:root[data-perf="idle"] .callout-rule::after,
+:root[data-perf="idle"] .view-tabs::after,
+:root[data-perf="idle"] .system-nav::after,
+:root[data-perf="idle-deep"] .scene-aura,
+:root[data-perf="idle-deep"] .scene-aura::before,
+:root[data-perf="idle-deep"] .scene-aura::after,
+:root[data-perf="idle-deep"] .liquid-edge,
+:root[data-perf="idle-deep"] .dynamic-island::before,
+:root[data-perf="idle-deep"] .callout::after,
+:root[data-perf="idle-deep"] .callout-rule::after,
+:root[data-perf="idle-deep"] .view-tabs::after,
+:root[data-perf="idle-deep"] .system-nav::after,
+:root[data-render-tier="low"] .scene-aura,
+:root[data-render-tier="low"] .scene-aura::before,
+:root[data-render-tier="low"] .scene-aura::after,
+:root[data-render-tier="low"] .liquid-edge,
+:root[data-render-tier="low"] .dynamic-island::before,
+:root[data-render-tier="low"] .callout::after,
+:root[data-render-tier="low"] .callout-rule::after,
+:root[data-render-tier="low"] .view-tabs::after,
+:root[data-render-tier="low"] .system-nav::after,
+:root[data-render-tier="minimal"] .scene-aura,
+:root[data-render-tier="minimal"] .scene-aura::before,
+:root[data-render-tier="minimal"] .scene-aura::after,
+:root[data-render-tier="minimal"] .liquid-edge,
+:root[data-render-tier="minimal"] .dynamic-island::before,
+:root[data-render-tier="minimal"] .callout::after,
+:root[data-render-tier="minimal"] .callout-rule::after,
+:root[data-render-tier="minimal"] .view-tabs::after,
+:root[data-render-tier="minimal"] .system-nav::after {
+  animation-play-state: paused !important;
+}

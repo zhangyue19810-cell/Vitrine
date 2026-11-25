@@ -54,6 +54,7 @@ export class Perf {
     private readonly rendererName: string,
   ) {
     this.governor = new QualityGovernor(initialTier("auto", rendererName, this.app.hardware?.()));
+    this.markTier(this.governor.tier);
     this.scheduler = new RenderScheduler({
       frame: (time) => this.frame(time),
       inputs: () => {
@@ -100,6 +101,7 @@ export class Perf {
     const tier = initialTier(setting, this.rendererName, this.app.hardware?.());
     this.governor = new QualityGovernor(tier);
     this.app.host.setTier(tier);
+    this.markTier(tier);
     this.syncGameQuality();
   }
 
@@ -109,6 +111,7 @@ export class Perf {
     this.lastFrame = 0;
     this.governor.reset();
     this.app.host.setTier(this.governor.tier);
+    this.markTier(this.governor.tier);
     this.syncGameQuality();
   }
 
@@ -121,6 +124,7 @@ export class Perf {
       const next = this.governor.evaluate(now, decision.fps);
       if (next) {
         this.app.host.setTier(next);
+        this.markTier(next);
         this.steps.push({ at: Math.round(now), tier: next });
         console.info(`[vitrine] 画面较卡，3D 画质自动降为“${next}”`);
       }
@@ -145,13 +149,21 @@ export class Perf {
     const running = this.app.gameRunning();
     if (running) {
       this.gameQuality ??= this.governor.tier;
-      this.app.host.setTier(this.governor.tier === "minimal" ? "minimal" : "low");
+      const effective = this.governor.tier === "minimal" ? "minimal" : "low";
+      this.app.host.setTier(effective);
+      this.markTier(effective);
       return;
     }
     if (this.gameQuality) {
       this.gameQuality = undefined;
       this.app.host.setTier(this.governor.tier);
+      this.markTier(this.governor.tier);
     }
+  }
+
+  /** A CSS-readable tier lets the decorative DOM effects fall away with the WebGL quality. */
+  private markTier(tier: QualityTier) {
+    document.documentElement.dataset.renderTier = tier;
   }
 
   /** Tell the core how closely the interface is watching (it thins out progress events accordingly). */
