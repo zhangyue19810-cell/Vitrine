@@ -5,7 +5,6 @@ import { records, setArchive } from "../data";
 import { fullMotion, reducedMotion } from "../motion-preferences";
 import { normalizeQuality, qualityPresets, type RenderQuality } from "../render-quality";
 import { ringMaterialById, type RingMaterialPreset } from "../ring-materials";
-import { LinearFilter, SRGBColorSpace, Texture, VideoTexture } from "three";
 import { waitForVisualAssets } from "./warmup";
 import type { PlateGroup } from "../rail/model";
 import { ArchiveScene } from "../scene";
@@ -102,10 +101,6 @@ export class SceneHost {
   private spectrum: SpectrumField | null = null;
   private cardSize: CardSize = "medium";
   private ringMaterial: RingMaterialPreset = ringMaterialById("black-gold");
-  private wallpaperMedia?: HTMLImageElement | HTMLVideoElement;
-  private wallpaperTexture?: Texture;
-  private wallpaperAspect = 16 / 9;
-  private wallpaperLook = { dim: 0.4, blur: 10, depth: 0.72 };
 
   constructor(
     private readonly container: HTMLElement,
@@ -164,7 +159,6 @@ export class SceneHost {
         }
         next.setMotion(this.reduced ? reducedMotion() : fullMotion());
         next.setRingMaterial(this.ringMaterial);
-        next.setWallpaper(this.wallpaperTexture ?? null, this.wallpaperAspect, this.wallpaperLook);
         next.setQuality(TIER_QUALITY[this.tier]);
         next.setSuperPerformance(this.tier === "minimal");
         next.setMode(this.mode);
@@ -189,7 +183,7 @@ export class SceneHost {
         }
       }
     }
-    console.error("3D scene unavailable", lastError);
+    console.error(`3D scene unavailable\n${lastError instanceof Error ? lastError.stack ?? lastError.message : String(lastError)}`);
     this.scene = undefined;
     this.status = "failed";
     this.error = (lastError as Error)?.message ?? String(lastError);
@@ -399,33 +393,6 @@ export class SceneHost {
     if (this.reduced === reduced) return;
     this.reduced = reduced;
     this.scene?.setMotion(reduced ? reducedMotion() : fullMotion());
-  }
-
-  /**
-   * Give the scene the image/video the player picked as wallpaper. The DOM
-   * layer remains the fallback; when WebGL is live the texture is drawn inside
-   * the scene so the ring and glass always occlude it correctly.
-   */
-  setWallpaperMedia(media: HTMLImageElement | HTMLVideoElement | null, aspect = 16 / 9) {
-    this.wallpaperMedia = media ?? undefined;
-    this.wallpaperTexture?.dispose();
-    this.wallpaperTexture = undefined;
-    this.wallpaperAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
-    if (media) {
-      const texture = media instanceof HTMLVideoElement ? new VideoTexture(media) : new Texture(media);
-      texture.colorSpace = SRGBColorSpace;
-      texture.minFilter = LinearFilter;
-      texture.magFilter = LinearFilter;
-      texture.generateMipmaps = false;
-      texture.needsUpdate = true;
-      this.wallpaperTexture = texture;
-    }
-    this.scene?.setWallpaper(this.wallpaperTexture ?? null, this.wallpaperAspect, this.wallpaperLook);
-  }
-
-  setWallpaperLook(look: { dim: number; blur: number; depth: number }) {
-    this.wallpaperLook = { ...look };
-    this.scene?.setWallpaperLook(this.wallpaperLook);
   }
 
   /** Switch the Möbius ring's PBR family. Kept here so a rebuilt GPU scene gets the same material. */

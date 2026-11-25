@@ -22,8 +22,6 @@ contextBridge.exposeInMainWorld("vitrine", {
     return () => void ipcRenderer.removeListener("vitrine:event", handler);
   },
 
-  mediaUrl: (path: string) => ipcRenderer.invoke("vitrine:media-url", path) as Promise<string | null>,
-
   pathForFile: (file: File) => {
     try {
       return webUtils.getPathForFile(file);

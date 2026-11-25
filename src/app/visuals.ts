@@ -1,48 +1,24 @@
 import { ringMaterialById, type RingMaterialId, type RingMaterialPreset } from "../ring-materials";
 
-export interface BackgroundSettings {
-  kind: "none" | "image" | "video";
-  /** Absolute local path. The desktop shell turns it into a safe media URL. */
-  path: string;
-  name: string;
-  /** 0 … 1 darkening of the media so glass text remains readable. */
-  dim: number;
-  /** Blur in stage pixels; 0 keeps the wallpaper crisp. */
-  blur: number;
-  /** Simulated depth: 0 = flat, 1 = deep parallax and focus falloff. */
-  depth: number;
-  paused: boolean;
-}
-
 export interface VisualPreferencesState {
   ringMaterial: RingMaterialId;
-  background: BackgroundSettings;
 }
 
 const KEY = "vitrine.visuals.v1";
-
-const DEFAULT_BACKGROUND: BackgroundSettings = { kind: "none", path: "", name: "", dim: 0.4, blur: 10, depth: 0.72, paused: false };
-const DEFAULT_STATE: VisualPreferencesState = { ringMaterial: "black-gold", background: { ...DEFAULT_BACKGROUND } };
+const DEFAULT_STATE: VisualPreferencesState = { ringMaterial: "black-gold" };
 
 function read(): VisualPreferencesState {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return { ...DEFAULT_STATE, background: { ...DEFAULT_BACKGROUND } };
-    const value = JSON.parse(raw) as Partial<VisualPreferencesState> | undefined;
-    const background = { ...DEFAULT_BACKGROUND, ...(value?.background ?? {}) };
-    if (!["none", "image", "video"].includes(background.kind)) background.kind = "none";
-    return {
-      ringMaterial: ringMaterialById(String(value?.ringMaterial)).id,
-      background: {
-        ...background,
-        dim: Math.max(0, Math.min(0.9, Number(background.dim) || 0)),
-        blur: Math.max(0, Math.min(36, Number(background.blur) || 0)),
-        depth: Math.max(0, Math.min(1, Number(background.depth) || 0)),
-        paused: Boolean(background.paused),
-      },
-    };
+    if (!raw) return { ...DEFAULT_STATE };
+    const value = JSON.parse(raw) as (Partial<VisualPreferencesState> & { background?: unknown }) | undefined;
+    const state: VisualPreferencesState = { ringMaterial: ringMaterialById(String(value?.ringMaterial)).id };
+    // The old wallpaper build stored a large background object in this same
+    // key. Drop it the next time the old value is read.
+    if (value?.background !== undefined) localStorage.setItem(KEY, JSON.stringify(state));
+    return state;
   } catch {
-    return { ...DEFAULT_STATE, background: { ...DEFAULT_BACKGROUND } };
+    return { ...DEFAULT_STATE };
   }
 }
 
@@ -52,7 +28,7 @@ class VisualPreferences {
   private readonly listeners = new Set<(state: VisualPreferencesState) => void>();
 
   get(): VisualPreferencesState {
-    return { ...this.state, background: { ...this.state.background } };
+    return { ...this.state };
   }
 
   get material(): RingMaterialPreset {
@@ -64,7 +40,9 @@ class VisualPreferences {
     return () => this.listeners.delete(listener);
   }
 
-  private commit() {
+  setRingMaterial(id: RingMaterialId) {
+    if (this.state.ringMaterial === id) return;
+    this.state.ringMaterial = ringMaterialById(id).id;
     try {
       localStorage.setItem(KEY, JSON.stringify(this.state));
     } catch {
@@ -78,31 +56,6 @@ class VisualPreferences {
         console.error("visual preference listener failed", error);
       }
     }
-  }
-
-  setRingMaterial(id: RingMaterialId) {
-    if (this.state.ringMaterial === id) return;
-    this.state.ringMaterial = ringMaterialById(id).id;
-    this.commit();
-  }
-
-  setBackground(patch: Partial<BackgroundSettings>) {
-    this.state.background = {
-      ...this.state.background,
-      ...patch,
-      dim: Math.max(0, Math.min(0.9, Number(patch.dim ?? this.state.background.dim))),
-      blur: Math.max(0, Math.min(36, Number(patch.blur ?? this.state.background.blur))),
-      depth: Math.max(0, Math.min(1, Number(patch.depth ?? this.state.background.depth))),
-    };
-    this.commit();
-  }
-
-  importBackground(kind: "image" | "video", path: string, name: string) {
-    this.setBackground({ kind, path, name: name.trim() || path.split(/[\\/]/).pop() || "自定义背景", paused: false });
-  }
-
-  clearBackground() {
-    this.setBackground({ kind: "none", path: "", name: "", paused: false });
   }
 }
 

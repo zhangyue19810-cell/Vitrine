@@ -20,7 +20,6 @@ import { LyricsFeed } from "./music/lyrics-feed";
 import { MusicView } from "./music/music-view";
 import type { MusicPlayer } from "./music/player";
 import { createMusicPlayer } from "./music/service";
-import { BackgroundView } from "./background";
 import { DynamicIsland } from "./dynamic-island";
 import { visualPreferences } from "./visuals";
 import { Perf, type PerfApp } from "./perf";
@@ -76,7 +75,6 @@ export class App implements PerfApp {
   private perf!: Perf;
   private readonly fader = new ThemeFader();
   private inspection?: InspectionOverlay;
-  private background?: BackgroundView;
   private island?: DynamicIsland;
 
   private download!: DownloadView;
@@ -219,10 +217,6 @@ export class App implements PerfApp {
       select: (index, cell) => this.onSceneSelect(index, cell),
       navigate: (axis, direction) => this.canBrowse() && (axis === "lane" ? this.stepLane(direction) : this.stepFile(direction)),
       hover: (index) => this.setHover(index),
-    });
-    this.background = new BackgroundView(this.stage, this.bridge, {
-      media: (media, aspect) => this.host.setWallpaperMedia(media, aspect),
-      look: (settings) => this.host.setWallpaperLook({ dim: settings.dim, blur: settings.blur, depth: settings.depth }),
     });
     this.host.setRingMaterial(visualPreferences.material);
     this.host.stageHandlers = {
@@ -913,7 +907,6 @@ export class App implements PerfApp {
       player: this.player,
       dock: this.dock,
       island: this.island,
-      background: this.background,
       visuals: visualPreferences,
       bus: this.bus,
       perf: this.perf,

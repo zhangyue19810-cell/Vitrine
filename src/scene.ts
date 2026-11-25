@@ -23,6 +23,7 @@ import { applyTextureQuality, resizeQuality } from "./quality-renderer";
 import { CardAppearance } from "./appearance";
 import type { RingMaterialPreset } from "./ring-materials";
 import { configureInternalOptics } from "./internal-optics";
+import { archiveEdgeFragment } from "./archive-edge";
 import { DecryptionController } from "./decryption";
 import { fileAtSlot, fileLocation } from "./data";
 import {
@@ -129,7 +130,6 @@ export class ArchiveScene {
       inst.material = enabled ? inst.userData.fastMaterial : original;
       inst.visible = !enabled || original.name.replace(/\.\d+$/, "") !== "Titanium_Fasteners";
     }
-    if (this.wallpaperMaterial) this.wallpaperMaterial.uniforms.uBlurPx.value = enabled ? 0 : this.wallpaperLook.blur;
     this.resize();
   }
   setSelectedIndexAccent(onlySelected: boolean) { this.selectedIndexOnly = onlySelected; }
@@ -207,11 +207,6 @@ export class ArchiveScene {
   private model = new THREE.Group();
   private appearance = new CardAppearance();
   private ringMaterialPreset?: RingMaterialPreset;
-  private wallpaperMesh!: THREE.Mesh;
-  private wallpaperMaterial!: THREE.ShaderMaterial;
-  private wallpaperAspect = 16 / 9;
-  private wallpaperLook = { dim: 0.4, blur: 10, depth: 0.72 };
-  private wallpaperPointer = new THREE.Vector2();
   private decryption = new DecryptionController();
   private cursor = new THREE.Vector2();
   private raycaster = new THREE.Raycaster();
@@ -816,19 +811,6 @@ export class ArchiveScene {
       "三维实例架，点击选择，左右拖动切换分组，上下拖动或滚轮切换分组内的实例",
     );
     container.appendChild(this.renderer.domElement);
-    this.renderer.domElement.addEventListener("pointermove", (event) => {
-      if (!this.wallpaperMesh?.visible) return;
-      const rect = this.renderer.domElement.getBoundingClientRect();
-      this.wallpaperPointer.set(
-        Math.max(-1, Math.min(1, ((event.clientX - rect.left) / Math.max(1, rect.width)) * 2 - 1)),
-        Math.max(-1, Math.min(1, ((event.clientY - rect.top) / Math.max(1, rect.height)) * 2 - 1)),
-      );
-      this.renderState.invalidate();
-    }, { signal: this.inputEvents.signal, passive: true });
-    this.renderer.domElement.addEventListener("pointerleave", () => {
-      this.wallpaperPointer.set(0, 0);
-      this.renderState.invalidate();
-    }, { signal: this.inputEvents.signal });
     this.controls = new ControlRail(container);
     this.renderer.domElement.addEventListener('webglcontextrestored', () => {
       this.renderState.invalidate();
@@ -839,7 +821,6 @@ export class ArchiveScene {
     // beauty, normal, depth and transmission renders reuse those same matrices.
     this.scene.matrixWorldAutoUpdate = false;
     this.scene.fog = new THREE.Fog("#eae5e1", 22, 47);
-    this.installWallpaperLayer();
     this.light = createArchiveLighting(this.renderer, this.scene, lightingLook);
     this.light.castShadow = true;
     Object.assign(this.light.shadow.camera, {
@@ -932,25 +913,45 @@ export class ArchiveScene {
       this.cells.push(cell);
     }
     for (const mesh of meshes) {
+      // The source cassette is deliberately wafer-thin. Stretch only its depth
+      // axis so the thicker optical stack has a real side wall to read against
+      // and the selected archive gets a more substantial silhouette.
       const geom = mesh.geometry
         .clone()
         .applyMatrix4(mesh.matrixWorld)
-        .scale(1, 1, 1);
+        .scale(1, 1, 1.38);
       const source = mesh.material as THREE.MeshStandardMaterial;
       const name = source.name.replace(/\.\d+$/, "");
-      const mat = source.clone() as THREE.MeshPhysicalMaterial;
+      // Promote every archive surface to a physical material: the edge and
+      // cover layers need transmission, clearcoat, sheen and iridescence even
+      // when the GLB only supplied a metallic-roughness material. Physical
+      // sources clone normally so their optical maps are preserved.
+      let mat: THREE.MeshPhysicalMaterial;
+      if (source instanceof THREE.MeshPhysicalMaterial) {
+        mat = source.clone();
+      } else {
+        mat = new THREE.MeshPhysicalMaterial();
+        THREE.MeshStandardMaterial.prototype.copy.call(mat, source);
+        // MeshStandardMaterial.copy writes its own defines; restore the
+        // physical shader flags after copying the common material settings.
+        mat.defines = { STANDARD: "", PHYSICAL: "" };
+      }
       mat.envMapIntensity = 1.0;
       if (name === "Frosted_Polymer") {
         mat.color.set("#f5f1e9");
-        mat.transmission = 0.82;
-        mat.thickness = 0.24;
-        mat.roughness = 0.16;
-        mat.ior = 1.47;
-        mat.attenuationColor = new THREE.Color("#e7d9c8");
-        mat.attenuationDistance = 2.6;
-        mat.clearcoat = 0.72;
-        mat.clearcoatRoughness = 0.12;
-        mat.envMapIntensity = 1.5;
+        mat.transmission = 0.9;
+        mat.thickness = 0.78;
+        mat.roughness = 0.12;
+        mat.ior = 1.52;
+        mat.dispersion = 0.16;
+        mat.attenuationColor = new THREE.Color("#dbc4a4");
+        mat.attenuationDistance = 0.76;
+        mat.clearcoat = 0.9;
+        mat.clearcoatRoughness = 0.07;
+        mat.envMapIntensity = 1.8;
+        mat.iridescence = 0.12;
+        mat.iridescenceIOR = 1.34;
+        mat.iridescenceThicknessRange = [110, 310];
       }
       if (name === "Internal_Ceramic") {
         mat.color.set(this.lightingLook === "refined" ? "#a49789" : "#b8aa9c");
@@ -963,20 +964,30 @@ export class ArchiveScene {
         mat.roughness = 0.54;
       }
       if (name === "Ivory_Edges") {
-        mat.color.set("#e7dac8");
-        mat.roughness = 0.24;
-        mat.transmission = 0.5;
-        mat.thickness = 0.055;
-        mat.ior = 1.45;
-        mat.clearcoat = 0.75;
-        mat.clearcoatRoughness = 0.15;
-        mat.envMapIntensity = 1.42;
+        // The outer rail is now brushed champagne metal rather than a second
+        // glass pane: a clear material break between the cover and its frame.
+        mat.color.set("#cfb37a");
+        mat.metalness = 0.82;
+        mat.roughness = 0.2;
+        mat.transmission = 0;
+        mat.thickness = 0;
+        mat.clearcoat = 0.84;
+        mat.clearcoatRoughness = 0.1;
+        mat.envMapIntensity = 2.0;
+        mat.sheen = 0.24;
+        mat.sheenColor = new THREE.Color("#ffe7b8");
+        mat.sheenRoughness = 0.32;
+        mat.iridescence = 0.16;
+        mat.iridescenceIOR = 1.38;
+        mat.iridescenceThicknessRange = [140, 360];
       }
       if (name === "Optical_Diffuser") {
-        mat.color.set("#cbbda9");
+        mat.color.set("#846c50");
         mat.transmission = 0;
-        mat.roughness = 0.68;
-        mat.clearcoat = 0.18;
+        mat.roughness = 0.58;
+        mat.clearcoat = 0.3;
+        mat.clearcoatRoughness = 0.24;
+        mat.envMapIntensity = 1.4;
       }
       if (name === "Subsurface_Optics") {
         mat.color.set(this.lightingLook === "refined" ? "#b09a84" : "#b4a391");
@@ -989,27 +1000,30 @@ export class ArchiveScene {
         // Internal refractive shoulders must be in the opaque capture: WebGL's
         // screen-space transmission cannot recursively sample another glass mesh.
         mat.transmission = 0;
-        mat.color.set(this.lightingLook === "refined" ? "#d0c1b0" : "#d2c4b5");
-        mat.roughness = 0.22;
-        mat.metalness = 0.12;
-        mat.clearcoat = 0.65;
-        mat.clearcoatRoughness = 0.16;
+        mat.color.set(this.lightingLook === "refined" ? "#a08c6b" : "#ab9878");
+        mat.roughness = 0.14;
+        mat.metalness = 0.88;
+        mat.clearcoat = 0.72;
+        mat.clearcoatRoughness = 0.1;
+        mat.envMapIntensity = 2.1;
       }
       if (name === "Titanium_Fasteners") {
-        mat.color.set("#d6c09a");
-        mat.metalness = 0.9;
-        mat.roughness = 0.18;
-        mat.clearcoat = 0.4;
-        mat.clearcoatRoughness = 0.1;
-        mat.envMapIntensity = 2.15;
+        mat.color.set("#c6bfad");
+        mat.metalness = 0.94;
+        mat.roughness = 0.16;
+        mat.clearcoat = 0.54;
+        mat.clearcoatRoughness = 0.08;
+        mat.envMapIntensity = 2.35;
+        mat.iridescence = 0.08;
+        mat.iridescenceIOR = 1.3;
       }
       if (name === "Index_Inlay") {
-        mat.color.set("#c6a05f");
-        mat.metalness = 0.55;
-        mat.roughness = 0.26;
-        mat.clearcoat = 0.62;
-        mat.clearcoatRoughness = 0.16;
-        mat.envMapIntensity = 1.66;
+        mat.color.set("#e0b35f");
+        mat.metalness = 0.72;
+        mat.roughness = 0.2;
+        mat.clearcoat = 0.86;
+        mat.clearcoatRoughness = 0.09;
+        mat.envMapIntensity = 1.96;
       }
       configureInternalOptics(name, mat);
       if (name === "Carbon_Ink") continue;
@@ -1034,15 +1048,20 @@ export class ArchiveScene {
       }
       const arrayMat = mat.clone();
       if (name === "Frosted_Polymer") {
-        arrayMat.transmission = 0.64;
-        arrayMat.thickness = 0.32;
-        arrayMat.attenuationColor.set("#cdb79e");
-        arrayMat.attenuationDistance = 1.35;
+        arrayMat.transmission = 0.58;
+        arrayMat.thickness = 0.68;
+        arrayMat.attenuationColor.set("#d6b995");
+        arrayMat.attenuationDistance = 0.92;
         arrayMat.transparent = false;
-        arrayMat.color.set("#e8dfd2");
-        arrayMat.clearcoat = 0.66;
-        arrayMat.clearcoatRoughness = 0.16;
-        arrayMat.envMapIntensity = 1.44;
+        arrayMat.color.set("#e8dcc8");
+        arrayMat.clearcoat = 0.84;
+        arrayMat.clearcoatRoughness = 0.1;
+        arrayMat.envMapIntensity = 1.72;
+        arrayMat.ior = 1.5;
+        arrayMat.dispersion = 0.12;
+        arrayMat.iridescence = 0.1;
+        arrayMat.iridescenceIOR = 1.32;
+        arrayMat.iridescenceThicknessRange = [110, 300];
         arrayMat.onBeforeCompile = (shader) => {
           shader.vertexShader =
             "varying float vPanelHeight;\n" + shader.vertexShader;
@@ -1054,37 +1073,51 @@ export class ArchiveScene {
             "varying float vPanelHeight;\n" + shader.fragmentShader;
           shader.fragmentShader = shader.fragmentShader.replace(
             "#include <color_fragment>",
-            "#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.40, 0.30, 0.20), vec3(1.0, 0.98, 0.94), smoothstep(0.1, 1.0, vPanelHeight));",
+            "#include <color_fragment>\ndiffuseColor.rgb *= mix(vec3(0.32, 0.23, 0.15), vec3(1.0, 0.98, 0.94), smoothstep(0.1, 1.0, vPanelHeight));",
           );
+          shader.fragmentShader = archiveEdgeFragment(shader.fragmentShader);
         };
-        arrayMat.roughness = 0.24;
+        arrayMat.roughness = 0.18;
       }
-      if (name === "Optical_Diffuser") arrayMat.color.set("#92775b");
+      if (name === "Optical_Diffuser") {
+        arrayMat.color.set("#725b42");
+        arrayMat.roughness = 0.54;
+        arrayMat.clearcoat = 0.28;
+        arrayMat.clearcoatRoughness = 0.26;
+        arrayMat.envMapIntensity = 1.28;
+      }
       if (name === "Ivory_Edges") {
-        arrayMat.transmission = 0.06;
-        arrayMat.color.set(
-          this.lightingLook === "refined" ? "#d4c1a7" : "#e1d2bf",
-        );
-        arrayMat.roughness = 0.3;
-        arrayMat.clearcoat = 0.46;
-        arrayMat.clearcoatRoughness = 0.19;
-        arrayMat.envMapIntensity = 1.34;
+        arrayMat.transmission = 0;
+        arrayMat.color.set(this.lightingLook === "refined" ? "#b99a62" : "#c7aa70");
+        arrayMat.metalness = 0.76;
+        arrayMat.roughness = 0.24;
+        arrayMat.clearcoat = 0.78;
+        arrayMat.clearcoatRoughness = 0.12;
+        arrayMat.envMapIntensity = 1.86;
+        arrayMat.sheen = 0.2;
+        arrayMat.sheenColor = new THREE.Color("#ffe6b2");
+        arrayMat.sheenRoughness = 0.34;
+        arrayMat.iridescence = 0.14;
+        arrayMat.iridescenceIOR = 1.36;
+        arrayMat.iridescenceThicknessRange = [140, 340];
       }
       if (name === "Index_Inlay") {
-        arrayMat.color.set("#c6a05f");
-        arrayMat.metalness = 0.52;
-        arrayMat.roughness = 0.28;
-        arrayMat.clearcoat = 0.6;
-        arrayMat.clearcoatRoughness = 0.16;
-        arrayMat.envMapIntensity = 1.56;
+        arrayMat.color.set("#d8a94f");
+        arrayMat.metalness = 0.68;
+        arrayMat.roughness = 0.23;
+        arrayMat.clearcoat = 0.74;
+        arrayMat.clearcoatRoughness = 0.12;
+        arrayMat.envMapIntensity = 1.86;
       }
       if (name === "Titanium_Fasteners") {
-        arrayMat.color.set("#9fa9a8");
-        arrayMat.metalness = 0.9;
-        arrayMat.roughness = 0.2;
-        arrayMat.clearcoat = 0.32;
-        arrayMat.clearcoatRoughness = 0.1;
-        arrayMat.envMapIntensity = 1.9;
+        arrayMat.color.set("#b8af9b");
+        arrayMat.metalness = 0.92;
+        arrayMat.roughness = 0.18;
+        arrayMat.clearcoat = 0.48;
+        arrayMat.clearcoatRoughness = 0.08;
+        arrayMat.envMapIntensity = 2.05;
+        arrayMat.iridescence = 0.08;
+        arrayMat.iridescenceIOR = 1.3;
       }
       this.appearance.register(name, mat, arrayMat);
       this.themeAttribute ??= new THREE.InstancedBufferAttribute(new Float32Array(count), 1).setUsage(THREE.DynamicDrawUsage);
@@ -1180,123 +1213,6 @@ export class ArchiveScene {
     // Disabling the reveal animation preserves the material state of each mode.
     return this.motion.modelDecryption ? this.decryption.clarity : this.targetDetail;
   }
-  /**
-   * A full-screen background drawn inside the WebGL pass. Keeping the image
-   * behind the ring in the same renderer gives true occlusion, physically
-   * correct glass reflections and one shared frame — unlike a DOM layer above
-   * a black canvas. The fallback DOM wallpaper remains available when WebGL
-   * cannot start.
-   */
-  private installWallpaperLayer() {
-    this.wallpaperMaterial = new THREE.ShaderMaterial({
-      name: "Vitrine_Wallpaper",
-      depthTest: false,
-      depthWrite: false,
-      toneMapped: false,
-      uniforms: {
-        uMap: { value: null },
-        uHasMap: { value: 0 },
-        uScreenAspect: { value: 16 / 9 },
-        uImageAspect: { value: 16 / 9 },
-        uDim: { value: this.wallpaperLook.dim },
-        uBlurPx: { value: this.wallpaperLook.blur },
-        uDepth: { value: this.wallpaperLook.depth },
-        uResolutionY: { value: 760 },
-        uPointer: { value: new THREE.Vector2() },
-      },
-      vertexShader: /* glsl */ `
-        varying vec2 vUv;
-        void main() {
-          vUv = uv;
-          gl_Position = vec4(position.xy, 1.0, 1.0);
-        }
-      `,
-      fragmentShader: /* glsl */ `
-        uniform sampler2D uMap;
-        uniform float uHasMap;
-        uniform float uScreenAspect;
-        uniform float uImageAspect;
-        uniform float uDim;
-        uniform float uBlurPx;
-        uniform float uDepth;
-        uniform float uResolutionY;
-        uniform vec2 uPointer;
-        varying vec2 vUv;
-
-        vec2 coverUv(vec2 uv) {
-          vec2 p = uv - 0.5;
-          if (uScreenAspect > uImageAspect) p.y *= uImageAspect / uScreenAspect;
-          else p.x *= uScreenAspect / uImageAspect;
-          return p + 0.5;
-        }
-
-        vec3 sampleBg(vec2 uv) {
-          vec2 r = vec2(max(0.0, uBlurPx) / uResolutionY);
-          if (r.x < 0.00001) return texture2D(uMap, uv).rgb;
-          vec3 c = texture2D(uMap, uv).rgb * 0.28;
-          c += texture2D(uMap, uv + vec2( r.x, 0.0)).rgb * 0.12;
-          c += texture2D(uMap, uv + vec2(-r.x, 0.0)).rgb * 0.12;
-          c += texture2D(uMap, uv + vec2(0.0,  r.x)).rgb * 0.12;
-          c += texture2D(uMap, uv + vec2(0.0, -r.x)).rgb * 0.12;
-          c += texture2D(uMap, uv + vec2( r.x,  r.x) * 0.7).rgb * 0.06;
-          c += texture2D(uMap, uv + vec2(-r.x,  r.x) * 0.7).rgb * 0.06;
-          c += texture2D(uMap, uv + vec2( r.x, -r.x) * 0.7).rgb * 0.06;
-          c += texture2D(uMap, uv + vec2(-r.x, -r.x) * 0.7).rgb * 0.06;
-          return c;
-        }
-
-        void main() {
-          if (uHasMap < 0.5) discard;
-          // The wallpaper drifts against the pointer by only a few virtual
-          // pixels: enough to feel like a room behind glass, never enough to
-          // pull the eye away from the archives.
-          vec2 parallax = uPointer * vec2(0.016, 0.010) * (0.45 + uDepth * 0.55);
-          vec2 uv = coverUv(vUv + parallax);
-          vec3 color = max(sampleBg(uv), vec3(0.0));
-          // Keep the central cabinet readable and let the perimeter recede.
-          float distance = length((vUv - 0.5) * vec2(1.6, 1.0));
-          float vignette = smoothstep(1.0, 0.28, distance);
-          color *= mix(0.38, 0.92, vignette * (0.82 + uDepth * 0.18));
-          color *= 1.0 - uDim * 0.72;
-          // The composer target is linear; decode the sRGB wallpaper explicitly.
-          color = pow(color, vec3(2.2));
-          gl_FragColor = vec4(color, 1.0);
-        }
-      `,
-    });
-    this.wallpaperMesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.wallpaperMaterial);
-    this.wallpaperMesh.name = "vitrine-wallpaper";
-    this.wallpaperMesh.frustumCulled = false;
-    this.wallpaperMesh.renderOrder = -100000;
-    this.wallpaperMesh.visible = false;
-    this.scene.add(this.wallpaperMesh);
-  }
-
-  setWallpaper(texture: THREE.Texture | null, aspect = 16 / 9, look?: { dim: number; blur: number; depth: number }) {
-    if (look) this.wallpaperLook = { ...look };
-    const uniforms = this.wallpaperMaterial.uniforms;
-    uniforms.uMap.value = texture;
-    uniforms.uHasMap.value = texture ? 1 : 0;
-    this.wallpaperAspect = Number.isFinite(aspect) && aspect > 0 ? aspect : 16 / 9;
-    uniforms.uImageAspect.value = this.wallpaperAspect;
-    uniforms.uDim.value = this.wallpaperLook.dim;
-    uniforms.uBlurPx.value = this.superPerformance ? 0 : this.wallpaperLook.blur;
-    uniforms.uDepth.value = this.wallpaperLook.depth;
-    uniforms.uScreenAspect.value = this.camera.aspect;
-    uniforms.uResolutionY.value = Math.max(1, this.container.clientHeight);
-    this.wallpaperMesh.visible = Boolean(texture);
-    this.renderState.invalidate();
-  }
-
-  setWallpaperLook(look: { dim: number; blur: number; depth: number }) {
-    this.wallpaperLook = { ...look };
-    const uniforms = this.wallpaperMaterial.uniforms;
-    uniforms.uDim.value = look.dim;
-    uniforms.uBlurPx.value = this.superPerformance ? 0 : look.blur;
-    uniforms.uDepth.value = look.depth;
-    this.renderState.invalidate();
-  }
-
   /** Apply a PBR preset to the whole ring (glass, metal, inlay and edge families independently). */
   setRingMaterial(preset: RingMaterialPreset) {
     this.ringMaterialPreset = preset;
@@ -1534,10 +1450,6 @@ export class ArchiveScene {
     });
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    if (this.wallpaperMaterial) {
-      this.wallpaperMaterial.uniforms.uScreenAspect.value = this.camera.aspect;
-      this.wallpaperMaterial.uniforms.uResolutionY.value = Math.max(1, h);
-    }
     this.controls.resize();
   }
   private canBrowse() {
@@ -1894,7 +1806,6 @@ export class ArchiveScene {
     this.last = time;
     this.clock = time;
     if (!this.loaded) return;
-    if (this.wallpaperMesh?.visible) this.wallpaperMaterial.uniforms.uPointer.value.copy(this.wallpaperPointer);
     this.flushHover();
     const step = !this.motion.surfaceTransitions ? 1 : Math.min(elapsed, .25) / 1.1;
     this.presence += Math.sign(this.presenceTarget - this.presence) * Math.min(step, Math.abs(this.presenceTarget - this.presence));

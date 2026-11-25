@@ -2,10 +2,9 @@
  * Vitrine — personalised glass layer.
  *
  * 1. rounder material language
- * 2. adaptive wallpaper and sample-derived card light
- * 3. the quiet top island
- * 4. personalisation controls
- * 5. the custom-download sheet
+ * 2. the quiet top island
+ * 3. personalisation controls
+ * 4. the custom-download sheet
  *
  * This file is imported last so it can refine the older component styles
  * without disturbing layout or the existing liquid-glass behaviour.
@@ -20,8 +19,6 @@
   --radius-card: 20px;
   --ambient-accent-rgb: 226, 178, 95;
   --ambient-flow-a-rgb: 110, 191, 191;
-  --ambient-flow-b-rgb: 255, 185, 125;
-  --ambient-depth-rgb: 22, 17, 10;
 }
 
 #viewport {
@@ -137,194 +134,6 @@ body {
   display: none !important;
 }
 
-/* ------------------------------------------------------------------------------------------ wallpaper + simulated depth */
-
-.stage-wallpaper {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-  background: #030303;
-  opacity: 1;
-  visibility: hidden;
-  transition: opacity 0.55s var(--ease), visibility 0s linear 0.55s;
-}
-
-#stage[data-wallpaper="true"] .stage-wallpaper {
-  visibility: visible;
-  opacity: 1;
-  transition: opacity 0.55s var(--ease), visibility 0s;
-}
-
-.stage-wallpaper .wallpaper-media {
-  position: absolute;
-  inset: -6%;
-  transform: translate3d(var(--wallpaper-pan-x, 0px), var(--wallpaper-pan-y, 0px), 0) scale(var(--wallpaper-scale, 1.06));
-  transform-origin: 50% 46%;
-  transition: transform 1.15s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: transform;
-}
-
-.stage-wallpaper .wallpaper-image,
-.stage-wallpaper .wallpaper-video {
-  display: block;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(var(--wallpaper-blur, 10px)) saturate(0.9) contrast(1.03);
-  transform: translateZ(0);
-}
-
-.stage-wallpaper .wallpaper-depth {
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 58% 54% at 50% 48%, transparent 28%, rgba(0, 0, 0, calc(0.12 + var(--wallpaper-depth, 0.7) * 0.24)) 76%, rgba(0, 0, 0, 0.62) 100%),
-    linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent 28%, transparent 66%, rgba(0, 0, 0, 0.5));
-  mix-blend-mode: multiply;
-}
-
-.stage-wallpaper .wallpaper-veil {
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(145deg, rgba(var(--ambient-depth-rgb), calc(var(--wallpaper-dim, 0.4) * 0.5)), rgba(0, 0, 0, var(--wallpaper-dim, 0.4)) 62%, rgba(0, 0, 0, calc(var(--wallpaper-dim, 0.4) * 1.08))),
-    radial-gradient(ellipse 70% 56% at 50% 48%, transparent 20%, rgba(0, 0, 0, calc(var(--wallpaper-dim, 0.4) * 0.36)) 100%);
-}
-
-.stage-wallpaper .wallpaper-grain {
-  position: absolute;
-  inset: 0;
-  background-image: var(--liquid-grain);
-  background-size: 160px 160px;
-  opacity: 0.045;
-  mix-blend-mode: soft-light;
-}
-
-.stage-wallpaper[data-error="true"] .wallpaper-image,
-.stage-wallpaper[data-error="true"] .wallpaper-video {
-  opacity: 0;
-}
-
-.stage-wallpaper[data-kind="none"] {
-  opacity: 0;
-}
-
-/* The WebGL frame keeps its deep-space clear colour. Screen blending removes
- * that black veil while preserving the lit ring, reflections and glints, so
- * the wallpaper reads through the scene without a second render pass. */
-#stage[data-wallpaper="true"] .three-scene {
-  z-index: 1;
-  isolation: auto;
-}
-
-#stage[data-wallpaper="true"] .three-scene canvas {
-  mix-blend-mode: normal;
-}
-
-#stage[data-wallpaper="true"] .scene-aura {
-  opacity: 0.22;
-  mix-blend-mode: soft-light;
-}
-
-#stage[data-wallpaper="true"] .scene-atmosphere {
-  background:
-    linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 24%, transparent 72%, rgba(0, 0, 0, 0.28)),
-    radial-gradient(ellipse at 50% 45%, transparent 46%, rgba(0, 0, 0, 0.2) 100%);
-}
-
-/* ------------------------------------------------------------------------------------------ adaptive card light */
-
-:root[data-adaptive-background="true"] {
-  --adaptive-accent: rgba(var(--ambient-accent-rgb), 1);
-}
-
-:root[data-adaptive-background="true"] .callout,
-:root[data-adaptive-background="true"] .detail-panel,
-:root[data-adaptive-background="true"] .dl-bar,
-:root[data-adaptive-background="true"] .card,
-:root[data-adaptive-background="true"] .dl-flat-card,
-:root[data-adaptive-background="true"] .stat,
-:root[data-adaptive-background="true"] .setting,
-:root[data-adaptive-background="true"] .settings .setting,
-:root[data-adaptive-background="true"] .mod-row,
-:root[data-adaptive-background="true"] .notice,
-:root[data-adaptive-background="true"] .empty,
-:root[data-adaptive-background="true"] .dialog,
-:root[data-adaptive-background="true"] .menu,
-:root[data-adaptive-background="true"] .toast {
-  border-color: rgba(var(--ambient-accent-rgb), 0.25);
-  background-image:
-    linear-gradient(126deg, rgba(255, 255, 255, 0.1), transparent 23%, transparent 73%, rgba(var(--ambient-accent-rgb), 0.1)),
-    radial-gradient(ellipse at 100% 0%, rgba(var(--ambient-accent-rgb), 0.17), transparent 56%),
-    radial-gradient(ellipse at 0% 100%, rgba(var(--ambient-flow-a-rgb), 0.07), transparent 54%);
-}
-
-:root[data-adaptive-background="true"] .card::before,
-:root[data-adaptive-background="true"] .notice::before,
-:root[data-adaptive-background="true"] .dialog::before,
-:root[data-adaptive-background="true"] .menu::before,
-:root[data-adaptive-background="true"] .toast::before {
-  background:
-    linear-gradient(122deg, rgba(255, 255, 255, 0.2), transparent 20%, transparent 72%, rgba(var(--ambient-accent-rgb), 0.15) 100%),
-    radial-gradient(ellipse at 18% -12%, rgba(255, 255, 255, 0.15), transparent 47%),
-    radial-gradient(ellipse at 90% 105%, rgba(var(--ambient-flow-a-rgb), 0.1), transparent 48%);
-}
-
-:root[data-adaptive-background="true"] .card:hover,
-:root[data-adaptive-background="true"] .stat:hover,
-:root[data-adaptive-background="true"] .setting:hover,
-:root[data-adaptive-background="true"] .mod-row:hover {
-  border-color: rgba(var(--ambient-accent-rgb), 0.48);
-  box-shadow:
-    0 22px 54px rgba(0, 0, 0, 0.27),
-    0 0 0 1px rgba(var(--ambient-accent-rgb), 0.08),
-    inset 0 1px 0 rgba(255, 249, 231, 0.62),
-    0 0 28px rgba(var(--ambient-accent-rgb), 0.12);
-}
-
-:root[data-adaptive-background="true"] .liquid-edge {
-  background:
-    linear-gradient(
-      112deg,
-      rgba(var(--ambient-flow-a-rgb), 0.02) 7%,
-      rgba(var(--ambient-accent-rgb), 0.28) 24%,
-      rgba(255, 251, 238, 0.8) 37%,
-      rgba(var(--ambient-flow-b-rgb), 0.34) 50%,
-      rgba(var(--ambient-flow-a-rgb), 0.24) 62%,
-      rgba(var(--ambient-accent-rgb), 0.1) 78%,
-      transparent 91%
-    ) 0 0 / 280% 100%;
-  opacity: 0.7;
-}
-
-:root[data-adaptive-background="true"] .liquid-target > .liquid-sheen {
-  background:
-    var(--liquid-grain),
-    radial-gradient(210px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 251, 241, 0.21), rgba(var(--ambient-accent-rgb), 0.07) 34%, transparent 64%),
-    radial-gradient(74px circle at var(--liquid-x, 50%) var(--liquid-y, 18%), rgba(255, 255, 255, 0.3), transparent 72%),
-    radial-gradient(180px ellipse at calc(var(--liquid-x, 50%) + 9%) calc(var(--liquid-y, 18%) + 7%), rgba(var(--ambient-accent-rgb), 0.21), transparent 70%),
-    linear-gradient(calc(var(--liquid-angle, 135deg) + 90deg), transparent 22%, rgba(255, 249, 234, 0.1) 45%, transparent 64%),
-    linear-gradient(118deg, transparent 14%, rgba(var(--ambient-flow-a-rgb), 0.1) 48%, transparent 82%);
-  background-size: 160px 160px, auto, auto, auto, auto, auto;
-  background-blend-mode: soft-light, screen, screen, screen, screen, normal;
-}
-
-:root[data-adaptive-background="true"] .view-tabs::after,
-:root[data-adaptive-background="true"] .system-nav::after {
-  background:
-    linear-gradient(
-      108deg,
-      transparent 25%,
-      rgba(var(--ambient-flow-a-rgb), 0.05) 35%,
-      rgba(var(--ambient-accent-rgb), 0.5) 47%,
-      rgba(255, 245, 220, 0.72) 50%,
-      rgba(var(--ambient-flow-b-rgb), 0.22) 55%,
-      transparent 66%
-    ) 0 0 / 260% 100%;
-}
-
 /* ------------------------------------------------------------------------------------------ the top quick island */
 /*
  * Ported geometry from Lumina UI's IslandChat: a pure-black capsule with a
@@ -353,6 +162,7 @@ body {
   border-radius: var(--island-r, 6.5px);
   background: linear-gradient(180deg, #000 0%, #0b0b10 100%);
   color: var(--ink);
+  font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Source Han Sans SC", "WenQuanYi Micro Hei", system-ui, sans-serif;
   box-shadow:
     0 10px 30px rgba(0, 0, 0, 0.58),
     0 0 0 1px rgba(0, 0, 0, 0.72),
@@ -532,6 +342,7 @@ body {
   grid-template-rows: auto auto auto;
   align-content: center;
   overflow: hidden;
+  perspective: 260px;
   text-align: left;
 }
 
@@ -567,45 +378,65 @@ body {
 
 .dynamic-island .island-lyrics span {
   height: 13px;
-  color: rgba(255, 255, 255, 0.3);
+  color: rgba(255, 255, 255, 0.28);
   font-size: 9.5px;
   line-height: 13px;
-  letter-spacing: 0.25px;
+  letter-spacing: 0.18px;
+  filter: blur(0.45px);
+  transform: translate3d(0, 1px, 0) rotateX(8deg) scale(0.92);
+  transform-origin: left center;
+  transition: opacity 0.4s var(--ease), filter 0.4s var(--ease), transform 0.4s var(--ease);
 }
 
+.dynamic-island .island-lyrics span:last-child {
+  color: rgba(255, 255, 255, 0.4);
+  filter: blur(0.28px);
+  transform: translate3d(0, -1px, 0) rotateX(-6deg) scale(0.95);
+}
+
+/* The same lyric grade as the music page: ivory letters that sweep through
+ * amber as the line lands, with a warm halo and the neighbouring lines
+ * blurred and tilted away like the lyric drum. */
 .dynamic-island .island-lyrics strong {
-  color: #fffdf7;
+  color: #b8b3ab;
   font-size: 14px;
-  font-weight: 650;
+  font-weight: 600;
   line-height: 1.45;
-  letter-spacing: 0.55px;
+  letter-spacing: 0.38px;
   text-shadow:
-    0 0 16px rgba(255, 255, 255, 0.16),
-    0 0 2px rgba(255, 255, 255, 0.22);
-  background: linear-gradient(92deg, #fffdf7 8%, rgb(var(--ambient-accent-rgb)) 54%, #fffdf7 92%);
+    0 0 16px rgba(209, 145, 64, 0.18),
+    0 0 2px rgba(255, 255, 255, 0.18);
+  background: linear-gradient(90deg, #c78d42 0%, #e8c78e 28%, #fbf8f0 52%, #fbf8f0 76%, #fffdf7 100%);
   background-size: 220% 100%;
+  background-position: 100% 50%;
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
-  animation: island-lyric-glow 4.8s ease-in-out infinite alternate;
-}
-
-@keyframes island-lyric-glow {
-  from { background-position: 0% 50%; filter: brightness(0.94); }
-  to { background-position: 100% 50%; filter: brightness(1.08); }
+  filter: drop-shadow(0 0 7px rgba(209, 145, 64, 0.12));
 }
 
 .dynamic-island .island-lyrics strong.island-lyric-pop {
   animation:
     island-lyric-spring 0.72s cubic-bezier(0.16, 1.45, 0.3, 1) both,
+    island-lyric-fill 2.4s ease-out both,
     island-lyric-glow 4.8s 0.72s ease-in-out infinite alternate;
 }
 
 @keyframes island-lyric-spring {
-  0% { opacity: 0.22; transform: translate3d(0, 10px, 0) scale(0.94); filter: blur(1.5px) brightness(0.8); }
-  52% { opacity: 1; transform: translate3d(0, -2px, 0) scale(1.025); filter: blur(0) brightness(1.1); }
+  0% { opacity: 0.22; transform: translate3d(0, 10px, 0) scale(0.94); }
+  52% { opacity: 1; transform: translate3d(0, -2px, 0) scale(1.025); }
   76% { transform: translate3d(0, 1px, 0) scale(0.997); }
-  100% { opacity: 1; transform: none; filter: brightness(1); }
+  100% { opacity: 1; transform: none; }
+}
+
+@keyframes island-lyric-fill {
+  from { background-position: 100% 50%; }
+  to { background-position: 0% 50%; }
+}
+
+@keyframes island-lyric-glow {
+  from { filter: drop-shadow(0 0 5px rgba(209, 145, 64, 0.1)); }
+  to { filter: drop-shadow(0 0 10px rgba(218, 163, 82, 0.25)); }
 }
 
 .dynamic-island[data-mode="complete"] {
@@ -654,8 +485,7 @@ body {
   max-width: 560px;
 }
 
-.personalization-current,
-.background-current {
+.personalization-current {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -675,12 +505,6 @@ body {
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
-.background-current {
-  max-width: 260px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 .material-grid {
   display: grid;
@@ -750,49 +574,6 @@ body {
     0 8px 24px rgba(0, 0, 0, 0.18),
     inset 0 1px 0 rgba(255, 249, 231, 0.38),
     0 0 20px rgba(var(--ambient-accent-rgb), 0.1);
-}
-
-.personalization-divider {
-  height: 1px;
-  margin: 3px 0;
-  background: linear-gradient(90deg, transparent, rgba(var(--rim-rgb), 0.26), transparent);
-}
-
-.background-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 7px;
-}
-
-.background-sliders {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 8px 18px;
-}
-
-.background-sliders[data-disabled="true"] {
-  opacity: 0.38;
-  pointer-events: none;
-}
-
-.background-sliders label {
-  display: grid;
-  grid-template-columns: 42px 1fr 42px;
-  align-items: center;
-  gap: 8px;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.background-sliders .range {
-  width: 100%;
-}
-
-.background-sliders output {
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 10px;
-  text-align: right;
 }
 
 /* ------------------------------------------------------------------------------------------ custom download dialog */
@@ -889,11 +670,105 @@ body {
   animation: none !important;
 }
 
-:root[data-perf="economy"] .stage-wallpaper .wallpaper-media {
-  transition: none;
-}
 
 /* Keep transient messages above the keyboard hint and footer controls. */
 .toast-root {
   bottom: 112px;
+}
+
+/* ------------------------------------------------------------------------------------------ account capsule dropdown */
+
+/* The account capsule has less room at the top edge than it used to: with the
+ * island in residence, the reveal menu drops below the capsule instead of
+ * growing sideways into the centre. The outside edge is anchored so the
+ * capsule itself does not move while the sheet springs down. */
+.system-nav {
+  /* It is already absolutely positioned by the base stylesheet; only make
+     room for the dropdown that hangs beneath it. */
+  overflow: visible;
+}
+
+.nav-reveal,
+.system-nav.is-open .nav-reveal {
+  position: absolute;
+  top: calc(100% + 9px);
+  right: 0;
+  order: initial;
+  display: grid;
+  width: 216px !important;
+  height: auto;
+  max-height: min(70vh, 470px);
+  padding: 8px;
+  gap: 5px;
+  overflow: auto;
+  border: 1px solid rgba(var(--rim-rgb), 0.44);
+  border-radius: 20px;
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, 0.14), transparent 36%, rgba(var(--ambient-accent-rgb), 0.08)),
+    linear-gradient(150deg, rgba(var(--glass-strong-rgb), 0.92), rgba(var(--glass-rgb), 0.78)),
+    var(--panel);
+  box-shadow:
+    0 22px 58px rgba(0, 0, 0, 0.42),
+    0 0 0 1px rgba(var(--rim-rgb), 0.08),
+    inset 0 1px 0 rgba(255, 249, 231, 0.54);
+  backdrop-filter: blur(26px) saturate(1.65);
+  -webkit-backdrop-filter: blur(26px) saturate(1.65);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform-origin: 88% 0;
+  transform: translate3d(0, -14px, 0) scale(0.88);
+  transition:
+    opacity 0.16s var(--ease),
+    transform 0.34s var(--ease),
+    visibility 0s linear 0.34s;
+}
+
+.system-nav.is-open .nav-reveal {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  animation: account-drop-spring 0.62s cubic-bezier(0.16, 1.32, 0.3, 1) both;
+  transition: visibility 0s;
+}
+
+@keyframes account-drop-spring {
+  0% { opacity: 0; transform: translate3d(0, -18px, 0) scale(0.86); }
+  54% { opacity: 1; transform: translate3d(0, 5px, 0) scale(1.022); }
+  74% { transform: translate3d(0, -2px, 0) scale(0.996); }
+  88% { transform: translate3d(0, 1px, 0) scale(1.002); }
+  100% { opacity: 1; transform: none; }
+}
+
+.nav-reveal .nav-button,
+.system-nav.is-open .nav-reveal .nav-button {
+  width: 100%;
+  min-height: 39px;
+  justify-content: flex-start;
+  padding: 0 12px;
+  border-radius: 12px;
+  opacity: 1;
+  transform: none;
+}
+
+.system-nav.is-open .nav-reveal .nav-button:hover {
+  transform: translate3d(2px, 0, 0);
+}
+
+.system-nav:not(.is-open) .nav-reveal {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  animation: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .system-nav.is-open .nav-reveal {
+    animation: none;
+  }
+}
+
+#stage.reduce-motion .system-nav.is-open .nav-reveal {
+  animation: none !important;
 }

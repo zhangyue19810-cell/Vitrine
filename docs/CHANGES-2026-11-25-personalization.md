@@ -12,23 +12,26 @@ the instanced ring, including the fast material clone used by the minimal
 quality tier. Settings → 个性化 switches it live and the choice persists in
 `localStorage` under `vitrine.visuals.v1`.
 
-## Wallpaper and sampled card light
+## Thicker archive glass and a new edge material
 
-Images and videos can be imported from Settings → 个性化. The desktop shell
-turns a user-picked absolute path into an opaque `vitrine-media://` token URL;
-the renderer never receives a `file://` URL. The protocol supports HTTP byte
-ranges, which keeps video seeking and playback efficient.
+The archive GLB's metallic-roughness materials are promoted to physical
+materials on load so every surface can use clearcoat, transmission, sheen and
+iridescence. The front cover now has a thicker PBR stack: `thickness 0.78`,
+`ior 1.52`, low roughness, dispersion, a shorter attenuation distance and a
+soft iridescent layer. The model's depth axis is stretched to 1.38× so the
+thicker optical stack has a visible side wall. The instanced row keeps a
+lighter version for the download/Mod view while retaining the dense tint.
 
-When WebGL is live the wallpaper is a full-screen plane inside the WebGL pass.
-This gives correct occlusion and physically plausible glass reflections while
-keeping one compositor frame. The DOM wallpaper layer remains as the fallback
-when WebGL is unavailable. A small frame is sampled to derive an adaptive
-accent, flow colours and a deep shadow colour; the cards, liquid edges and
-chrome use those variables. Pointer parallax and the shader vignette provide a
-lightweight simulated depth without a per-pixel depth reconstruction pass.
+`archiveEdgeFragment` ports the useful part of Lumina UI's liquid-glass shader
+to the card silhouette: a dark thick wall at grazing angles, a narrow inner
+bevel and a lit champagne rim. The old translucent ivory rail is now brushed
+champagne metal, while the internal optical shoulder uses darker polished
+metal. The result is one extra shader branch in the existing PBR programs, not
+another mesh or fullscreen pass.
 
-Video playback pauses when the launcher is hidden, unfocused, when a game is
-running, or when the player pauses it from settings.
+The wallpaper/video experiment was removed completely, including its Electron
+media protocol, settings controls, scene background plane and adaptive palette
+sampling.
 
 ## Custom download
 
@@ -65,9 +68,16 @@ seconds after the last real input it leaves completely. Progress and lyric
 events update content but do not reset inactivity. A finished download opens
 for exactly three seconds, then collapses to the sensor bar and leaves on the
 same ten-second rule. While a song plays and the user is active, the island
-shows the previous/current/next lyric lines; the current line uses its own
-spring reveal. The home view tabs were moved below the island and checked at
+shows the previous/current/next lyric lines using the same sans stack, ivory
+to amber grade, blurred neighbour slots and spring fill motion as the music
+page's lyric layer. The home view tabs were moved below the island and checked at
 1352, 1024 and 960 px widths for non-overlap.
+
+The account capsule's reveal menu now drops down from the capsule instead of
+growing left across the stage. It is absolutely anchored under the right-hand
+pill, opens with an overshooting damped keyframe, and keeps the capsule itself
+fixed. This removes the last overlap between the enlarged navigation capsule
+and the centre-top island.
 
 ## Startup warm-up and game resources
 
@@ -77,8 +87,8 @@ and taken exactly once by `GLTFLoader.parseAsync`, then released. The splash
 animation remains CSS-first and can be skipped as before.
 
 When a game is running, the launcher temporarily lowers its WebGL quality to
-the low tier (minimal on software GPUs), freezes decorative compositor
-animations and pauses wallpaper video. The normal tier is restored when the
+the low tier (minimal on software GPUs) and freezes decorative compositor
+animations. The normal tier is restored when the
 game exits. G1 heap-region sizing now follows the actual heap allocation
 (8/16/32 MB) instead of always using 32 MB. Microsoft account refresh now
 retrieves and persists the Xbox `xuid` and passes it into `auth_xuid`, with a

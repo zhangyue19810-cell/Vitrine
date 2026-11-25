@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { glassRevealGLSL, frostedTransmissionGLSL, FROSTED_ROUGHNESS } from "./glass-reveal.ts";
 import { internalOpticsFragment } from "./internal-optics.ts";
 import { themeMaterial } from "./theme-material";
+import { archiveEdgeFragment } from "./archive-edge";
 import type { RingMaterialPreset } from "./ring-materials";
 
 type Surface = THREE.MeshPhysicalMaterial;
@@ -181,6 +182,7 @@ export class CardAppearance {
             "#include <roughnessmap_fragment>",
             `#include <roughnessmap_fragment>\nroughnessFactor = mix(mix(0.28, ${FROSTED_ROUGHNESS}, archiveQuality), 0.025, glassRevealAtHeight(archiveClarity, vArchiveHeight));`,
           );
+          shader.fragmentShader = archiveEdgeFragment(shader.fragmentShader);
         } else if (!palette.low) {
           // Stable screen-space coverage adds internal geometry without an
           // abrupt visibility toggle or a second transparent body.

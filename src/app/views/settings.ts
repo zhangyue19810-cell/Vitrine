@@ -144,7 +144,7 @@ function buildPersonalization(host: HTMLElement) {
       <div class="personalization-head">
         <div>
           <div class="name">环体 PBR 材质</div>
-          <div class="desc">实时应用到首页莫比乌斯环，重新打开启动器后仍会保留。</div>
+          <div class="desc">实时应用到首页莫比乌斯环和档案卡片，重新打开启动器后仍会保留。</div>
         </div>
         <div class="personalization-current">
           <i style="background:${visualPreferences.material.swatch}"></i>
@@ -157,27 +157,6 @@ function buildPersonalization(host: HTMLElement) {
           <span><b>${material.label}</b><small>${material.tag}</small></span>
         </button>`)}
       </div>
-
-      <div class="personalization-divider"></div>
-      <div class="personalization-head">
-        <div>
-          <div class="name">背景壁纸 / 视频</div>
-          <div class="desc">导入图片或视频后自动采样主色，卡片描边和流光会跟随背景变化；景深滑杆控制视差与聚焦晕影。</div>
-        </div>
-        <div class="background-current" data-bg-current>${state.background.kind === "none" ? "未设置" : state.background.name}</div>
-      </div>
-      <div class="background-actions">
-        <button class="btn sm soft" type="button" data-import-bg="image">导入图片…</button>
-        <button class="btn sm soft" type="button" data-import-bg="video">导入视频…</button>
-        <button class="btn sm ghost" type="button" data-clear-bg ${state.background.kind === "none" ? "disabled" : ""}>清除背景</button>
-        <button class="btn sm ghost" type="button" data-pause-bg ${state.background.kind !== "video" ? "disabled" : ""} aria-pressed="${String(state.background.paused)}">${state.background.paused ? "继续播放" : "暂停视频"}</button>
-      </div>
-      <div class="background-sliders" data-bg-controls data-disabled="${String(state.background.kind === "none")}">
-        <label>景深 <input class="range" type="range" data-bg="depth" min="0" max="100" step="1" value="${Math.round(state.background.depth * 100)}" /><output data-out="depth">${Math.round(state.background.depth * 100)}%</output></label>
-        <label>暗化 <input class="range" type="range" data-bg="dim" min="0" max="90" step="1" value="${Math.round(state.background.dim * 100)}" /><output data-out="dim">${Math.round(state.background.dim * 100)}%</output></label>
-        <label>柔化 <input class="range" type="range" data-bg="blur" min="0" max="36" step="1" value="${Math.round(state.background.blur)}" /><output data-out="blur">${Math.round(state.background.blur)}px</output></label>
-      </div>
-      <div class="hint-text">视频会在启动器隐藏或游戏运行时自动暂停，避免和游戏争抢解码器与显存。</div>
     </div>`.value;
 
   const refresh = () => {
@@ -185,64 +164,13 @@ function buildPersonalization(host: HTMLElement) {
     host.querySelectorAll<HTMLElement>("[data-material]").forEach((button) => button.setAttribute("aria-checked", String(button.dataset.material === next.ringMaterial)));
     const name = host.querySelector<HTMLElement>("[data-material-name]");
     if (name) name.textContent = visualPreferences.material.label;
-    const current = host.querySelector<HTMLElement>("[data-bg-current]");
-    if (current) current.textContent = next.background.kind === "none" ? "未设置" : next.background.name;
-    const clear = host.querySelector<HTMLButtonElement>("[data-clear-bg]");
-    if (clear) clear.disabled = next.background.kind === "none";
-    const pause = host.querySelector<HTMLButtonElement>("[data-pause-bg]");
-    if (pause) {
-      pause.disabled = next.background.kind !== "video";
-      pause.setAttribute("aria-pressed", String(next.background.paused));
-      pause.textContent = next.background.paused ? "继续播放" : "暂停视频";
-    }
-    const controls = host.querySelector<HTMLElement>("[data-bg-controls]");
-    if (controls) controls.dataset.disabled = String(next.background.kind === "none");
   };
 
-  host.addEventListener("click", async (event) => {
-    const target = event.target as HTMLElement;
-    const material = target.closest<HTMLElement>("[data-material]");
-    if (material?.dataset.material) {
-      visualPreferences.setRingMaterial(material.dataset.material as RingMaterialId);
-      refresh();
-      return;
-    }
-    const importButton = target.closest<HTMLElement>("[data-import-bg]");
-    if (importButton) {
-      const kind = importButton.dataset.importBg === "video" ? "video" : "image";
-      const file = await pickPath("file", {
-        title: kind === "video" ? "选择背景视频" : "选择背景图片",
-        filters: kind === "video"
-          ? [{ name: "视频", extensions: ["mp4", "m4v", "webm", "ogv", "ogg", "mov"] }]
-          : [{ name: "图片", extensions: ["png", "jpg", "jpeg", "webp", "avif", "gif", "bmp"] }],
-        hint: "当前不是桌面版，请粘贴背景文件的完整路径。",
-      });
-      if (!file) return;
-      const name = file.split(/[\/]/).pop() ?? file;
-      visualPreferences.importBackground(kind, file, name);
-      refresh();
-      toast(kind === "video" ? "背景视频已导入，正在生成自适应配色。" : "背景图片已导入，卡片颜色会随画面变化。", "ok");
-      return;
-    }
-    if (target.closest("[data-clear-bg]")) {
-      visualPreferences.clearBackground();
-      refresh();
-      return;
-    }
-    if (target.closest("[data-pause-bg]")) {
-      visualPreferences.setBackground({ paused: !visualPreferences.get().background.paused });
-      refresh();
-    }
-  });
-
-  host.addEventListener("input", (event) => {
-    const input = (event.target as HTMLElement).closest<HTMLInputElement>("input[data-bg]");
-    if (!input) return;
-    const key = input.dataset.bg as "depth" | "dim" | "blur";
-    const value = Number(input.value);
-    const output = host.querySelector<HTMLOutputElement>(`[data-out="${key}"]`);
-    if (output) output.value = key === "blur" ? `${Math.round(value)}px` : `${Math.round(value)}%`;
-    visualPreferences.setBackground(key === "depth" || key === "dim" ? { [key]: value / 100 } : { blur: value });
+  host.addEventListener("click", (event) => {
+    const material = (event.target as HTMLElement).closest<HTMLElement>("[data-material]");
+    if (!material?.dataset.material) return;
+    visualPreferences.setRingMaterial(material.dataset.material as RingMaterialId);
+    refresh();
   });
 }
 
