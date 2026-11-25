@@ -158,9 +158,11 @@ licence are in `docs/third-party/`.
 The extracted archive at the ring opening used its own `HOLE.scale` of `2.1`
 while the band plates used `RING_CARD.scale` of `1.22`. One front-facing slab
 therefore towered over the evenly sized ring and made the silhouette read like
-a hedgehog. The opening card now uses the same `1.22` world scale as the band
-plates; perspective still makes the centre card readable, but it no longer
-breaks the ring's proportions.
+a hedgehog. The archive shells are now scaled to `0.95`, which matches the
+physical 4.4 × 3.7 size of the Möbius fins; the opening card and the band cards
+use the same `0.95` scale, so a selected archive no longer looks like a
+different species of object. The fin lean and wave were reduced as well, so
+the band reads as a ribbon instead of a ring of spikes.
 
 The PBR picker previously reached the archive shells but not `FinMesh`, the
 single instanced mesh that actually draws the dense Möbius fins. `FinMesh` now
@@ -168,8 +170,11 @@ accepts the same `RingMaterialPreset` and applies its metal, roughness,
 clearcoat, environment intensity and emissive response after the theme/deep
 space blend. Switching a preset now visibly recolours the ring itself.
 
-A tenth look, **流光白**, was added. Its shell/glass families use cool pearl
-white, while the fin mesh keeps a silver-gray base and computes a narrow white
-crest per instance from the plate's position along the band and the scene
-clock. The crest follows the ring through its morphs and costs no extra draw
-call; a small cool emissive prevents the gold studio key from turning it beige.
+A tenth look, **流光白**, was added. Its shell/glass families use a low-metal
+cool pearl response (including a cool printed-face palette), while the fin
+mesh keeps a silver-blue base and computes a narrow white crest per instance
+from the plate's position along the band and the scene clock. The crest
+follows the ring through its morphs and costs no extra draw call. Because the
+studio key is champagne, this preset explicitly lowers metalness and
+environment reflection and adds a restrained cool emissive; otherwise every
+gray surface reflects the warm room and reads brown.

@@ -65,6 +65,30 @@ export const LIGHT: Palette = { paper: "rgba(238,233,222,0.97)", ink: "#171713",
 export const DARK: Palette = { paper: "rgba(13,13,16,0.97)", ink: "#ece5d6", muted: "#928b7d", accent: "#e8b967", accentInk: "#f4d08f", chip: "rgba(236,229,214,0.09)", chipInk: "#cfc7b4", rule: "#ece5d6", tile: "#2b2314" };
 export const INFO = { paper: "rgba(8,8,10,0.96)", ink: "#f4efe3", muted: "#a39c8c", accent: "#e8b967" };
 
+/** Printed faces for the pearl-white ring preset: white paper, cool rule and silver-blue accent. */
+const FLOW_WHITE_LIGHT: Palette = {
+  paper: "rgba(238,245,255,0.97)",
+  ink: "#1b2430",
+  muted: "#5f7188",
+  accent: "#819dbf",
+  accentInk: "#43648a",
+  chip: "rgba(66,95,130,0.1)",
+  chipInk: "#3b5168",
+  rule: "#9fb4c9",
+  tile: "#e8f1fb",
+};
+const FLOW_WHITE_DARK: Palette = {
+  paper: "rgba(18,22,29,0.97)",
+  ink: "#eef4ff",
+  muted: "#96a5ba",
+  accent: "#c8dcf2",
+  accentInk: "#dcecff",
+  chip: "rgba(174,205,236,0.11)",
+  chipInk: "#cbd8e7",
+  rule: "#c7d9eb",
+  tile: "#223041",
+};
+
 /** Largest start size ≤ `start` (down to `min`) at which `text` fits in `maxWidth`; ends with an ellipsis if it still does not. */
 export function fit(ctx: CanvasRenderingContext2D, text: string, maxWidth: number, start: number, min: number, weight = "bold"): string {
   let size = start;
@@ -390,7 +414,9 @@ export function createFacePainter(): FacePainter {
     size: (variant: FaceVariant) => (variant === "detail" ? { width: 1024, height: 741 } : { width: 512, height: 370 }),
     paint(ctx: CanvasRenderingContext2D, variant: FaceVariant, item: StageItem, state: FaceState): Hotspot[] {
       const payload = item.payload as FacePayload;
-      const palette = state.dark ? DARK : LIGHT;
+      const palette = state.tone === "flow-white"
+        ? (state.dark ? FLOW_WHITE_DARK : FLOW_WHITE_LIGHT)
+        : (state.dark ? DARK : LIGHT);
       ctx.save();
       ctx.textBaseline = "alphabetic";
       ctx.textAlign = "left";

@@ -36,13 +36,13 @@ export const BAND = {
   /** Roll at the start of the lap (radians). */
   phase: 0.35,
   /** How far each plate leans out of the square across the path (radians, at its most). */
-  lean: 0.58,
+  lean: 0.4,
   /** Size of the plates: wide, tall, thin. */
   plate: { width: 4.4, height: 3.7, thickness: 0.24 },
   /** Plates on the band. */
   count: 360,
   /** Radians of extra roll that the slow idle undulation adds (it travels along the band). */
-  wave: 0.3,
+  wave: 0.16,
   /** Lap fraction where the selected archive rests (the left tip of the figure eight), and where the lean flips. */
   focus: 0.5,
   seam: 0,

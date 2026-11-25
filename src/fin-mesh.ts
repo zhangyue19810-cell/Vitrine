@@ -249,11 +249,18 @@ export class FinMesh {
       m.envMapIntensity = THREE.MathUtils.lerp(m.envMapIntensity, preset.envMapIntensity, 0.82);
       m.iridescence = Math.max(m.iridescence, preset.id === "azure" || preset.id === "violet" ? 0.08 : 0.018);
       if (preset.id === "flow-white") {
-        // The studio is deliberately warm; a small cool emissive keeps the
-        // white preset from turning beige under the gold key light.
-        this.presetColor.set("#86a9dd");
-        m.emissive.copy(this.presetColor).multiplyScalar(0.035 + 0.015 * this.deep);
-        m.iridescence = Math.max(m.iridescence, 0.16);
+        // The studio key is warm; use a low-metal pearl body plus a cool
+        // self-lit component so this preset stays white instead of turning
+        // into the same champagne/gold as every other metal.
+        m.color.set("#c9d8ec");
+        m.metalness = 0.035;
+        m.roughness = 0.42;
+        m.clearcoat = 0.7;
+        m.clearcoatRoughness = 0.14;
+        m.envMapIntensity = 0.58;
+        m.emissive.set("#d6e8ff");
+        m.emissiveIntensity = 0.16;
+        m.iridescence = 0.16;
       }
     }
   }
@@ -433,8 +440,9 @@ export class FinMesh {
         // every plate through ring/row morphs and costs no extra draw call.
         const flow = this.flowingWhite ? Math.pow(0.5 + 0.5 * Math.sin(base * Math.PI * 6 - state.clock * 1.75), 7) : 0;
         if (flow > 0.001) anyTint = true;
+        const cool = this.flowingWhite ? [0.84, 0.9, 1.0] : null;
         for (let channel = 0; channel < 3; channel++) {
-          let value = this.baseColors[at + channel] * level * (ew > 0.002 ? 1 + (hot[channel] - 1) * ew : 1);
+          let value = (cool ? cool[channel] : this.baseColors[at + channel]) * level * (ew > 0.002 ? 1 + (hot[channel] - 1) * ew : 1);
           if (tint > 0.002) value += (GLOW[channel] - value) * Math.min(1, tint);
           if (flow > 0.001) value += (FLOW_WHITE[channel] - value) * flow * 0.92;
           colors[at + channel] = value;

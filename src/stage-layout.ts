@@ -146,7 +146,7 @@ export function detailPlacement(preset: CameraPreset, aspect: number, share = 0.
 // Keep the pulled-out archive close to the band's card scale. The old 2.1
 // made one giant front-facing slab among evenly sized plates and read as a
 // hedgehog rather than a Möbius archive ring.
-export const HOLE = { scale: 1.22, lift: 3.4, turn: 0.1 };
+export const HOLE = { scale: 0.95, lift: 3.4, turn: 0.1 };
 
 export function holePlacement(preset: CameraPreset, aspect: number): DetailPlacement {
   void aspect;

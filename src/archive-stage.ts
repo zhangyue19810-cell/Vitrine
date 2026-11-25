@@ -92,6 +92,8 @@ export interface FaceState {
   hot: string | null;
   index: number;
   count: number;
+  /** Named ring material, so printed faces can follow a strongly coloured/white preset. */
+  tone?: import("./ring-materials").RingMaterialId;
 }
 
 /** Paints the faces; supplied by the app so the stage knows nothing about instances or mods. */
@@ -147,7 +149,7 @@ export const ARCHIVE_CARD_DEPTH_SCALE = 1.38;
 export const ARCHIVE_FACE_Z = 0.312;
 const FACE = { width: 4.56, height: 3.3, z: ARCHIVE_FACE_Z };
 /** Archives on the band stand a little larger than the plates around them, so they read as the tabs of the card file. */
-const RING_CARD = { scale: 1.22, arc: 3.4 };
+const RING_CARD = { scale: 0.95, arc: 3.4 };
 
 /** Candela of the disk's light per square horizon radius (so that what stands a few radii away is lit the same at any size of the picture). */
 const GLOW_CANDELA = 38;
@@ -302,6 +304,8 @@ export class ArchiveStage {
   private readonly detailFace: Face;
   /** The Möbius ring's plates (the same ones become the track of the download view). */
   readonly fins = new FinMesh();
+  private faceTint = new THREE.Color("#ffffff");
+  private faceTone?: import("./ring-materials").RingMaterialId;
   private readonly bandPath = new BandPath();
   private readonly plate: PlateFrame = newPlate();
   private readonly assemble: Spring = { value: 0, velocity: 0 };
@@ -831,12 +835,13 @@ export class ArchiveStage {
     const item = card.shownItem;
     if (!item) return;
     card.face ??= this.makeFace();
-    const state: FaceState = { dark: this.dark, hot: null, index: card.shown, count: this.items.length };
+    const state: FaceState = { dark: this.dark, hot: null, index: card.shown, count: this.items.length, tone: this.faceTone };
     card.face.paint(this.painter, item, state, force);
   }
 
   private makeFace(): Face {
     const face = new Face("card", this.painter, this.faceGeometry, this.anisotropy);
+    face.material.color.copy(this.faceTint);
     this.group.add(face.mesh);
     return face;
   }
@@ -1035,13 +1040,13 @@ export class ArchiveStage {
   private paintInfo() {
     const item = this.items[this.hoverItem];
     if (!item) return;
-    this.infoFace.paint(this.painter, item, { dark: this.dark, hot: null, index: this.hoverItem, count: this.items.length }, true);
+    this.infoFace.paint(this.painter, item, { dark: this.dark, hot: null, index: this.hoverItem, count: this.items.length, tone: this.faceTone }, true);
   }
 
   private paintDetail(force = false) {
     const item = this.items[this.detailItem];
     if (!item) return;
-    this.detailFace.paint(this.painter, item, { dark: this.dark, hot: this.hoverHot, index: this.detailItem, count: this.items.length }, force);
+    this.detailFace.paint(this.painter, item, { dark: this.dark, hot: this.hoverHot, index: this.detailItem, count: this.items.length, tone: this.faceTone }, force);
   }
 
   /** What is under the ray: the card, and the hotspot of its pulled-out face. */
@@ -1682,6 +1687,35 @@ export class ArchiveStage {
   /** Recolour the Möbius plates together with the archive shells. */
   setRingMaterial(preset: RingMaterialPreset | undefined) {
     this.fins.setRingMaterial(preset);
+    this.faceTone = preset?.id;
+    const tint = !preset || preset.original
+      ? "#ffffff"
+      : preset.id === "flow-white"
+        ? "#eaf4ff"
+        : preset.id === "azure"
+          ? "#d9efff"
+          : preset.id === "crimson"
+            ? "#ffe3e5"
+            : preset.id === "violet"
+              ? "#ecdcff"
+              : preset.id === "jade"
+                ? "#dcfff0"
+                : preset.id === "copper"
+                  ? "#ffe5d1"
+                  : preset.id === "obsidian"
+                    ? "#d8d4cd"
+                    : preset.id === "carbon"
+                      ? "#e0e4e8"
+                      : "#ffffff";
+    this.faceTint.set(tint);
+    this.infoFace.material.color.copy(this.faceTint);
+    this.detailFace.material.color.copy(this.faceTint);
+    for (const card of this.cards) {
+      card.face?.material.color.copy(this.faceTint);
+      if (card.face && card.shownItem) this.paintCard(card, true);
+    }
+    if (this.hoverItem >= 0) this.paintInfo();
+    if (this.detailItem >= 0) this.paintDetail(true);
   }
 
   dispose() {

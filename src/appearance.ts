@@ -125,6 +125,21 @@ export class CardAppearance {
       if (material.attenuationColor) material.attenuationColor.lerp(new THREE.Color(preset.attenuation), 0.68 * strength);
       if (material.attenuationDistance !== undefined) material.attenuationDistance = THREE.MathUtils.lerp(material.attenuationDistance, preset.attenuationDistance, 0.65 * strength);
     }
+    if (preset.id === "flow-white") {
+      // The studio key and environment are intentionally champagne. A pearl
+      // preset needs a low-metal, cool, faintly self-lit response or every
+      // gray surface simply mirrors the warm room and reads as brown/gold.
+      material.color.lerp(new THREE.Color("#d8e5f7"), 0.9);
+      material.metalness = Math.min(material.metalness, 0.045);
+      material.roughness = Math.max(material.roughness, 0.4);
+      material.envMapIntensity = Math.min(material.envMapIntensity, 0.52);
+      material.clearcoat = Math.max(material.clearcoat, 0.5);
+      material.clearcoatRoughness = Math.min(material.clearcoatRoughness, 0.18);
+      if (material.emissive) {
+        material.emissive.set("#cfe4ff");
+        material.emissiveIntensity = 0.1;
+      }
+    }
   }
 
   prepare(group: THREE.Group) {
