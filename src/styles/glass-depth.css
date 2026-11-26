@@ -815,7 +815,11 @@
   mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, transparent 0 17%, rgba(0, 0, 0, 0.04) 29%, rgba(0, 0, 0, 0.14) 43%, rgba(0, 0, 0, 0.38) 59%, rgba(0, 0, 0, 0.72) 75%, #000 91%);
 }
 
-:root[data-render-tier="low"] .liquid-lens,
+:root[data-render-tier="low"] .liquid-lens {
+  -webkit-backdrop-filter: blur(6px) saturate(1.18) brightness(1.01) !important;
+  backdrop-filter: blur(6px) saturate(1.18) brightness(1.01) !important;
+}
+
 :root[data-render-tier="minimal"] .liquid-lens,
 :root[data-perf="economy"] .liquid-lens {
   -webkit-backdrop-filter: none !important;
