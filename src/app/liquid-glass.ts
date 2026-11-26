@@ -83,6 +83,23 @@ const EDGE_TARGET = [
 
 const EDGE_ALWAYS = ".callout,.detail-panel,.dl-bar,.sheet,.dialog,.menu,.hud-capsule";
 
+/** Surfaces that get the centre-clear radial blur layer in addition to their glass fill. */
+const LENS_TARGET = [
+  ".btn",
+  ".callout",
+  ".detail-panel",
+  ".dialog",
+  ".menu",
+  ".card",
+  ".dl-flat-card",
+  ".material-option",
+  ".setting",
+  ".hud-capsule",
+  ".hud-queue",
+  ".system-nav",
+  ".view-tabs",
+].join(",");
+
 /** Capsule controls get the circular water-fill reveal and a lighter light pass. */
 const DROP_TARGET = ".btn,.nav-button,.view-tab,.seg,.toggle,.system-nav,.view-tabs,.hud-capsule";
 const CONTROL_TARGET = ".btn,.nav-button,.view-tab,.seg,.seg button,.toggle";
@@ -163,6 +180,12 @@ export function installLiquidGlass(root: HTMLElement): () => void {
       target.classList.add("liquid-drop-host");
     }
     if (target.matches(CONTROL_TARGET)) target.classList.add("liquid-light-control");
+    if (target.matches(LENS_TARGET) && !target.querySelector(":scope > .liquid-lens")) {
+      const lens = document.createElement("span");
+      lens.className = "liquid-lens";
+      lens.setAttribute("aria-hidden", "true");
+      target.prepend(lens);
+    }
     if (!target.querySelector(":scope > .liquid-edge")) {
       const edge = document.createElement("span");
       edge.className = "liquid-edge";

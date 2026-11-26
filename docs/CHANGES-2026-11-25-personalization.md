@@ -282,3 +282,22 @@ the previous flat `.btn` treatment. Buttons now have:
 
 The pass uses box-shadow and transform only, keeping the long-session load
 shedding intact.
+
+## Clear-centre radial lens
+
+The previous glass was uniform frost plus painted highlights, which reads as
+plastic because every part of the surface is equally blurred. The final glass
+now behaves like a lens:
+
+- `liquid-glass-filter.ts` builds a radial displacement map and a separate
+  alpha rim mask. Its SVG graph blurs the backdrop, bends it toward the
+  centre near the rim, masks that result to the rim, and composites it back
+  over the untouched `SourceGraphic`. The centre therefore stays sharp while
+  the perimeter is displaced and blurred.
+- A `.liquid-lens` child adds one masked 12px blur band from about 31% radius
+  outward. It is static and switches off at low/minimal tiers.
+- Card fills were lowered from milky opaque values to translucent tints, so
+  the backdrop can actually be seen through the middle.
+- Buttons are full glass pills/circles with a separate outer bezel lip, bright
+  upper bevel and dark lower wall. This follows the supplied close-up
+  reference rather than relying on a flat border.

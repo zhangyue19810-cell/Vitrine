@@ -430,18 +430,62 @@
     inset -1px -1px 0 rgba(0, 0, 0, 0.26);
 }
 
-/* Real backdrop displacement on the large glass planes. The filter is static:
- * motion comes from the flowing light field below, not from wobbling the whole
- * interface. Browsers without SVG-in-backdrop-filter keep the frosted blur. */
+/* A real lens, not a uniform blur: the SVG filter keeps the centre of each
+ * surface clear and only blurs/pulls the backdrop near its rim. Browsers that
+ * cannot sample an SVG filter on a backdrop keep their ordinary frosted blur. */
 @supports ((backdrop-filter: url("#vitrine-glass-lens")) or (-webkit-backdrop-filter: url("#vitrine-glass-lens"))) {
-  /* A live animated 3D scene behind a displacement filter is expensive. Keep
-   * true refraction on the modal cards where the backdrop is already dimmed
-   * and blurred; the always-on home chrome uses the cheaper frosted blur. */
+  :root:root .btn:not(.ghost):not(.primary),
+  :root:root .btn.icon,
+  :root:root .card,
+  :root:root .setting,
+  :root:root .material-option,
+  :root:root .mod-row,
+  :root:root .dl-flat-card,
+  :root:root .notice,
+  :root:root .stat,
+  :root:root .item,
+  :root:root .empty,
+  :root:root .callout,
+  :root:root .detail-panel,
+  :root:root .dl-bar,
   :root:root .dialog,
-  :root:root .mod-update-dialog.dialog {
-    -webkit-backdrop-filter: var(--glass-lens) blur(28px) saturate(1.82) brightness(1.045);
-    backdrop-filter: var(--glass-lens) blur(28px) saturate(1.82) brightness(1.045);
+  :root:root .menu,
+  :root:root .system-nav,
+  :root:root .view-tabs,
+  :root:root .hud-capsule,
+  :root:root .hud-queue {
+    -webkit-backdrop-filter: var(--glass-lens) saturate(1.52) brightness(1.035);
+    backdrop-filter: var(--glass-lens) saturate(1.52) brightness(1.035);
   }
+}
+
+/* Less milky fill so the clear centre and the refracted rim can actually be
+ * seen. The tint remains strong enough for labels over the moving scene. */
+:root:root .card,
+:root:root .setting,
+:root:root .material-option,
+:root:root .mod-row,
+:root:root .dl-flat-card,
+:root:root .notice,
+:root:root .stat,
+:root:root .item,
+:root:root .empty,
+:root:root .callout,
+:root:root .detail-panel,
+:root:root .dl-bar {
+  background:
+    radial-gradient(ellipse at 88% -8%, var(--glass-refract-blue), transparent 42%),
+    radial-gradient(ellipse at 3% 108%, var(--glass-refract-warm), transparent 48%),
+    radial-gradient(ellipse at 48% 106%, var(--glass-refract-mint), transparent 55%),
+    linear-gradient(112deg, rgba(255, 255, 255, 0.1), transparent 24%, rgba(255, 255, 255, 0.035) 51%, transparent 76%, rgba(255, 255, 255, 0.08)),
+    linear-gradient(150deg, color-mix(in srgb, var(--glass-card-a) 54%, transparent), color-mix(in srgb, var(--glass-card-b) 46%, transparent));
+}
+
+:root:root .btn:not(.accent):not(.primary) {
+  background:
+    radial-gradient(ellipse at 70% -30%, rgba(255, 255, 255, 0.3), transparent 50%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 44%),
+    linear-gradient(145deg, color-mix(in srgb, var(--glass-control-a) 64%, transparent), color-mix(in srgb, var(--glass-control-b) 54%, transparent));
 }
 
 /* ------------------------------------------------------------------------------------------ light-theme reference */
@@ -635,8 +679,8 @@
  * still reads through it, plus the same thick chromatic walls as the form
  * reference. */
 :root {
-  --hud-glass-a: rgba(255, 255, 255, 0.4);
-  --hud-glass-b: rgba(223, 237, 252, 0.15);
+  --hud-glass-a: rgba(255, 255, 255, 0.3);
+  --hud-glass-b: rgba(223, 237, 252, 0.1);
   --hud-border: rgba(255, 255, 255, 0.6);
   --hud-shadow:
     0 20px 48px rgba(52, 78, 104, 0.22),
@@ -649,8 +693,8 @@
 }
 
 :root[data-dark-surface="true"] {
-  --hud-glass-a: rgba(34, 38, 45, 0.55);
-  --hud-glass-b: rgba(7, 9, 12, 0.3);
+  --hud-glass-a: rgba(34, 38, 45, 0.42);
+  --hud-glass-b: rgba(7, 9, 12, 0.22);
   --hud-border: rgba(198, 220, 244, 0.32);
   --hud-shadow:
     0 20px 48px rgba(0, 0, 0, 0.52),
@@ -694,6 +738,40 @@
   z-index: 1;
 }
 
+/* ------------------------------------------------------------------------------------------ radial lens */
+
+/* Backdrop-filter cannot vary blur across one surface by itself. This child
+ * adds a masked blur only in a radial band near the rim; the middle remains
+ * unmodified. It is static, so it adds no animation work. Low/minimal tiers
+ * switch it off with the rest of the live frost. */
+.liquid-lens {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  display: block;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(12px) saturate(1.36) brightness(1.025);
+  backdrop-filter: blur(12px) saturate(1.36) brightness(1.025);
+  -webkit-mask-image: radial-gradient(ellipse 74% 74% at 50% 50%, transparent 0 31%, rgba(0, 0, 0, 0.18) 43%, #000 67%);
+  mask-image: radial-gradient(ellipse 74% 74% at 50% 50%, transparent 0 31%, rgba(0, 0, 0, 0.18) 43%, #000 67%);
+}
+
+:root[data-render-tier="low"] .liquid-lens,
+:root[data-render-tier="minimal"] .liquid-lens,
+:root[data-perf="economy"] .liquid-lens {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-lens {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
 /* ------------------------------------------------------------------------------------------ adaptive frost */
 
 /* When the governor has stepped the GPU down, spend less on live backdrop
@@ -707,9 +785,18 @@
 :root:root[data-render-tier="low"] .view-tabs,
 :root:root[data-render-tier="low"] .menu,
 :root:root[data-render-tier="low"] .hud-capsule,
-:root:root[data-render-tier="low"] .hud-queue {
-  -webkit-backdrop-filter: blur(15px) saturate(1.45) brightness(1.02);
-  backdrop-filter: blur(15px) saturate(1.45) brightness(1.02);
+:root:root[data-render-tier="low"] .hud-queue,
+:root:root[data-render-tier="low"] .btn,
+:root:root[data-render-tier="low"] .card,
+:root:root[data-render-tier="low"] .setting,
+:root:root[data-render-tier="low"] .material-option,
+:root:root[data-render-tier="low"] .mod-row,
+:root:root[data-render-tier="low"] .dl-flat-card,
+:root:root[data-render-tier="low"] .notice,
+:root:root[data-render-tier="low"] .stat,
+:root:root[data-render-tier="low"] .item {
+  -webkit-backdrop-filter: blur(10px) saturate(1.38) brightness(1.015);
+  backdrop-filter: blur(10px) saturate(1.38) brightness(1.015);
 }
 
 /* Minimal is normally only reached on a software rasteriser or a machine
@@ -728,7 +815,12 @@
 :root:root[data-render-tier="minimal"] .card,
 :root:root[data-render-tier="minimal"] .setting,
 :root:root[data-render-tier="minimal"] .material-option,
-:root:root[data-render-tier="minimal"] .dl-flat-card {
+:root:root[data-render-tier="minimal"] .dl-flat-card,
+:root:root[data-render-tier="minimal"] .btn,
+:root:root[data-render-tier="minimal"] .mod-row,
+:root:root[data-render-tier="minimal"] .notice,
+:root:root[data-render-tier="minimal"] .stat,
+:root:root[data-render-tier="minimal"] .item {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }
