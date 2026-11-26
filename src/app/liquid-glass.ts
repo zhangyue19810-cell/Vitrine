@@ -92,8 +92,6 @@ const LENS_TARGET = [
   ".menu",
   ".card",
   ".dl-flat-card",
-  ".material-option",
-  ".setting",
   ".hud-capsule",
   ".hud-queue",
   ".system-nav",

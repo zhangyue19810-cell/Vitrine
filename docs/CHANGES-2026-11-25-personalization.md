@@ -301,3 +301,24 @@ now behaves like a lens:
 - Buttons are full glass pills/circles with a separate outer bezel lip, bright
   upper bevel and dark lower wall. This follows the supplied close-up
   reference rather than relying on a flat border.
+
+## Physical light/shadow model for the lens
+
+The material now follows the described optical stack instead of a painted
+plastic look:
+
+- an implied light above the card gives a bright upper lip and a fading top
+  reflection; the bottom wall is dark;
+- the radial lens mask progressively increases blur from the clear centre to
+  the rim, while the SVG displacement bends only the edge sample;
+- a neutral cast shadow (large ambient + close contact) sits under each major
+  surface;
+- the rim uses two-tone layering: white on the upper/left wall, black on the
+  lower/right wall, with a hard black underside and a separate outer glass lip
+  on buttons;
+- no ray tracing is used. The effect is a cached 2D displacement map, masked
+  Gaussian blur and neutral CSS shadows.
+
+To keep the running cost bounded, only the primary panels and buttons receive
+the live SVG lens; individual settings rows use the cheaper frosted glass and
+the static two-tone rim.

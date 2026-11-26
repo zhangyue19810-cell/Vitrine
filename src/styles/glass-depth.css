@@ -55,6 +55,14 @@
   --glass-error-soft: rgba(233, 105, 105, 0.15);
   --glass-ok: rgba(74, 177, 128, 0.75);
   --glass-ok-soft: rgba(74, 177, 128, 0.14);
+  --lens-cast: rgba(28, 43, 61, 0.22);
+  --lens-contact: rgba(28, 43, 61, 0.14);
+  --lens-white: rgba(255, 255, 255, 0.92);
+  --lens-black: rgba(31, 48, 68, 0.26);
+  --lens-side-white: rgba(255, 255, 255, 0.52);
+  --lens-side-black: rgba(31, 48, 68, 0.24);
+  --lens-light: rgba(255, 255, 255, 0.24);
+  --lens-shade: rgba(22, 37, 54, 0.14);
 }
 
 :root[data-dark-surface="true"] {
@@ -97,6 +105,14 @@
   --glass-error-soft: rgba(255, 96, 96, 0.19);
   --glass-ok: rgba(112, 218, 165, 0.76);
   --glass-ok-soft: rgba(96, 210, 153, 0.16);
+  --lens-cast: rgba(0, 0, 0, 0.54);
+  --lens-contact: rgba(0, 0, 0, 0.36);
+  --lens-white: rgba(255, 255, 255, 0.48);
+  --lens-black: rgba(0, 0, 0, 0.64);
+  --lens-side-white: rgba(255, 255, 255, 0.28);
+  --lens-side-black: rgba(0, 0, 0, 0.58);
+  --lens-light: rgba(255, 255, 255, 0.13);
+  --lens-shade: rgba(0, 0, 0, 0.3);
 }
 
 /* ------------------------------------------------------------------------------------------ large sheets */
@@ -392,7 +408,7 @@
   border: 1px solid rgba(var(--accent-rgb), 0.68);
   background:
     radial-gradient(ellipse at 84% 8%, rgba(143, 192, 255, 0.22), transparent 42%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 44%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.34), transparent 36%, transparent 68%, rgba(0, 0, 0, 0.17)),
     linear-gradient(135deg, var(--accent), var(--accent-ink));
   box-shadow:
     0 14px 34px rgba(var(--accent-rgb), 0.24),
@@ -436,15 +452,9 @@
 @supports ((backdrop-filter: url("#vitrine-glass-lens")) or (-webkit-backdrop-filter: url("#vitrine-glass-lens"))) {
   :root:root .btn:not(.ghost):not(.primary),
   :root:root .btn.icon,
+  :root:root .btn:not(.ghost):not(.primary),
+  :root:root .btn.icon,
   :root:root .card,
-  :root:root .setting,
-  :root:root .material-option,
-  :root:root .mod-row,
-  :root:root .dl-flat-card,
-  :root:root .notice,
-  :root:root .stat,
-  :root:root .item,
-  :root:root .empty,
   :root:root .callout,
   :root:root .detail-panel,
   :root:root .dl-bar,
@@ -474,6 +484,8 @@
 :root:root .detail-panel,
 :root:root .dl-bar {
   background:
+    radial-gradient(ellipse at 50% -34%, var(--lens-light), transparent 53%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent 28%, transparent 76%, var(--lens-shade)),
     radial-gradient(ellipse at 88% -8%, var(--glass-refract-blue), transparent 42%),
     radial-gradient(ellipse at 3% 108%, var(--glass-refract-warm), transparent 48%),
     radial-gradient(ellipse at 48% 106%, var(--glass-refract-mint), transparent 55%),
@@ -483,8 +495,8 @@
 
 :root:root .btn:not(.accent):not(.primary) {
   background:
-    radial-gradient(ellipse at 70% -30%, rgba(255, 255, 255, 0.3), transparent 50%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.24), transparent 44%),
+    radial-gradient(ellipse at 50% -38%, rgba(255, 255, 255, 0.4), transparent 56%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 31%, transparent 72%, rgba(0, 0, 0, 0.14)),
     linear-gradient(145deg, color-mix(in srgb, var(--glass-control-a) 64%, transparent), color-mix(in srgb, var(--glass-control-b) 54%, transparent));
 }
 
@@ -499,6 +511,7 @@
   background:
     radial-gradient(ellipse at 84% 4%, rgba(255, 255, 255, 0.64), transparent 42%),
     radial-gradient(ellipse at 22% 100%, rgba(205, 222, 255, 0.38), transparent 48%),
+    linear-gradient(180deg, transparent 56%, rgba(54, 79, 111, 0.12)),
     linear-gradient(145deg, rgba(226, 237, 255, 0.9), rgba(176, 199, 236, 0.74));
   box-shadow:
     0 14px 32px rgba(91, 125, 181, 0.22),
@@ -672,6 +685,50 @@
   text-shadow: 0 0 10px var(--glass-error-soft);
 }
 
+/* ------------------------------------------------------------------------------------------ physical lens rim */
+
+/* The reference reads as a thick piece of glass under a light source: a soft
+ * cast shadow underneath, a bright upper wall, a dark lower wall and a
+ * restrained white/black side wall. These are deliberately neutral; colour is
+ * supplied by the refraction layers, not by painted borders. */
+:root:root .card,
+:root:root .setting,
+:root:root .settings .setting,
+:root:root .sheet .setting,
+:root:root .material-option,
+:root:root .callout,
+:root:root .detail-panel,
+:root:root .dialog,
+:root:root .menu {
+  box-shadow:
+    0 30px 64px var(--lens-cast),
+    0 9px 22px var(--lens-contact),
+    0 2px 4px rgba(0, 0, 0, 0.18),
+    inset 0 1px 0 var(--lens-white),
+    inset 0 -2px 0 var(--lens-black),
+    inset 2px 0 0 var(--lens-side-white),
+    inset -2px 0 0 var(--lens-side-black);
+}
+
+/* A masked light/shadow band on the lens layer itself. Because the lens layer
+ * is transparent in the middle, the centre keeps its clear view; the rim
+ * carries the bright top lip and the black lower wall. */
+.liquid-lens::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% -42%, rgba(255, 255, 255, 0.22), transparent 53%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.11), transparent 25%, transparent 72%, rgba(0, 0, 0, 0.15));
+  box-shadow:
+    inset 0 1px 0 var(--lens-white),
+    inset 0 -2px 0 var(--lens-black),
+    inset 2px 0 0 var(--lens-side-white),
+    inset -2px 0 0 var(--lens-side-black);
+}
+
 /* ------------------------------------------------------------------------------------------ music transport */
 
 /* The transport is the one bar that floats directly over the black hole. It
@@ -683,8 +740,8 @@
   --hud-glass-b: rgba(223, 237, 252, 0.1);
   --hud-border: rgba(255, 255, 255, 0.6);
   --hud-shadow:
-    0 20px 48px rgba(52, 78, 104, 0.22),
-    0 4px 14px rgba(52, 78, 104, 0.13),
+    0 28px 58px var(--lens-cast),
+    0 7px 18px var(--lens-contact),
     inset 0 1px 0 rgba(255, 255, 255, 0.8),
     inset 0 -1px 0 rgba(55, 76, 98, 0.24),
     inset 2px 0 0 rgba(128, 184, 255, 0.34),
@@ -697,8 +754,8 @@
   --hud-glass-b: rgba(7, 9, 12, 0.22);
   --hud-border: rgba(198, 220, 244, 0.32);
   --hud-shadow:
-    0 20px 48px rgba(0, 0, 0, 0.52),
-    0 4px 14px rgba(0, 0, 0, 0.34),
+    0 28px 58px var(--lens-cast),
+    0 7px 18px var(--lens-contact),
     inset 0 1px 0 rgba(255, 255, 255, 0.42),
     inset 0 -1px 0 rgba(0, 0, 0, 0.5),
     inset 2px 0 0 rgba(105, 173, 255, 0.22),
@@ -754,8 +811,8 @@
   pointer-events: none;
   -webkit-backdrop-filter: blur(12px) saturate(1.36) brightness(1.025);
   backdrop-filter: blur(12px) saturate(1.36) brightness(1.025);
-  -webkit-mask-image: radial-gradient(ellipse 74% 74% at 50% 50%, transparent 0 31%, rgba(0, 0, 0, 0.18) 43%, #000 67%);
-  mask-image: radial-gradient(ellipse 74% 74% at 50% 50%, transparent 0 31%, rgba(0, 0, 0, 0.18) 43%, #000 67%);
+  -webkit-mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, transparent 0 17%, rgba(0, 0, 0, 0.04) 29%, rgba(0, 0, 0, 0.14) 43%, rgba(0, 0, 0, 0.38) 59%, rgba(0, 0, 0, 0.72) 75%, #000 91%);
+  mask-image: radial-gradient(ellipse 78% 78% at 50% 50%, transparent 0 17%, rgba(0, 0, 0, 0.04) 29%, rgba(0, 0, 0, 0.14) 43%, rgba(0, 0, 0, 0.38) 59%, rgba(0, 0, 0, 0.72) 75%, #000 91%);
 }
 
 :root[data-render-tier="low"] .liquid-lens,

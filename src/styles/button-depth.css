@@ -60,8 +60,9 @@
     inset 0 -10px 16px var(--btn-inner-bottom),
     inset 0 0 22px var(--btn-face-glow),
     0 2px 0 var(--btn-wall),
-    0 4px 8px var(--btn-contact),
-    0 13px 28px var(--btn-ambient);
+    0 3px 0 rgba(0, 0, 0, 0.24),
+    0 6px 12px var(--btn-contact),
+    0 18px 38px var(--btn-ambient);
 }
 
 :root:root .btn.sm {
