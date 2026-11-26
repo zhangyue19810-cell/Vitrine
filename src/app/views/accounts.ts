@@ -101,7 +101,7 @@ function accountRow(account: PublicAccount, selected: boolean) {
         : "离线账号";
   return html`<div class="item" data-selected="${selected}">
     ${avatar(account, true)}
-    <div style="min-width:0"><div class="title">${account.name}</div><div class="sub">${sub} · ${account.uuid}${account.lastUsed ? ` · ${relativeTime(account.lastUsed)}使用` : ""}</div></div>
+    <div style="min-width:0"><div class="title">${account.name}</div><div class="sub">${sub}${account.lastUsed ? ` · ${relativeTime(account.lastUsed)}使用` : ""}</div></div>
     <div class="tail">
       <span class="chip ${account.type === "microsoft" ? "accent" : ""}">${ACCOUNT_TYPE_LABEL[account.type] ?? account.type}</span>
       ${selected ? html`<span class="chip solid">当前使用</span>` : html`<button class="btn sm soft" data-use="${account.id}">使用</button>`}
@@ -199,7 +199,7 @@ function buildOffline(panel: HTMLElement) {
     html`<div class="stack">
       <div class="field"><label>玩家名</label><input class="input" data-name maxlength="16" placeholder="3–16 位字母、数字或下划线" autocomplete="off" spellcheck="false" /><div class="hint-text" data-hint></div></div>
       <div class="field"><label>UUID</label>
-        <label class="check"><input type="radio" name="uuid" value="owner" ${owner ? raw_checked() : ""} ${owner ? "" : "disabled"} />使用我的默认 UUID <span class="muted mono" style="font-size:11.5px">${owner || "（设置里未填写）"}</span></label>
+        <label class="check"><input type="radio" name="uuid" value="owner" ${owner ? raw_checked() : ""} ${owner ? "" : "disabled"} />使用我的默认 UUID <span class="muted" style="font-size:11.5px">${owner ? "（已配置，已隐藏）" : "（未配置）"}</span></label>
         <label class="check"><input type="radio" name="uuid" value="auto" ${owner ? "" : raw_checked()} />按玩家名自动生成（离线标准算法）</label>
         <label class="check"><input type="radio" name="uuid" value="custom" />自定义</label>
         <input class="input mono" data-uuid placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" hidden />

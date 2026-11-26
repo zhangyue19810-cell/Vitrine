@@ -103,13 +103,6 @@ function sections(): Section[] {
       ],
     },
     {
-      id: "accounts",
-      label: "账号",
-      rows: [
-        { name: "离线账号默认 UUID", path: "accounts.ownerUuid", field: { kind: "text", mono: true }, desc: "添加离线账号时默认使用的 UUID，保持不变可以让存档、背包和权限始终对应同一个玩家。" },
-      ],
-    },
-    {
       id: "appearance",
       label: "外观与性能",
       rows: [

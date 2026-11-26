@@ -243,3 +243,42 @@ instead of inheriting the opaque card fill:
 
 The low/minimal load-shedding rules still override the frost when the quality
 governor has stepped down.
+
+## Personal UUID removed from defaults
+
+An imported build had baked a player's UUID into the `DEFAULT_OWNER_UUID`
+constant, so Settings → 账号 displayed it as if it were a launcher default.
+It is a player identifier (not a password or token), but it should never ship
+inside the launcher or appear in a fresh profile.
+
+- `DEFAULT_OWNER_UUID` is empty again, so a fresh profile ships with no
+  personal UUID.
+- Existing profiles keep the UUID already stored on disk — it may be the
+  identity of a real offline account. Settings version 4 persists the migration
+  without deleting account data.
+- The UUID row is removed from the main Settings page. The account list no
+  longer prints the profile UUID, and the offline-account chooser says
+  “已配置，已隐藏” instead of showing the value. The hidden value is still
+  available to the account manager when adding an offline account.
+- With no owner UUID, adding an offline account uses the standard
+  `OfflinePlayer:<name>` UUID derivation.
+
+This also keeps the field useful for players who intentionally want several
+launchers to share one offline save identity.
+
+## Raised glass buttons
+
+The supplied close-up reference showed a much thicker glass cross-section than
+the previous flat `.btn` treatment. Buttons now have:
+
+- a full pill silhouette (circular icon buttons stay circular);
+- a separate bright outer lip rendered with `::before`, so it stays crisp
+  outside the face without adding DOM nodes;
+- a milky upper bevel, a dark lower wall and a hard one-pixel underside;
+- a soft contact shadow and a wider ambient shadow;
+- a perspective lift on hover and a compressed, inset press state;
+- the same treatment on the music transport’s small control keys, with a
+  brighter ring on the main play button.
+
+The pass uses box-shadow and transform only, keeping the long-session load
+shedding intact.

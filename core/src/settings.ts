@@ -6,7 +6,7 @@ import type { JvmPreset } from "./mc/jvm";
 export type AfterLaunch = "keep" | "minimize" | "hide" | "close";
 
 export interface Settings {
-  version: 3;
+  version: 4;
   /** Folder holding versions/, libraries/ and assets/. Empty = `<data>/minecraft`. */
   gameRoot: string;
   sources: SourceSettings;
@@ -65,11 +65,11 @@ export interface Settings {
  */
 export const DEFAULT_MS_CLIENT_ID = "7d584720-c4ba-42f5-bcc7-0ec98897fb2b";
 
-/** The user's own ID, offered as the default UUID for offline accounts (editable in settings). */
-export const DEFAULT_OWNER_UUID = "89a9c36b-3f72-4942-bdd4-4ff8b41223c1";
+/** Optional owner UUID for offline accounts. Empty by default; the player sets it in settings. */
+export const DEFAULT_OWNER_UUID = "";
 
 export const DEFAULT_SETTINGS: Settings = {
-  version: 3,
+  version: 4,
   gameRoot: "",
   sources: { ...DEFAULT_SOURCES },
   download: { concurrency: 64, segments: 8, speedLimitKBps: 0, retries: 3 },
@@ -256,6 +256,9 @@ export function normalizeSettings(stored: unknown): Settings {
   // This release makes the liquid-glass dark palette the primary look. Existing
   // "auto" users move to dark once; an explicit light/dark choice is preserved.
   if (storedVersion < 3 && result.ui.theme === "auto") result.ui.theme = "dark";
+  // Version 4 removes the personal UUID that was baked into the shipped
+  // defaults. Existing profiles keep the UUID already on disk because it may
+  // be the identity of a real offline account; the interface now masks it.
   return result;
 }
 
@@ -270,6 +273,11 @@ export class SettingsStore {
     const stored = await readJsonOr<unknown>(this.file, undefined);
     if (stored !== undefined && !isObject(stored)) await copyFile(this.file, `${this.file}.bad`).catch(() => {});
     this.current = normalizeSettings(stored);
+    // Persist one-shot migrations immediately. In particular this removes an
+    // obsolete personal UUID from disk instead of only hiding it in memory.
+    if (isObject(stored) && (typeof stored.version !== "number" || stored.version < this.current.version)) {
+      await writeJsonAtomic(this.file, this.current).catch(() => {});
+    }
     return this.get();
   }
 

@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Core } from "../src/core";
 import { DEFAULT_MS_CLIENT_ID, DEFAULT_OWNER_UUID, DEFAULT_SETTINGS, normalizeSettings } from "../src/settings";
+import { offlineUuid } from "../src/account/offline";
 import { startWsServer, type WsServer } from "../src/ws-server";
 import { currentOs } from "../src/util/os";
 import { startFakeMojang, type FakeWorld } from "./helpers/fake-mojang";
@@ -16,7 +17,7 @@ import { RpcClient } from "./helpers/ws-client";
 describe("settings migration", () => {
   it("upgrades untouched version 1 download defaults but keeps custom choices", () => {
     const oldDefaults = normalizeSettings({ version: 1, download: { concurrency: 32, segments: 4, speedLimitKBps: 0 }, sources: { contentPolicy: "official-first" } });
-    assert.equal(oldDefaults.version, 3);
+    assert.equal(oldDefaults.version, 4);
     assert.equal(oldDefaults.download.concurrency, 64);
     assert.equal(oldDefaults.download.segments, 8);
     assert.equal(oldDefaults.sources.contentPolicy, "mirror-first");
@@ -28,9 +29,13 @@ describe("settings migration", () => {
     assert.equal(custom.ui.theme, "dark", "legacy auto follows the dark-first release, while explicit colours remain untouched");
     const explicitLight = normalizeSettings({ version: 2, ui: { theme: "light" } });
     assert.equal(explicitLight.ui.theme, "light");
+    const keptOwner = normalizeSettings({ version: 3, accounts: { ownerUuid: "11111111-2222-4333-8444-555555555555" } });
+    assert.equal(keptOwner.accounts.ownerUuid, "11111111-2222-4333-8444-555555555555", "an existing account UUID is preserved even though it is no longer shown");
+    const chosenOwner = normalizeSettings({ version: 4, accounts: { ownerUuid: "00112233-4455-4677-8899-aabbccddeeff" } });
+    assert.equal(chosenOwner.accounts.ownerUuid, "00112233-4455-4677-8899-aabbccddeeff");
     const legacyAuto = normalizeSettings({ version: 2, ui: { theme: "auto" } });
     assert.equal(legacyAuto.ui.theme, "dark");
-    assert.equal(DEFAULT_SETTINGS.version, 3);
+    assert.equal(DEFAULT_SETTINGS.version, 4);
   });
 });
 
@@ -183,9 +188,10 @@ describe("the core over the development transport", () => {
       await client.call("instances.setConfig", { id: "fake", patch: { jvmPreset: null, memory: "auto", width: 0, note: null } });
     });
 
-    it("adds the player's own UUID as the default offline account", async () => {
+    it("falls back to the name-derived UUID when no owner UUID is configured", async () => {
       const account = await client.call("accounts.addOffline", { name: "Wind", useOwnerUuid: true });
-      assert.equal(account.uuid, DEFAULT_OWNER_UUID);
+      assert.equal(DEFAULT_OWNER_UUID, "", "no personal UUID ships with the launcher");
+      assert.equal(account.uuid, offlineUuid("Wind"));
       assert.equal(account.type, "offline");
       const list = await client.call("accounts.list");
       assert.equal(list.selected, account.id);
@@ -207,7 +213,7 @@ describe("the core over the development transport", () => {
       assert.equal(exited.crash, undefined, "a clean exit is not analysed");
       const text = (await client.call("games.tail", { id: gameId })).join("\n");
       assert.match(text, /ARGS=--username\|Wind\|--version\|fake\|--gameDir\|/);
-      assert.match(text, /--uuid\|89a9c36b3f724942bdd44ff8b41223c1/);
+      assert.match(text, new RegExp(`--uuid\\|${offlineUuid("Wind").replace(/-/g, "")}`));
       assert.match(text, /中文测试/);
       const info = await client.call("instances.get", { id: "fake" });
       assert.ok(info.config.lastPlayed > 0);
