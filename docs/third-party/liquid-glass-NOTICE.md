@@ -1,14 +1,14 @@
 # liquid-glass
 
-Vitrine's static SVG backdrop lens in `src/liquid-glass-filter.ts` is adapted
-from the `liquid-glass` source supplied by the Vitrine author at
-`/storage/emulated/0/Vitrine/liquid-glass-main`.
+Vitrine's per-surface UI glass in `src/liquid-glass-filter.ts` adapts the
+convex-squircle refraction profile, Snell-law displacement map, specular map
+and SVG filter graph from the `liquid-glass` project.
 
-- Author: Dominik Pawlikowski
+- Project: https://github.com/archisvaze/liquid-glass
+- Author: Archis Vaze
 - License: MIT (see `liquid-glass-LICENSE.txt`)
 
-The original radial displacement idea (`-dir * f * (d/r)^7` plus a light
-sample blur) informed Vitrine's pre-baked SVG displacement map. The React
-component, demo layout, drag system, control panel and runtime turbulence
-filter are not bundled. Vitrine retains its own DOM, animation, spring and
-interaction systems.
+The upstream demo page, settings panel, background picker, share/export UI and
+sample backgrounds are not bundled. Vitrine adapts the renderer to classify,
+measure and decorate its own DOM surfaces, including sheets, dialogs, cards,
+menus, fields and buttons.

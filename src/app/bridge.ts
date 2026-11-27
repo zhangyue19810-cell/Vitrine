@@ -39,6 +39,8 @@ export interface Bridge {
   };
   /** Focus / visibility of the real window, pushed by the desktop shell. */
   onWindowState?(listener: (state: { focused: boolean; visible: boolean }) => void): () => void;
+  /** Turn a user-picked local image/video into a safe `vitrine-media:` URL. */
+  mediaUrl?(path: string): Promise<string | undefined>;
 }
 
 /** What the Electron preload script exposes. */
@@ -51,6 +53,7 @@ export interface ElectronBridge {
   windowControl?(action: "minimize" | "maximize" | "close"): void;
   /** Focus / visibility of the real window (document events are unreliable for a minimized window on some platforms). */
   onWindowState?(listener: (state: { focused: boolean; visible: boolean }) => void): () => void;
+  mediaUrl?(path: string): Promise<string | null>;
 }
 
 declare global {
@@ -87,11 +90,13 @@ class IpcBridge extends BaseBridge {
   readonly kind = "electron" as const;
   window: Bridge["window"];
   onWindowState: Bridge["onWindowState"];
+  mediaUrl: Bridge["mediaUrl"];
   constructor(private readonly native: ElectronBridge) {
     super();
     this.connected = true;
     native.onEvent((event) => this.emit(event));
     if (native.onWindowState) this.onWindowState = (listener) => native.onWindowState!(listener);
+    if (native.mediaUrl) this.mediaUrl = async (path) => (await native.mediaUrl!(path)) ?? undefined;
     if (native.windowControl) {
       const control = native.windowControl.bind(native);
       this.window = { minimize: () => control("minimize"), toggleMaximize: () => control("maximize"), close: () => control("close") };

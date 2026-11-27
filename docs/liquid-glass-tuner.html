@@ -1,0 +1,679 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Vitrine · 液态玻璃调参</title>
+<!--
+  Vitrine Liquid Glass Tuner
+  Filter graph and displacement-map math adapted from Liquid Glass by Archis Vaze,
+  https://github.com/archisvaze/liquid-glass, MIT licensed.
+  Open in Chrome / Edge. Keep backgrounds/ relative to this file when using the presets.
+-->
+<style>
+  :root {
+    color-scheme: dark;
+    --tint-rgb: 255, 255, 255;
+    --tint-opacity: 0;
+    --inner-color: #ffffff;
+    --inner-blur: 20px;
+    --inner-spread: -5px;
+    --outer-blur: 24px;
+    --radius: 28px;
+    --paper: #071018;
+    --ink: #f5f0e6;
+    --muted: rgba(245, 240, 230, .55);
+    --line: rgba(255, 255, 255, .14);
+    --accent: #e7c878;
+    --panel: rgba(15, 22, 29, .72);
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-family: "LXGW WenKai", "Noto Serif SC", "Songti SC", Georgia, serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; min-height: 100%; margin: 0; }
+  body {
+    color: var(--ink);
+    background-color: #10161c;
+    background-image: url("./liquid-glass-main/backgrounds/image1.jpg");
+    background-position: center;
+    background-size: cover;
+    background-attachment: fixed;
+    overflow-x: hidden;
+  }
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      linear-gradient(180deg, rgba(0, 0, 0, .12), rgba(0, 0, 0, .32)),
+      radial-gradient(ellipse at center, transparent 38%, rgba(0, 0, 0, .34) 100%);
+  }
+  button, input { font: inherit; }
+  button { cursor: pointer; }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 340px;
+    min-height: 100dvh;
+    align-items: stretch;
+  }
+  .stage {
+    position: relative;
+    min-width: 0;
+    min-height: 720px;
+    padding: clamp(20px, 5vw, 56px);
+    overflow: hidden;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 13px;
+    color: #fff;
+    font-family: "Source Serif 4", Georgia, serif;
+    letter-spacing: .02em;
+    text-shadow: 0 2px 18px rgba(0, 0, 0, .45);
+  }
+  .brand-mark {
+    width: 44px;
+    height: 28px;
+    border: 2px solid var(--accent);
+    border-radius: 50%;
+    position: relative;
+    transform: rotate(-10deg);
+  }
+  .brand-mark::after {
+    content: "";
+    position: absolute;
+    inset: 7px 10px;
+    border-radius: 50%;
+    border: 2px solid var(--accent);
+    transform: rotate(28deg);
+  }
+  .brand b { display: block; font-size: 24px; font-weight: 600; letter-spacing: .13em; }
+  .brand small { display: block; margin-top: 3px; color: rgba(255,255,255,.5); font: 9px/1.4 var(--mono); letter-spacing: .2em; }
+
+  .glass {
+    position: relative;
+    isolation: isolate;
+    border-radius: var(--surface-radius, var(--radius));
+    box-shadow: 0 4px var(--outer-blur) rgba(0, 0, 0, .18);
+    overflow: hidden;
+  }
+  .glass > .lens {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    backdrop-filter: var(--glass-filter-url);
+    -webkit-backdrop-filter: var(--glass-filter-url);
+  }
+  .glass::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    border-radius: inherit;
+    pointer-events: none;
+    background: rgba(var(--tint-rgb), var(--tint-opacity));
+    box-shadow: inset 0 0 var(--inner-blur) var(--inner-spread) var(--inner-color);
+  }
+  .glass > :not(.lens) { position: relative; z-index: 1; }
+  .glass[data-shape="panel"] { --surface-radius: var(--radius); }
+  .glass[data-shape="card"] { --surface-radius: min(var(--radius), 26px); }
+  .glass[data-shape="pill"], .glass[data-shape="chip"] { --surface-radius: 999px; }
+  .glass[data-shape="button"], .glass[data-shape="field"] { --surface-radius: min(var(--radius), 22px); }
+  .glass[data-shape="round"] { --surface-radius: 50%; }
+
+  .top-nav {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: max-content;
+    margin: 42px auto 0;
+    padding: 8px 14px;
+    color: rgba(255,255,255,.88);
+    font-size: 12px;
+  }
+  .top-nav span { color: rgba(255,255,255,.44); letter-spacing: .12em; }
+
+  .instance {
+    width: min(820px, 100%);
+    margin: clamp(92px, 18vh, 190px) 0 0 auto;
+    padding: clamp(22px, 3.2vw, 36px);
+    border-radius: var(--radius);
+  }
+  .eyebrow { color: rgba(255,255,255,.5); font: 10px/1.4 var(--mono); letter-spacing: .14em; text-transform: uppercase; }
+  .instance h1 { margin: 16px 0 13px; color: #fff; font-size: clamp(24px, 3.5vw, 40px); font-weight: 500; letter-spacing: .04em; text-shadow: 0 2px 20px rgba(0,0,0,.3); }
+  .instance h1 em { color: var(--accent); font-style: normal; padding-left: 6px; }
+  .rule { height: 1px; background: linear-gradient(90deg, var(--accent), rgba(255,255,255,.04)); }
+  .instance .meta { display: flex; flex-wrap: wrap; gap: 10px 22px; margin: 16px 0 11px; color: rgba(255,255,255,.64); font: 12px/1.5 var(--mono); }
+  .instance .meta b { color: rgba(255,255,255,.92); font-weight: 500; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 14px; }
+  .chip { padding: 6px 10px; color: rgba(255,255,255,.66); border: 0; font: 10px/1.2 var(--mono); }
+  .instance p { margin: 0 0 20px; color: rgba(255,255,255,.6); font-size: 13px; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+  .btn { min-height: 40px; padding: 0 17px; border: 0; color: rgba(255,255,255,.78); font-size: 13px; }
+  .btn.primary { color: var(--accent); }
+  .toolbar { display: flex; flex-wrap: wrap; gap: 9px; width: min(820px, 100%); margin: 18px 0 0 auto; }
+  .field { display: flex; align-items: center; min-height: 42px; padding: 0 15px; color: rgba(255,255,255,.58); font: 11px/1.4 var(--mono); }
+  .field input { width: 100%; border: 0; outline: 0; background: transparent; color: rgba(255,255,255,.8); }
+  .round { width: 42px; height: 42px; display: grid; place-items: center; color: var(--accent); }
+
+  .wallpaper-dock {
+    position: absolute;
+    left: clamp(20px, 5vw, 56px);
+    bottom: clamp(22px, 4vw, 34px);
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    flex-wrap: wrap;
+  }
+  .wallpaper-dock .label { margin-right: 4px; color: rgba(255,255,255,.48); font: 10px/1 var(--mono); letter-spacing: .12em; }
+  .wp {
+    width: 44px;
+    height: 30px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.24);
+    border-radius: 8px;
+    background-position: center;
+    background-size: cover;
+    box-shadow: 0 3px 12px rgba(0,0,0,.25);
+  }
+  .wp.active { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .file-pick { position: relative; overflow: hidden; display: inline-flex; align-items: center; padding: 0 10px; height: 30px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; color: var(--muted); font: 10px/1 var(--mono); }
+  .file-pick input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+  .controls {
+    position: sticky;
+    top: 0;
+    height: 100dvh;
+    overflow: auto;
+    padding: 20px 18px 28px;
+    border-left: 1px solid var(--line);
+    background: rgba(9, 14, 19, .88);
+    backdrop-filter: none;
+  }
+  .controls-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 16px; }
+  .controls-title { font: 600 15px/1.35 "LXGW WenKai", Georgia, serif; letter-spacing: .08em; }
+  .controls-sub { margin-top: 4px; color: var(--muted); font: 10px/1.5 var(--mono); }
+  .preset-buttons { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 18px; }
+  .preset-buttons button, .copy-btn {
+    min-height: 29px; border: 1px solid rgba(255,255,255,.16); border-radius: 8px;
+    background: rgba(255,255,255,.045); color: rgba(255,255,255,.72); padding: 0 9px; font: 10px/1 var(--mono);
+  }
+  .preset-buttons button:hover, .copy-btn:hover { border-color: rgba(231,200,120,.55); color: #fff; }
+  .section { margin: 0 0 16px; padding-top: 14px; border-top: 1px solid var(--line); }
+  .section:first-of-type { border-top: 0; padding-top: 0; }
+  .section h2 { margin: 0 0 10px; color: rgba(255,255,255,.46); font: 600 9px/1.3 var(--mono); letter-spacing: .18em; text-transform: uppercase; }
+  .control-row { display: grid; grid-template-columns: 1fr 42px; align-items: center; gap: 5px 10px; min-height: 38px; color: rgba(255,255,255,.68); font-size: 11px; }
+  .control-row input[type="range"] { grid-column: 1 / 2; width: 100%; accent-color: #8e7cff; }
+  .control-row output { grid-column: 2 / 3; text-align: right; color: rgba(255,255,255,.48); font: 10px/1 var(--mono); }
+  .color-row { grid-template-columns: 1fr 38px 42px; }
+  .color-row input[type="color"] { grid-column: 2 / 3; grid-row: 1; width: 28px; height: 24px; padding: 0; border: 1px solid rgba(255,255,255,.2); border-radius: 5px; background: transparent; }
+  .color-row output { grid-column: 3 / 4; }
+  input[type="range"] { height: 18px; }
+  input[type="range"]::-webkit-slider-runnable-track { height: 4px; border-radius: 99px; background: rgba(255,255,255,.16); }
+  input[type="range"]::-webkit-slider-thumb { appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: #8e7cff; box-shadow: 0 0 10px rgba(142,124,255,.35); }
+  input[type="range"]::-moz-range-track { height: 4px; border-radius: 99px; background: rgba(255,255,255,.16); }
+  input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #8e7cff; }
+  .actions-bottom { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 15px; }
+  .copy-btn.primary { border-color: rgba(231,200,120,.5); color: #f4dda4; }
+  .params-preview { margin-top: 12px; padding: 10px; border: 1px solid rgba(255,255,255,.1); border-radius: 8px; background: rgba(0,0,0,.18); color: rgba(255,255,255,.47); font: 9px/1.55 var(--mono); white-space: pre-wrap; word-break: break-word; }
+  .status { min-height: 16px; color: var(--accent); font: 10px/1.4 var(--mono); }
+
+  @media (max-width: 860px) {
+    .layout { display: block; }
+    .stage { min-height: 690px; padding: 22px 18px; }
+    .instance { margin-top: 64px; padding: 22px; }
+    .controls { position: relative; height: auto; max-height: none; border-left: 0; border-top: 1px solid var(--line); }
+    .wallpaper-dock { left: 18px; bottom: 16px; }
+    .top-nav { margin-top: 34px; }
+  }
+</style>
+</head>
+<body>
+<svg id="lens-defs" xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute;overflow:hidden" color-interpolation-filters="sRGB" aria-hidden="true"><defs></defs></svg>
+
+<main class="layout">
+  <section class="stage" id="stage">
+    <header class="brand" aria-label="Vitrine">
+      <span class="brand-mark"></span>
+      <div><b>VITRINE</b><small>琉璃 · MINECRAFT LAUNCHER</small></div>
+    </header>
+
+    <nav class="top-nav glass" data-glass data-shape="pill">首页 <span>···</span></nav>
+
+    <section class="instance glass" data-glass data-shape="panel">
+      <div class="eyebrow">整合包 / 实例 01</div>
+      <h1>机械动力·天空岛 <em>↗</em></h1>
+      <div class="rule"></div>
+      <div class="meta"><span><b>1.21.1</b> · NeoForge 21.1.77</span><span>上次 5 小时前 · 累计 <b>120</b> 小时</span></div>
+      <div class="chips">
+        <span class="chip glass" data-glass data-shape="chip">文件不完整</span>
+        <span class="chip glass" data-glass data-shape="chip">64 个模组</span>
+        <span class="chip glass" data-glass data-shape="chip">JAVA 21</span>
+        <span class="chip glass" data-glass data-shape="chip">MODRINTH 1.4.2</span>
+      </div>
+      <p>我的主力整合包：齿轮、传动与天空岛。</p>
+      <div class="actions">
+        <button class="btn primary glass" data-glass data-shape="button">修复文件 →</button>
+        <button class="btn glass" data-glass data-shape="button">仍然启动</button>
+        <button class="btn glass" data-glass data-shape="button">管理 ↗</button>
+      </div>
+    </section>
+
+    <div class="toolbar">
+      <div class="field glass" data-glass data-shape="field"><input value="maimai / 天空岛 · 01" aria-label="实例筛选" /></div>
+      <div class="round glass" data-glass data-shape="round">★</div>
+    </div>
+
+    <div class="wallpaper-dock" aria-label="壁纸">
+      <span class="label">WALLPAPER</span>
+      <button class="wp active" data-wallpaper="./liquid-glass-main/backgrounds/image1.jpg" style="background-image:url('./liquid-glass-main/backgrounds/image1.jpg')" aria-label="花海"></button>
+      <button class="wp" data-wallpaper="./liquid-glass-main/backgrounds/image2.jpg" style="background-image:url('./liquid-glass-main/backgrounds/image2.jpg')" aria-label="桥"></button>
+      <button class="wp" data-wallpaper="./liquid-glass-main/backgrounds/image3.jpg" style="background-image:url('./liquid-glass-main/backgrounds/image3.jpg')" aria-label="溪石"></button>
+      <button class="wp" data-wallpaper="./liquid-glass-main/backgrounds/image4.jpg" style="background-image:url('./liquid-glass-main/backgrounds/image4.jpg')" aria-label="草地"></button>
+      <label class="file-pick">选择本地图片<input id="wallpaper-file" type="file" accept="image/*" /></label>
+    </div>
+  </section>
+
+  <aside class="controls" aria-label="液态玻璃参数">
+    <div class="controls-head">
+      <div><div class="controls-title">液态玻璃调参</div><div class="controls-sub">在 Chrome / Edge 中查看真实折射<br>拖完后把参数发给我</div></div>
+    </div>
+    <div class="preset-buttons">
+      <button type="button" data-preset="vitrine">当前 Vitrine</button>
+      <button type="button" data-preset="official">官方参考</button>
+      <button type="button" id="theme-toggle">切换明暗</button>
+    </div>
+
+    <section class="section">
+      <h2>Refraction</h2>
+      <div class="control-row"><label for="thickness">Glass Thickness</label><input id="thickness" data-param="thickness" type="range" min="10" max="200" step="1" /><output data-for="thickness"></output></div>
+      <div class="control-row"><label for="bezel">Bezel Width</label><input id="bezel" data-param="bezel" type="range" min="1" max="100" step="1" /><output data-for="bezel"></output></div>
+      <div class="control-row"><label for="ior">Refractive Index</label><input id="ior" data-param="ior" type="range" min="1" max="3" step="0.01" /><output data-for="ior"></output></div>
+      <div class="control-row"><label for="scaleRatio">Scale Ratio</label><input id="scaleRatio" data-param="scaleRatio" type="range" min="0.2" max="2" step="0.05" /><output data-for="scaleRatio"></output></div>
+      <div class="control-row"><label for="radius">圆角半径</label><input id="radius" data-param="radius" type="range" min="8" max="160" step="1" /><output data-for="radius"></output></div>
+    </section>
+
+    <section class="section">
+      <h2>Appearance</h2>
+      <div class="control-row"><label for="blur">Blur</label><input id="blur" data-param="blur" type="range" min="0" max="8" step="0.1" /><output data-for="blur"></output></div>
+      <div class="control-row"><label for="specularOpacity">Specular Opacity</label><input id="specularOpacity" data-param="specularOpacity" type="range" min="0" max="1" step="0.01" /><output data-for="specularOpacity"></output></div>
+      <div class="control-row"><label for="specularSaturation">Specular Saturation</label><input id="specularSaturation" data-param="specularSaturation" type="range" min="0" max="8" step="0.1" /><output data-for="specularSaturation"></output></div>
+    </section>
+
+    <section class="section">
+      <h2>Glass Tint</h2>
+      <div class="control-row color-row"><label for="tintColor">Tint Color</label><input id="tintColor" data-param="tintColor" type="color" /><output data-for="tintColor"></output></div>
+      <div class="control-row"><label for="tintOpacity">Tint Opacity</label><input id="tintOpacity" data-param="tintOpacity" type="range" min="0" max="100" step="1" /><output data-for="tintOpacity"></output></div>
+    </section>
+
+    <section class="section">
+      <h2>Inner Shadow</h2>
+      <div class="control-row color-row"><label for="innerColor">Shadow Color</label><input id="innerColor" data-param="innerColor" type="color" /><output data-for="innerColor"></output></div>
+      <div class="control-row"><label for="innerBlur">Blur</label><input id="innerBlur" data-param="innerBlur" type="range" min="0" max="80" step="1" /><output data-for="innerBlur"></output></div>
+      <div class="control-row"><label for="innerSpread">Spread</label><input id="innerSpread" data-param="innerSpread" type="range" min="-30" max="30" step="1" /><output data-for="innerSpread"></output></div>
+    </section>
+
+    <section class="section">
+      <h2>Outer Shadow</h2>
+      <div class="control-row"><label for="outerBlur">Blur</label><input id="outerBlur" data-param="outerBlur" type="range" min="0" max="80" step="1" /><output data-for="outerBlur"></output></div>
+    </section>
+
+    <div class="actions-bottom">
+      <button class="copy-btn" id="copy-params" type="button">复制参数 JSON</button>
+      <button class="copy-btn" id="copy-css" type="button">复制 CSS 变量</button>
+    </div>
+    <div class="params-preview" id="params-preview"></div>
+    <div class="status" id="status">已加载</div>
+  </aside>
+</main>
+
+<script>
+(() => {
+  "use strict";
+
+  const SURFACE_FN = (x) => Math.pow(1 - Math.pow(1 - x, 4), 0.25);
+  const SAMPLE_COUNT = 128;
+  const defaultState = {
+    thickness: 122,
+    bezel: 44,
+    ior: 2.34,
+    scaleRatio: 2,
+    blur: 0,
+    specularOpacity: 0.18,
+    specularSaturation: 4,
+    tintColor: "#ffffff",
+    tintOpacity: 0,
+    innerColor: "#ffffff",
+    innerBlur: 20,
+    innerSpread: -5,
+    outerBlur: 24,
+    radius: 46,
+  };
+  const officialState = { ...defaultState, thickness: 80, bezel: 60, ior: 3, scaleRatio: 1, blur: 0.3, specularOpacity: 0.5, tintOpacity: 6, radius: 85 };
+  const storageKey = "vitrine.liquidGlassTuner.v1";
+  let state = loadState();
+  let filterMarkup = "";
+  let rebuildTimer = 0;
+  let previousObjectUrl = "";
+  const defs = document.querySelector("#lens-defs defs");
+  const stage = document.querySelector("#stage");
+  const controls = document.querySelector(".controls");
+  const status = document.querySelector("#status");
+
+  function loadState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(storageKey) || "null");
+      return { ...defaultState, ...(saved && typeof saved === "object" ? saved : {}) };
+    } catch { return { ...defaultState }; }
+  }
+
+  function saveState() {
+    try { localStorage.setItem(storageKey, JSON.stringify(state)); } catch { /* file:// private mode */ }
+  }
+
+  function hexToRgb(hex) {
+    const h = String(hex).replace("#", "");
+    const n = h.length === 3 ? h.split("").map(c => c + c).join("") : h.padEnd(6, "0").slice(0, 6);
+    return [parseInt(n.slice(0, 2), 16), parseInt(n.slice(2, 4), 16), parseInt(n.slice(4, 6), 16)];
+  }
+
+  function applyCss() {
+    const root = document.documentElement.style;
+    root.setProperty("--tint-rgb", hexToRgb(state.tintColor).join(", "));
+    root.setProperty("--tint-opacity", String(state.tintOpacity / 100));
+    root.setProperty("--inner-color", state.innerColor);
+    root.setProperty("--inner-blur", `${state.innerBlur}px`);
+    root.setProperty("--inner-spread", `${state.innerSpread}px`);
+    root.setProperty("--outer-blur", `${state.outerBlur}px`);
+    root.setProperty("--radius", `${state.radius}px`);
+  }
+
+  function calculateProfile(thickness, bezel, ior) {
+    const profile = new Float64Array(SAMPLE_COUNT);
+    const eta = 1 / ior;
+    const refract = (nx, ny) => {
+      const k = 1 - eta * eta * (1 - ny * ny);
+      if (k < 0) return null;
+      const sq = Math.sqrt(k);
+      return [-(eta * ny + sq) * nx, eta - (eta * ny + sq) * ny];
+    };
+    for (let i = 0; i < SAMPLE_COUNT; i++) {
+      const x = i / SAMPLE_COUNT;
+      const y = SURFACE_FN(x);
+      const dx = x < 1 ? 0.0001 : -0.0001;
+      const y2 = SURFACE_FN(x + dx);
+      const deriv = (y2 - y) / dx;
+      const mag = Math.sqrt(deriv * deriv + 1);
+      const ref = refract(-deriv / mag, -1 / mag);
+      profile[i] = ref ? ref[0] * ((y * bezel + thickness) / ref[1]) : 0;
+    }
+    return profile;
+  }
+
+  function displacementMap(w, h, radius, bezel, profile, maxDisp) {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) { d[i] = 128; d[i + 1] = 128; d[i + 2] = 0; d[i + 3] = 255; }
+    const r = radius, rSq = r * r, r1Sq = (r + 1) ** 2, rBSq = Math.max(r - bezel, 0) ** 2;
+    const wB = w - r * 2, hB = h - r * 2, S = profile.length;
+    for (let y1 = 0; y1 < h; y1++) {
+      for (let x1 = 0; x1 < w; x1++) {
+        const x = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
+        const y = y1 < r ? y1 - r : y1 >= h - r ? y1 - r - hB : 0;
+        const dSq = x * x + y * y;
+        if (dSq > r1Sq || dSq < rBSq) continue;
+        const dist = Math.sqrt(dSq);
+        const fromSide = r - dist;
+        const op = dSq < rSq ? 1 : 1 - (dist - Math.sqrt(rSq)) / (Math.sqrt(r1Sq) - Math.sqrt(rSq));
+        if (op <= 0 || dist === 0) continue;
+        const cos = x / dist, sin = y / dist;
+        const bi = Math.min(((fromSide / bezel) * S) | 0, S - 1);
+        const disp = profile[bi] || 0;
+        const dX = (-cos * disp) / maxDisp, dY = (-sin * disp) / maxDisp;
+        const idx = (y1 * w + x1) * 4;
+        d[idx] = (128 + dX * 127 * op + 0.5) | 0;
+        d[idx + 1] = (128 + dY * 127 * op + 0.5) | 0;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas.toDataURL();
+  }
+
+  function specularMap(w, h, radius, bezel, angle = Math.PI / 3) {
+    const canvas = document.createElement("canvas");
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    const img = ctx.createImageData(w, h);
+    const d = img.data;
+    const r = radius, rSq = r * r, r1Sq = (r + 1) ** 2, rBSq = Math.max(r - bezel, 0) ** 2;
+    const wB = w - r * 2, hB = h - r * 2;
+    const sv = [Math.cos(angle), Math.sin(angle)];
+    for (let y1 = 0; y1 < h; y1++) {
+      for (let x1 = 0; x1 < w; x1++) {
+        const x = x1 < r ? x1 - r : x1 >= w - r ? x1 - r - wB : 0;
+        const y = y1 < r ? y1 - r : y1 >= h - r ? y1 - r - hB : 0;
+        const dSq = x * x + y * y;
+        if (dSq > r1Sq || dSq < rBSq) continue;
+        const dist = Math.sqrt(dSq);
+        const fromSide = r - dist;
+        const op = dSq < rSq ? 1 : 1 - (dist - Math.sqrt(rSq)) / (Math.sqrt(r1Sq) - Math.sqrt(rSq));
+        if (op <= 0 || dist === 0) continue;
+        const cos = x / dist, sin = -y / dist;
+        const dot = Math.abs(cos * sv[0] + sin * sv[1]);
+        const edge = Math.sqrt(Math.max(0, 1 - (1 - fromSide) ** 2));
+        const coeff = dot * edge;
+        const colour = (255 * coeff) | 0;
+        const alpha = (colour * coeff * op) | 0;
+        const idx = (y1 * w + x1) * 4;
+        d[idx] = colour; d[idx + 1] = colour; d[idx + 2] = colour; d[idx + 3] = alpha;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    return canvas.toDataURL();
+  }
+
+  function makeFilter(surface, index) {
+    const rect = surface.getBoundingClientRect();
+    const w = Math.max(2, Math.round(rect.width));
+    const h = Math.max(2, Math.round(rect.height));
+    const cssRadius = Number.parseFloat(getComputedStyle(surface).borderTopLeftRadius) || 0;
+    const radius = Math.max(1, Math.floor(Math.min(Math.min(rect.width, rect.height) / 2, cssRadius)));
+    const bezel = Math.max(1, Math.min(state.bezel, radius - 1, Math.min(w, h) / 2 - 1));
+    const profile = calculateProfile(state.thickness, bezel, state.ior);
+    const maxDisp = Math.max(...Array.from(profile).map(Math.abs)) || 1;
+    const disp = displacementMap(w, h, radius, bezel, profile, maxDisp);
+    const spec = specularMap(w, h, radius, bezel * 2.5);
+    const scale = maxDisp * state.scaleRatio;
+    const id = `vitrine-tune-${index}`;
+    return {
+      id,
+      surface,
+      markup: `<filter id="${id}" x="0%" y="0%" width="100%" height="100%">
+        <feGaussianBlur in="SourceGraphic" stdDeviation="${state.blur}" result="blurred_source" />
+        <feImage href="${disp}" x="0" y="0" width="${w}" height="${h}" result="disp_map" />
+        <feDisplacementMap in="blurred_source" in2="disp_map" scale="${scale}" xChannelSelector="R" yChannelSelector="G" result="displaced" />
+        <feColorMatrix in="displaced" type="saturate" values="${state.specularSaturation}" result="displaced_sat" />
+        <feImage href="${spec}" x="0" y="0" width="${w}" height="${h}" result="spec_layer" />
+        <feComposite in="displaced_sat" in2="spec_layer" operator="in" result="spec_masked" />
+        <feComponentTransfer in="spec_layer" result="spec_faded"><feFuncA type="linear" slope="${state.specularOpacity}" /></feComponentTransfer>
+        <feBlend in="spec_masked" in2="displaced" mode="normal" result="with_sat" />
+        <feBlend in="spec_faded" in2="with_sat" mode="normal" />
+      </filter>`,
+    };
+  }
+
+  function ensureLens(surface) {
+    let lens = surface.querySelector(":scope > .lens");
+    if (!lens) {
+      lens = document.createElement("span");
+      lens.className = "lens";
+      lens.setAttribute("aria-hidden", "true");
+      surface.prepend(lens);
+    }
+    return lens;
+  }
+
+  function rebuildFilters() {
+    const surfaces = [...document.querySelectorAll("[data-glass]")].filter((surface) => surface.offsetParent !== null);
+    const filters = [];
+    surfaces.forEach((surface, index) => {
+      const lens = ensureLens(surface);
+      const { id, markup } = makeFilter(surface, index);
+      filters.push(markup);
+      const renderer = document.documentElement.dataset.renderer;
+      if (renderer === "fallback") {
+        lens.style.backdropFilter = "blur(8px) saturate(1.18)";
+        lens.style.webkitBackdropFilter = "blur(8px) saturate(1.18)";
+        lens.style.background = "rgba(255,255,255,.025)";
+      } else {
+        lens.style.background = "transparent";
+        lens.style.backdropFilter = `url(#${id})`;
+        lens.style.webkitBackdropFilter = `url(#${id})`;
+      }
+    });
+    defs.innerHTML = filters.join("");
+    filterMarkup = filters[0] || "";
+    status.textContent = document.documentElement.dataset.renderer === "fallback"
+      ? "Firefox 不支持 SVG backdrop-filter，当前显示模糊回退；请用 Chrome/Edge 查看折射"
+      : `已生成 ${surfaces.length} 个按实际尺寸计算的滤波器`;
+  }
+
+  function scheduleRebuild() {
+    clearTimeout(rebuildTimer);
+    rebuildTimer = setTimeout(rebuildFilters, 130);
+  }
+
+  function updateOutputs() {
+    for (const input of document.querySelectorAll("[data-param]")) {
+      const key = input.dataset.param;
+      const value = state[key];
+      if (input.type === "color") input.value = value;
+      else input.value = value;
+      const output = document.querySelector(`[data-for="${key}"]`);
+      if (!output) continue;
+      if (input.type === "color") output.textContent = String(value).toUpperCase();
+      else if (key === "ior") output.textContent = Number(value).toFixed(2);
+      else if (key === "scaleRatio" || key === "blur" || key === "specularOpacity" || key === "specularSaturation") output.textContent = String(value);
+      else if (key === "tintOpacity") output.textContent = `${value}%`;
+      else if (key === "innerBlur" || key === "outerBlur" || key === "radius") output.textContent = `${value}px`;
+      else if (key === "innerSpread") output.textContent = `${value}px`;
+      else output.textContent = String(value);
+    }
+    const params = JSON.stringify(publicParams(), null, 2);
+    document.querySelector("#params-preview").textContent = params;
+  }
+
+  function publicParams() {
+    return {
+      glassThickness: state.thickness,
+      bezelWidth: state.bezel,
+      refractiveIndex: state.ior,
+      scaleRatio: state.scaleRatio,
+      cornerRadius: state.radius,
+      blur: state.blur,
+      specularOpacity: state.specularOpacity,
+      specularSaturation: state.specularSaturation,
+      tint: { color: state.tintColor, opacityPercent: state.tintOpacity },
+      innerShadow: { color: state.innerColor, blur: state.innerBlur, spread: state.innerSpread },
+      outerShadow: { color: "#000000", blur: state.outerBlur, opacity: 0.18 },
+    };
+  }
+
+  function setPreset(next) {
+    state = { ...defaultState, ...next };
+    saveState();
+    updateOutputs();
+    applyCss();
+    rebuildFilters();
+    status.textContent = "已应用预设";
+  }
+
+  function copyText(text, label) {
+    const fallback = () => {
+      const area = document.createElement("textarea");
+      area.value = text;
+      area.style.position = "fixed";
+      area.style.opacity = "0";
+      document.body.append(area);
+      area.select();
+      try { document.execCommand("copy"); status.textContent = `${label} 已复制`; }
+      catch { status.textContent = "复制失败，请长按参数文本复制"; }
+      area.remove();
+    };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).then(() => { status.textContent = `${label} 已复制`; }, fallback);
+    } else fallback();
+  }
+
+  function setWallpaper(url, activeButton) {
+    document.body.style.backgroundImage = `url("${url}")`;
+    document.querySelectorAll(".wp").forEach((button) => button.classList.toggle("active", button === activeButton));
+  }
+
+  document.querySelectorAll("[data-param]").forEach((input) => {
+    input.addEventListener("input", () => {
+      const key = input.dataset.param;
+      const value = input.type === "range" ? Number(input.value) : input.value;
+      state[key] = value;
+      saveState();
+      updateOutputs();
+      applyCss();
+      scheduleRebuild();
+    });
+  });
+
+  document.querySelectorAll("[data-preset]").forEach((button) => {
+    button.addEventListener("click", () => {
+      setPreset(button.dataset.preset === "official" ? officialState : defaultState);
+    });
+  });
+
+  document.querySelector("#theme-toggle").addEventListener("click", () => {
+    const next = document.documentElement.dataset.theme === "light" ? "dark" : "light";
+    document.documentElement.dataset.theme = next;
+    document.documentElement.style.colorScheme = next;
+    status.textContent = next === "light" ? "已切到亮色主题" : "已切到暗色主题";
+  });
+
+  document.querySelectorAll("[data-wallpaper]").forEach((button) => {
+    button.addEventListener("click", () => setWallpaper(button.dataset.wallpaper, button));
+  });
+
+  document.querySelector("#wallpaper-file").addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (previousObjectUrl) URL.revokeObjectURL(previousObjectUrl);
+    previousObjectUrl = URL.createObjectURL(file);
+    setWallpaper(previousObjectUrl, null);
+    status.textContent = `壁纸：${file.name}`;
+  });
+
+  document.querySelector("#copy-params").addEventListener("click", () => copyText(JSON.stringify(publicParams(), null, 2), "参数 JSON"));
+  document.querySelector("#copy-css").addEventListener("click", () => {
+    const css = `--glass-thickness: ${state.thickness};\n--glass-bezel: ${state.bezel};\n--glass-ior: ${state.ior};\n--glass-scale: ${state.scaleRatio};\n--glass-radius: ${state.radius}px;\n--glass-blur: ${state.blur};\n--glass-specular-opacity: ${state.specularOpacity};\n--glass-specular-saturation: ${state.specularSaturation};\n--glass-tint: ${state.tintColor}${Math.round(state.tintOpacity * 2.55).toString(16).padStart(2,"0")};\n--glass-inner-shadow: inset 0 0 ${state.innerBlur}px ${state.innerSpread}px ${state.innerColor};\n--glass-outer-shadow: 0 4px ${state.outerBlur}px rgba(0,0,0,.18);`;
+    copyText(css, "CSS 变量");
+  });
+
+  const renderer = /Firefox\//.test(navigator.userAgent) ? "fallback" : "svg";
+  document.documentElement.dataset.renderer = renderer;
+  const savedWallpaper = [...document.querySelectorAll(".wp")][0];
+  if (savedWallpaper) setWallpaper(savedWallpaper.dataset.wallpaper, savedWallpaper);
+  updateOutputs();
+  applyCss();
+  requestAnimationFrame(rebuildFilters);
+  const observer = new ResizeObserver(scheduleRebuild);
+  observer.observe(stage);
+  window.addEventListener("resize", scheduleRebuild, { passive: true });
+})();
+</script>
+</body>
+</html>

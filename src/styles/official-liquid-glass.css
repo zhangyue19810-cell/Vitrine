@@ -1,0 +1,496 @@
+/*
+ * Official Liquid Glass material layer.
+ *
+ * The SVG filter itself is generated in src/liquid-glass-filter.ts from the
+ * upstream index.html renderer (Archis Vaze, MIT). This stylesheet applies the
+ * exported material recipe: a transparent surface, a filtered backdrop layer,
+ * fully transparent tint and an inset white shadow, plus the outer contact shadow.
+ */
+
+:root:root .liquid-glass {
+  --liquid-glass-tint: rgba(255, 255, 255, 0);
+  --liquid-glass-inner-shadow: inset 0 0 20px -5px #ffffff;
+  --liquid-glass-outer-shadow: 0 4px 24px rgba(0, 0, 0, 0.18);
+  isolation: isolate !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  border-color: transparent !important;
+  box-shadow: var(--liquid-glass-outer-shadow) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.liquid-glass-needs-position {
+  position: relative !important;
+}
+
+:root:root .liquid-glass.arrow-btn {
+  border-radius: 999px !important;
+}
+
+.liquid-glass-shape-panel { --liquid-glass-filter: url(#vitrine-liquid-glass-panel); }
+.liquid-glass-shape-card { --liquid-glass-filter: url(#vitrine-liquid-glass-card); }
+.liquid-glass-shape-control { --liquid-glass-filter: url(#vitrine-liquid-glass-control); }
+.liquid-glass-shape-pill { --liquid-glass-filter: url(#vitrine-liquid-glass-pill); }
+.liquid-glass-shape-chip { --liquid-glass-filter: url(#vitrine-liquid-glass-chip); }
+.liquid-glass-shape-round { --liquid-glass-filter: url(#vitrine-liquid-glass-round); }
+.liquid-glass-shape-field { --liquid-glass-filter: url(#vitrine-liquid-glass-field); }
+
+:root[data-glass-renderer="svg"] .liquid-glass > .liquid-glass-layer,
+:root[data-glass-renderer="svg"] .liquid-glass-field {
+  -webkit-backdrop-filter: var(--liquid-glass-filter) !important;
+  backdrop-filter: var(--liquid-glass-filter) !important;
+}
+
+.liquid-glass > .liquid-glass-layer {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: -1 !important;
+  display: block !important;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  overflow: hidden;
+  pointer-events: none !important;
+  background: transparent;
+}
+
+.liquid-glass > .liquid-glass-tint {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 4 !important;
+  display: block !important;
+  border-radius: inherit;
+  pointer-events: none !important;
+  background: var(--liquid-glass-tint);
+  box-shadow:
+    var(--liquid-glass-inner-shadow),
+    inset 0 0 0 1px rgba(45, 65, 86, 0.1),
+    inset 0 -18px 28px -26px rgba(0, 0, 0, 0.32);
+}
+
+/* The official 20px inner shadow is tuned for a large card. On a 40px pill it
+ * covers the whole face, so keep the same recipe but scale the bevel down.
+ * Nested surfaces also use half tint so ten stacked controls do not turn the
+ * whole sheet white. */
+.liquid-glass[data-liquid-glass-shape="control"] > .liquid-glass-tint,
+.liquid-glass[data-liquid-glass-shape="pill"] > .liquid-glass-tint,
+.liquid-glass[data-liquid-glass-shape="chip"] > .liquid-glass-tint,
+.liquid-glass[data-liquid-glass-shape="round"] > .liquid-glass-tint {
+  background: rgba(255, 255, 255, 0);
+  box-shadow:
+    inset 0 0 9px -3px rgba(255, 255, 255, 0.8),
+    inset 0 0 0 1px rgba(45, 65, 86, 0.12),
+    inset 0 -7px 10px -8px rgba(0, 0, 0, 0.3);
+}
+
+/* Nested controls sit on an already-filtered sheet. A second backdrop pass
+ * samples the parent's white tint and turns the whole settings card chalky,
+ * so nested glass keeps its tint/edge but uses the parent's refracted image. */
+.liquid-glass-nested,
+.liquid-glass-nested > .liquid-glass-layer {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+.liquid-glass-nested > .liquid-glass-tint {
+  background: rgba(255, 255, 255, 0);
+  box-shadow:
+    inset 0 0 11px -4px rgba(255, 255, 255, 0.52),
+    inset 0 0 0 1px rgba(45, 65, 86, 0.08);
+}
+
+/* The old raised-keycap/frost pseudo-elements must not stack above the new
+ * surface. Toggle keeps its ::after knob. */
+:root:root .liquid-glass:not(.toggle)::before,
+:root:root .liquid-glass:not(.toggle)::after {
+  content: none !important;
+}
+
+:root:root .liquid-glass.btn,
+:root:root .liquid-glass.nav-button,
+:root:root .liquid-glass.view-tab,
+:root:root .liquid-glass.toggle,
+:root:root button.liquid-glass {
+  transform: none !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: var(--liquid-glass-outer-shadow) !important;
+}
+
+:root:root .liquid-glass.btn.accent,
+:root:root .liquid-glass.btn.primary,
+:root:root .liquid-glass.btn.danger {
+  color: var(--accent-ink) !important;
+}
+
+/* Fields are void elements and cannot carry the tint/layer children. */
+:root:root input.liquid-glass,
+:root:root select.liquid-glass,
+:root:root textarea.liquid-glass {
+  background: var(--liquid-glass-tint) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  box-shadow:
+    inset 0 0 10px -3px rgba(255, 255, 255, 0.8),
+    inset 0 0 0 1px rgba(45, 65, 86, 0.12),
+    var(--liquid-glass-outer-shadow) !important;
+}
+
+:root:root .liquid-glass.dynamic-island {
+  background: linear-gradient(rgb(0, 0, 0), rgb(11, 11, 16)) !important;
+  border: 0 !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3) !important;
+}
+
+.liquid-glass.dynamic-island > .liquid-glass-layer {
+  opacity: 0.16;
+}
+
+.liquid-glass.dynamic-island > .liquid-glass-tint {
+  display: none;
+}
+
+/* Visible blur fallback for Gecko and other browsers that parse SVG backdrop
+ * filters but do not composite them. Firefox only composites the property on
+ * the surface itself, so keep the child layer for Chromium/SVG. */
+:root[data-glass-renderer="fallback"] .liquid-glass {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Gecko cannot sample a live backdrop through an SVG displacement filter.
+ * Repaint the still wallpaper inside each lens, filtered by the same
+ * displacement/specular graph, so edges genuinely refract instead of merely
+ * showing a flat blur. background-attachment keeps every lens aligned with
+ * the full-stage wallpaper. */
+:root[data-glass-renderer="fallback"] .liquid-glass > .liquid-glass-layer {
+  --glass-edge: 14px;
+  --glass-fade: 32px;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background-image: var(--vitrine-wallpaper-image, none) !important;
+  background-attachment: fixed !important;
+  background-size: cover !important;
+  background-position: center !important;
+  filter: var(--liquid-glass-filter) brightness(0.58) saturate(1.1) contrast(1.06) !important;
+  opacity: 0.78;
+  -webkit-mask-image:
+    linear-gradient(to right, #000 0 var(--glass-edge), transparent calc(var(--glass-edge) + var(--glass-fade)), transparent calc(100% - var(--glass-edge) - var(--glass-fade)), #000 calc(100% - var(--glass-edge)) 100%),
+    linear-gradient(to bottom, #000 0 var(--glass-edge), transparent calc(var(--glass-edge) + var(--glass-fade)), transparent calc(100% - var(--glass-edge) - var(--glass-fade)), #000 calc(100% - var(--glass-edge)) 100%);
+  -webkit-mask-composite: source-over;
+  mask-image:
+    linear-gradient(to right, #000 0 var(--glass-edge), transparent calc(var(--glass-edge) + var(--glass-fade)), transparent calc(100% - var(--glass-edge) - var(--glass-fade)), #000 calc(100% - var(--glass-edge)) 100%),
+    linear-gradient(to bottom, #000 0 var(--glass-edge), transparent calc(var(--glass-edge) + var(--glass-fade)), transparent calc(100% - var(--glass-edge) - var(--glass-fade)), #000 calc(100% - var(--glass-edge)) 100%);
+  mask-composite: add;
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-nested > .liquid-glass-layer {
+  background-image: none !important;
+  filter: none !important;
+  opacity: 1;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-panel > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-card > .liquid-glass-layer {
+  --glass-edge: 26px;
+  --glass-fade: 80px;
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-control > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-field > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-pill > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-chip > .liquid-glass-layer {
+  --glass-edge: 10px;
+  --glass-fade: 30px;
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-round > .liquid-glass-layer {
+  --glass-edge: 9px;
+  --glass-fade: 24px;
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass:not(.sheet):not(.dialog):not(.settings-nav):not(.menu):not(.seg):not(.tabs) {
+  overflow: hidden !important;
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-panel > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-card > .liquid-glass-layer {
+  clip-path: inset(0 round 24px);
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-control > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-field > .liquid-glass-layer {
+  clip-path: inset(0 round 14px);
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-pill > .liquid-glass-layer,
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-chip > .liquid-glass-layer {
+  clip-path: inset(0 round 999px);
+}
+
+:root[data-glass-renderer="fallback"] .liquid-glass-shape-round > .liquid-glass-layer {
+  clip-path: inset(0 round 50%);
+}
+
+:root[data-glass-renderer="fallback"] input.liquid-glass,
+:root[data-glass-renderer="fallback"] select.liquid-glass,
+:root[data-glass-renderer="fallback"] textarea.liquid-glass {
+  -webkit-backdrop-filter: saturate(1.22) contrast(1.03) !important;
+  backdrop-filter: saturate(1.22) contrast(1.03) !important;
+}
+
+/* The launcher's quality governor still has the last word. */
+:root[data-render-tier="low"] .liquid-glass > .liquid-glass-layer,
+:root[data-render-tier="low"] input.liquid-glass,
+:root[data-render-tier="low"] select.liquid-glass,
+:root[data-render-tier="low"] textarea.liquid-glass {
+  -webkit-backdrop-filter: saturate(1.2) !important;
+  backdrop-filter: saturate(1.2) !important;
+}
+
+:root[data-render-tier="minimal"] .liquid-glass > .liquid-glass-layer,
+:root[data-render-tier="minimal"] input.liquid-glass,
+:root[data-render-tier="minimal"] select.liquid-glass,
+:root[data-render-tier="minimal"] textarea.liquid-glass {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: rgba(var(--glass-rgb), 0.18) !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-glass > .liquid-glass-layer,
+  input.liquid-glass,
+  select.liquid-glass,
+  textarea.liquid-glass {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+}
+
+
+/* Light paper needs a thinner inner glow; the tint is fully transparent at
+ * every level. Dark surfaces keep the exact 20px / -5px white inner shadow. */
+:root:not([data-dark-surface="true"]) .liquid-glass {
+  --liquid-glass-tint: rgba(255, 255, 255, 0);
+  --liquid-glass-inner-shadow: inset 0 0 20px -5px #ffffff;
+}
+
+:root:not([data-dark-surface="true"]) .liquid-glass-shape-control > .liquid-glass-tint,
+:root:not([data-dark-surface="true"]) .liquid-glass-shape-pill > .liquid-glass-tint,
+:root:not([data-dark-surface="true"]) .liquid-glass-shape-chip > .liquid-glass-tint,
+:root:not([data-dark-surface="true"]) .liquid-glass-shape-round > .liquid-glass-tint,
+:root:not([data-dark-surface="true"]) .liquid-glass-nested > .liquid-glass-tint {
+  background: rgba(255, 255, 255, 0);
+  box-shadow:
+    inset 0 0 8px -4px rgba(255, 255, 255, 0.38),
+    inset 0 0 0 1px rgba(45, 65, 86, 0.1);
+}
+
+:root:not([data-dark-surface="true"]) input.liquid-glass,
+:root:not([data-dark-surface="true"]) select.liquid-glass,
+:root:not([data-dark-surface="true"]) textarea.liquid-glass {
+  background: transparent !important;
+  box-shadow:
+    inset 0 0 8px -4px rgba(255, 255, 255, 0.4),
+    inset 0 0 0 1px rgba(45, 65, 86, 0.1),
+    var(--liquid-glass-outer-shadow) !important;
+}
+
+/* Setting rows are separators inside the filtered sheet, not independent
+ * paper cards. The old light-theme fill made the personalisation block look
+ * like a solid white slab over the wallpaper. */
+:root:root .settings .setting,
+:root:root .settings .setting:hover {
+  background: transparent !important;
+}
+
+/* Ensure every filtered surface presents a rounded glass silhouette even
+ * when the original control had square corners. */
+.liquid-glass-radius-panel {
+  border-radius: 46px !important;
+}
+
+.liquid-glass-radius-card {
+  border-radius: 26px !important;
+}
+
+.liquid-glass-radius-control,
+.liquid-glass-radius-field {
+  border-radius: 22px !important;
+}
+
+.liquid-glass-radius-pill,
+.liquid-glass-radius-chip {
+  border-radius: 999px !important;
+}
+
+.liquid-glass-radius-round {
+  border-radius: 50% !important;
+}
+
+
+/* A custom settings block is a content section, never a second sheet. Hide any
+ * stale glass children if the block was decorated before its controls existed. */
+:root:root .setting.block,
+:root:root .setting.block:hover {
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+:root:root .setting.block > .liquid-glass-layer,
+:root:root .setting.block > .liquid-glass-tint {
+  display: none !important;
+}
+
+
+/* The old painted-glass layer and its rim pseudo-elements must not show
+ * through content blocks that are deliberately left undecorated. */
+:root:root .settings,
+:root:root .settings-body,
+:root:root .setting.block,
+:root:root .settings .setting {
+  background: transparent !important;
+  background-image: none !important;
+  box-shadow: none !important;
+}
+
+:root:root .setting.block::before,
+:root:root .setting.block::after,
+:root:root .settings .setting::before,
+:root:root .settings .setting::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* Sheets and dialogs sit over a sharp, dimmed stage. The old paper scrim and
+ * 10–18px backdrop blur turned the transparent centre of the sheet into a
+ * cream slab; the glass itself is now the only material between the user and
+ * the wallpaper. */
+.scrim {
+  background: rgba(3, 7, 11, 0.52) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#stage:has(.modal-root[data-open="true"]) > .three-scene,
+#stage:has(.modal-root[data-open="true"]) > .scene-aura,
+#stage:has(.modal-root[data-open="true"]) > .scene-atmosphere,
+#stage:has(.modal-root[data-open="true"]) > .brand,
+#stage:has(.modal-root[data-open="true"]) > .system-nav,
+#stage:has(.modal-root[data-open="true"]) > .view-tabs,
+#stage:has(.modal-root[data-open="true"]) > .home,
+#stage:has(.modal-root[data-open="true"]) > .download,
+#stage:has(.modal-root[data-open="true"]) > .detail,
+#stage:has(.modal-root[data-open="true"]) > .system-footer {
+  filter: none !important;
+  opacity: 0.18 !important;
+}
+
+/* Large floating panes use native frosted glass instead of an SVG
+ * displacement filter. Standard Gaussian backdrop blur stays in the GPU
+ * compositor and does not alternate with the underlying animated scene the
+ * way feImage/feDisplacementMap did on Windows. The clear rim and shadows are
+ * still supplied by the tint layer; nested controls stay filter-free so the
+ * sheet never stacks multiple live backdrop passes. */
+:root:root .sheet > .liquid-glass-layer,
+:root:root .dialog > .liquid-glass-layer,
+:root:root .detail-panel > .liquid-glass-layer,
+:root:root .callout > .liquid-glass-layer {
+  -webkit-backdrop-filter: blur(20px) saturate(1.18) !important;
+  backdrop-filter: blur(20px) saturate(1.18) !important;
+  background-image: none !important;
+  filter: none !important;
+  opacity: 1;
+  transform: translateZ(0);
+  will-change: backdrop-filter;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+/* No live backdrop filter is allowed anywhere inside a large sheet or detail
+ * pane. If even one nested card keeps a live SVG backdrop pass, Windows
+ * compositors can alternate the whole pane between filtered and unfiltered
+ * frames. Nested surfaces keep their own tint, rim and outer shadow. */
+:root:root .sheet .liquid-glass,
+:root:root .sheet .liquid-glass > .liquid-glass-layer,
+:root:root .dialog .liquid-glass,
+:root:root .dialog .liquid-glass > .liquid-glass-layer,
+:root:root .detail-panel .liquid-glass,
+:root:root .detail-panel .liquid-glass > .liquid-glass-layer {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* A captured pre-open frame gives large panels a stable refraction source.
+ * The image is frozen for the lifetime of the panel, so the Windows compositor
+ * never alternates between filtered and unfiltered frames while the scene
+ * behind it moves. The SVG filter supplies the edge distortion; the trailing
+ * blur turns the captured centre into frosted glass. */
+.glass-capturing {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+.glass-frozen > .liquid-glass-layer {
+  background-image: var(--vitrine-frozen-backdrop, none) !important;
+  background-attachment: fixed !important;
+  background-size: 100vw 100vh !important;
+  background-position: top left !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  filter: var(--liquid-glass-filter) blur(10px) saturate(1.1) !important;
+  opacity: 0.94;
+  transform: translateZ(0);
+  will-change: auto;
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+
+/* The music HUD lives directly over the animated black hole. Its left archive
+ * panel and bottom transport capsule use the same stable frosted material as
+ * the large sheets; inner queue/button glass stays filter-free so the two
+ * layers cannot alternate on the Windows compositor. */
+:root:root .hud-left > .liquid-glass-layer,
+:root:root .hud-capsule > .liquid-glass-layer {
+  -webkit-backdrop-filter: blur(20px) saturate(1.18) !important;
+  backdrop-filter: blur(20px) saturate(1.18) !important;
+  background-image: none !important;
+  filter: none !important;
+  opacity: 1;
+  transform: translateZ(0);
+  -webkit-mask-image: none !important;
+  mask-image: none !important;
+}
+
+:root:root .hud-left .liquid-glass,
+:root:root .hud-left .liquid-glass > .liquid-glass-layer,
+:root:root .hud-capsule .liquid-glass,
+:root:root .hud-capsule .liquid-glass > .liquid-glass-layer {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Settings/account sheets should not show the live music transport sitting
+ * over their content. It also keeps the frozen curtain free of moving HUD. */
+#stage:has(.modal-root[data-open="true"]) > .music-hud {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+/* A bright wallpaper gets averaged into a chalky frozen backdrop by a large
+ * blur. Preserve the image detail and pull the frozen curtain down a little so
+ * settings/account glass keeps its smoked lens character instead of reading as
+ * white paper. */
+#stage[data-wallpaper="true"] .sheet.glass-frozen > .liquid-glass-layer,
+#stage[data-wallpaper="true"] .dialog.glass-frozen > .liquid-glass-layer {
+  filter: var(--liquid-glass-filter) blur(6px) saturate(1.04) brightness(0.82) contrast(1.06) !important;
+  opacity: 0.92;
+}

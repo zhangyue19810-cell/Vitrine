@@ -57,3 +57,9 @@ together with the following third-party work. Their licences stay with them.
 "Minecraft" is a trademark of Mojang Synergies AB / Microsoft. Vitrine is not an official Minecraft product and
 is not approved by or associated with Mojang or Microsoft.
 Vitrine contains no source code from PCL / PCL2 or any other launcher; it is an independent implementation.
+
+11. Liquid Glass by Archis Vaze — https://github.com/archisvaze/liquid-glass
+    MIT License, Copyright (c) 2026 Archis Vaze.
+    Vitrine's per-surface SVG displacement, specular-map and filter synthesis in
+    src/liquid-glass-filter.ts is adapted from this project.
+    Licence text: public/licenses/liquid-glass.txt and docs/third-party/liquid-glass-LICENSE.txt.

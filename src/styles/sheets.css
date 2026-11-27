@@ -222,6 +222,7 @@
 }
 
 .settings-body {
+  position: relative;
   overflow: auto;
   padding-right: 12px;
   overscroll-behavior: contain;

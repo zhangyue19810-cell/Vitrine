@@ -77,7 +77,7 @@ export const DEFAULT_SETTINGS: Settings = {
   java: { autoInstall: true, extraPaths: [] },
   launch: { memory: "auto", jvmPreset: "auto", jvmArgs: "", optimize: true, gameArgs: "", width: 0, height: 0, fullscreen: false, afterLaunch: "minimize", versionType: "Vitrine" },
   accounts: { msClientId: DEFAULT_MS_CLIENT_ID, curseforgeKey: "", ownerUuid: DEFAULT_OWNER_UUID },
-  ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "dark", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1, cardSize: "medium" },
+  ui: { motion: "auto", fps: "auto", pauseWhenGameRuns: true, releaseGpuWhenGameRuns: true, theme: "light", whenUnfocused: "pause", quality: "auto", sounds: true, soundVolume: 0.5, splash: "full", scale: 1, cardSize: "medium" },
   music: { quality: "exhigh", volume: 0.6, mode: "loop", pauseWhenGameRuns: true },
 };
 
@@ -255,7 +255,7 @@ export function normalizeSettings(stored: unknown): Settings {
   }
   // This release makes the liquid-glass dark palette the primary look. Existing
   // "auto" users move to dark once; an explicit light/dark choice is preserved.
-  if (storedVersion < 3 && result.ui.theme === "auto") result.ui.theme = "dark";
+  if (storedVersion < 3 && result.ui.theme === "auto") result.ui.theme = "light";
   // Version 4 removes the personal UUID that was baked into the shipped
   // defaults. Existing profiles keep the UUID already on disk because it may
   // be the identity of a real offline account; the interface now masks it.

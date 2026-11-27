@@ -13,6 +13,7 @@ import { DownloadView } from "./download";
 import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
+import { installGlassTuner } from "./glass-tuner";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { MusicDock } from "./music/dock";
@@ -30,7 +31,7 @@ import { sound } from "./sound";
 import { showSplash, type Splash } from "./splash";
 import { store } from "./store";
 import { renderTabs, type ViewId } from "./tabs";
-import { ThemeFader, paint, resolveDark, systemPrefersDark } from "./theme";
+import { ThemeFader, paint } from "./theme";
 import type { ContentKind, Settings, TaskSnapshot } from "./types";
 import { DetailView, TABS } from "./views/detail";
 import { launchOverlay, showLaunchFor } from "./views/launch";
@@ -134,9 +135,9 @@ export class App implements PerfApp {
   draw(time: number) {
     const scene = this.host.scene;
     const amount = scene ? scene.themeAmount : this.fader.amount;
-    // The interface follows the theme — and goes dark in the music world's deep space, whichever theme is chosen.
-    paint(scene ? scene.chromeAmount : amount);
-    this.fader.follow(amount);
+    // The launcher uses one light theme only.
+    paint(0);
+    this.fader.follow(0);
     if (!scene) return;
     const dt = this.lastDraw ? Math.min(0.1, Math.max(0, time - this.lastDraw)) : 0;
     this.lastDraw = time;
@@ -195,14 +196,14 @@ export class App implements PerfApp {
     stage.dataset.entered = "false";
     document.title = `${PRODUCT.name} ${PRODUCT.nameCn}`;
     installLiquidGlass(stage);
+    installGlassTuner();
     wireModals();
     this.layout = new Layout(this.viewport, stage);
 
     // The palette of the last run, before anything else is drawn: no flash of the wrong colours.
-    const cachedDark = cache.get("dark");
-    // First run: the deep-space look (near-black with gold) is the default, whatever the system prefers.
-    this.dark = cachedDark === null ? true : cachedDark === "1";
-    this.fader.set(this.dark, true);
+    this.dark = false;
+    cache.set("dark", "0");
+    this.fader.set(false, true);
 
     this.bridge = createBridge();
     if (!this.bridge) return this.showNoBackend();
@@ -351,15 +352,12 @@ export class App implements PerfApp {
     this.perf.refresh();
   }
 
-  private applyTheme(setting: Settings["ui"]["theme"], immediate = false) {
-    const dark = resolveDark(setting);
-    if (dark === this.dark && !immediate) return;
-    this.dark = dark;
-    cache.set("dark", dark ? "1" : "0");
-    // While the scene draws, its own wave drives the page palette; otherwise the page cross-fades by itself.
-    const live = this.perf.running && this.host.ready;
-    this.host.setDark(dark, immediate || !live);
-    if (!live) this.fader.set(dark, immediate);
+  private applyTheme(_setting: Settings["ui"]["theme"], immediate = false) {
+    if (!this.dark && !immediate) return;
+    this.dark = false;
+    cache.set("dark", "0");
+    this.host.setDark(false, true);
+    this.fader.set(false, true);
   }
 
   // ------------------------------------------------------------------------------------------ selection
@@ -495,7 +493,7 @@ export class App implements PerfApp {
         let childIndex = 0;
         for (const child of parent.children) {
           if (!(child instanceof HTMLElement)) continue;
-          if (child.classList.contains("liquid-edge") || child.classList.contains("liquid-sheen")) continue;
+          if (child.classList.contains("liquid-edge") || child.classList.contains("liquid-sheen") || child.classList.contains("liquid-glass-layer") || child.classList.contains("liquid-glass-tint")) continue;
           child.dataset.pageItem = "";
           child.style.setProperty("--page-delay", `${parentDelay + 60 + childIndex * 38}ms`);
           childIndex++;
@@ -750,7 +748,6 @@ export class App implements PerfApp {
       this.updateInert();
       this.perf.refresh();
     });
-    matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => this.applyTheme(store.settings.ui.theme));
     matchMedia("(prefers-reduced-motion: reduce)").addEventListener("change", () => this.applySettings());
   }
 

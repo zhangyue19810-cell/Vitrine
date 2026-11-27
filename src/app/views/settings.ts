@@ -106,7 +106,6 @@ function sections(): Section[] {
       id: "appearance",
       label: "外观与性能",
       rows: [
-        { name: "界面配色", path: "ui.theme", field: { kind: "seg", options: [["dark", "深空（暗色）"], ["light", "亮色"], ["auto", "跟随系统"]] } },
         { name: "动效", path: "ui.motion", field: { kind: "select", options: [["auto", "跟随系统的“减少动态效果”"], ["full", "完整动效"], ["reduced", "精简动效"]] }, desc: "精简动效会关闭滚动数字、选择涟漪等装饰，帧率上限降到 30。" },
         { name: "3D 帧率上限", path: "ui.fps", field: { kind: "select", options: [["auto", "自动（跟随显示器，最高 60）"], [30, "30 帧"], [60, "60 帧"], [120, "120 帧"]] }, desc: "停止操作 10 秒后会自动降到 30 帧，90 秒后降到 15 帧。" },
         { name: "3D 画质", path: "ui.quality", field: { kind: "seg", options: [["auto", "自动"], ["high", "高"], ["medium", "中"], ["low", "低"]] }, desc: "自动档会结合显卡、处理器和物理内存选择档位；帧率持续偏低时再逐级降级。检测到游戏运行时，启动器会临时降到低档并把 GPU 让给游戏。" },
@@ -234,11 +233,38 @@ function rowHtml(row: Row, index: number): Raw {
 // ---------------------------------------------------------------------------------------------- the sheet
 
 let open: ModalHandle | undefined;
+let revealTimer = 0;
 const sectionCapsules = new WeakMap<HTMLElement, CapsuleTabs>();
+
+/** Top-to-bottom reveal shared with the page-switch cascade. It also gives
+ * the WebGL glass batches enough time to paint while rows slide in. */
+function revealSettingsSheet(sheet: ModalHandle) {
+  const stage = document.querySelector<HTMLElement>("#stage");
+  if (!stage) return;
+  const head = sheet.root.querySelector<HTMLElement>(".sheet-head");
+  const nav = [...sheet.body.querySelectorAll<HTMLElement>(".settings-nav button")];
+  const panel = sheet.body.querySelector<HTMLElement>("[data-panel]:not([hidden])");
+  const rows = panel ? [...panel.querySelectorAll<HTMLElement>(".setting")] : [];
+  const items = [head, ...nav, ...rows].filter((item): item is HTMLElement => Boolean(item));
+  let maxDelay = 0;
+  items.forEach((item, index) => {
+    const delay = index === 0 ? 0 : 90 + index * 42;
+    maxDelay = Math.max(maxDelay, delay);
+    item.dataset.pageItem = "";
+    item.style.setProperty("--page-delay", `${delay}ms`);
+  });
+  stage.dataset.staggering = "false";
+  void sheet.root.offsetWidth;
+  stage.dataset.staggering = "true";
+  clearTimeout(revealTimer);
+  revealTimer = window.setTimeout(() => {
+    delete stage.dataset.staggering;
+  }, maxDelay + 1000);
+}
 
 export function openSettings(sectionId = "general") {
   if (open) {
-    selectSection(open.body, sectionId);
+    selectSection(open.body, sectionId, true);
     return;
   }
   const all = sections();
@@ -305,7 +331,7 @@ export function openSettings(sectionId = "general") {
   sheet.body.addEventListener("click", (event) => {
     const target = event.target as HTMLElement;
     const nav = target.closest<HTMLElement>("[data-section]");
-    if (nav) return selectSection(sheet.body, nav.dataset.section!);
+    if (nav) return selectSection(sheet.body, nav.dataset.section!, true);
     const toggle = target.closest<HTMLElement>(".toggle[data-bind]");
     if (toggle) {
       const next = toggle.getAttribute("aria-checked") !== "true";
@@ -363,6 +389,7 @@ export function openSettings(sectionId = "general") {
   });
   selectSection(sheet.body, sectionId);
   syncControls(sheet.body, true);
+  if (sectionId === "general") revealSettingsSheet(sheet);
 }
 
 function fieldOptions(path: string): Opt[] {
@@ -376,11 +403,77 @@ function fieldOptions(path: string): Opt[] {
   return [];
 }
 
-function selectSection(root: HTMLElement, id: string) {
-  $$("[data-section]", root).forEach((b) => b.setAttribute("aria-selected", String(b.dataset.section === id)));
-  $$("[data-panel]", root).forEach((p) => (p.hidden = p.dataset.panel !== id));
+let panelAnimations: Animation[] = [];
+
+function selectSection(root: HTMLElement, id: string, animate = false) {
+  const buttons = [...root.querySelectorAll<HTMLElement>("[data-section]")];
+  const previousIndex = buttons.findIndex((button) => button.getAttribute("aria-selected") === "true");
+  const nextIndex = buttons.findIndex((button) => button.dataset.section === id);
+  const previous = root.querySelector<HTMLElement>("[data-panel]:not([hidden])");
+  const next = root.querySelector<HTMLElement>(`[data-panel="${id}"]`);
+  buttons.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.section === id)));
   const body = root.querySelector<HTMLElement>("[data-f='body']");
+  if (!next) return;
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(root.closest(".reduce-motion"));
+  const shouldAnimate = animate && previous && previous !== next && !reduced;
+  panelAnimations.forEach((animation) => animation.cancel());
+  panelAnimations = [];
+
+  for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) {
+    if (panel !== next && panel !== (shouldAnimate ? previous : null)) panel.hidden = true;
+  }
+  next.hidden = false;
   if (body) body.scrollTop = 0;
+
+  if (shouldAnimate && previous) {
+    // TikTok-style vertical hand-off: the old panel leaves upward while the
+    // next one rises from the bottom (reverse when moving back up the list).
+    const down = nextIndex >= previousIndex;
+    const oldHeight = previous.offsetHeight;
+    previous.style.position = "absolute";
+    previous.style.inset = "0 0 auto";
+    previous.style.height = `${oldHeight}px`;
+    previous.style.zIndex = "2";
+    previous.style.pointerEvents = "none";
+    previous.style.overflow = "hidden";
+    const oldAnimation = previous.animate(
+      [
+        { opacity: 1, transform: "translateY(0)" },
+        { opacity: 0, transform: `translateY(${down ? -26 : 26}px)` },
+      ],
+      { duration: 320, easing: "cubic-bezier(0.4, 0, 0.8, 1)", fill: "both" },
+    );
+    const newAnimation = next.animate(
+      [
+        { opacity: 0, transform: `translateY(${down ? 46 : -46}px)` },
+        { opacity: 1, transform: "translateY(0)" },
+      ],
+      { duration: 440, easing: "cubic-bezier(0.16, 0.95, 0.25, 1)", fill: "both" },
+    );
+    panelAnimations = [oldAnimation, newAnimation];
+    void oldAnimation.finished.catch(() => undefined).finally(() => {
+      if (!previous.isConnected || previous === next) return;
+      previous.hidden = true;
+      previous.style.removeProperty("position");
+      previous.style.removeProperty("inset");
+      previous.style.removeProperty("height");
+      previous.style.removeProperty("z-index");
+      previous.style.removeProperty("pointer-events");
+      previous.style.removeProperty("overflow");
+    });
+    void newAnimation.finished.catch(() => undefined);
+  } else {
+    for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) panel.hidden = panel !== next;
+    if (previous) {
+      previous.style.removeProperty("position");
+      previous.style.removeProperty("inset");
+      previous.style.removeProperty("height");
+      previous.style.removeProperty("z-index");
+      previous.style.removeProperty("pointer-events");
+      previous.style.removeProperty("overflow");
+    }
+  }
+
   const active = root.querySelector<HTMLElement>(`[data-section="${id}"]`);
   sectionCapsules.get(root)?.setActive(active ?? undefined, true);
 }

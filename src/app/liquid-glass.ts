@@ -1,359 +1,683 @@
+import {
+  LinearFilter,
+  Mesh,
+  NoToneMapping,
+  OrthographicCamera,
+  PlaneGeometry,
+  Scene,
+  ShaderMaterial,
+  SRGBColorSpace,
+  Texture,
+  Vector2,
+  Vector3,
+  Vector4,
+  WebGLRenderer,
+} from "three";
+
 /**
- * Pointer-reactive light for Vitrine's liquid-glass surfaces.
+ * Live interface glass.
  *
- * One delegated listener feeds a single animation frame: the specular
- * highlight follows the pointer with a short optical delay, large panels tilt
- * a few tenths of a degree in perspective, and a gently travelling gradient
- * outlines the most important glass surfaces.
+ * All glass surfaces are rendered by one shared Three.js shader from a static
+ * background board (CSS paper / wallpaper, never the UI or the Möbius ring).
+ * There is no page capture and no glass layer is ever hidden for a screenshot.
+ * The board is only regenerated on resize, wallpaper or theme changes.
  */
 
-const LIQUID_TARGET = [
-  ".system-nav",
-  ".view-tabs",
-  ".callout",
-  ".detail-panel",
-  ".dl-bar",
-  ".sheet",
-  ".dialog",
-  ".card",
-  ".dl-flat-card",
-  ".notice",
-  ".problem",
-  ".stat",
-  ".setting",
-  ".mod-row",
-  ".mod-update-row",
-  ".mod-problem-trigger",
-  ".mod-problem-popover",
-  ".material-option",
-  ".custom-download-status",
-  ".hud-capsule",
-  ".hud-queue",
-  ".item",
-  ".empty",
-  ".logview",
-  ".settings",
-  ".settings-nav",
-  ".seg",
-  ".tabs",
-  ".btn",
-  ".nav-button",
-  ".view-tab",
-  ".chip",
-  ".toggle",
-  ".menu",
-  ".together-room",
+const GLASS_TARGETS = [
+  ".system-nav", ".view-tabs", ".callout", ".detail-panel", ".dl-bar",
+  ".sheet", ".dialog", ".card", ".dl-flat-card",
+  ".stat", ".setting", ".mod-row", ".mod-update-row", ".material-option",
+  ".hud-left", ".hud-capsule", ".hud-queue", ".hud-float", ".item", ".empty", ".logview",
+  ".settings-nav", ".menu", ".together-room", ".toast", ".launch-card", ".version-row", ".pick",
 ].join(",");
 
-/** Only broad, stable surfaces tilt; controls keep their familiar geometry. */
-const TILT_TARGET = ".callout,.detail-panel,.dl-bar,.card,.dl-flat-card,.mod-row,.stat,.setting,.notice,.dialog,.menu";
+const MAX_SURFACES = 48;
+const PIXEL_RATIO_CAP = 1;
+const RENDER_DIMENSION_CAP = 1100;
+const LAYER_CLASS = "liquid-shader-layer";
+const TINT_CLASS = "liquid-shader-tint";
+const HOST_CLASS = "liquid-shader-host";
 
-/** The travelling gradient border is deliberately limited to framed surfaces. */
-const EDGE_TARGET = [
-  ".callout",
-  ".detail-panel",
-  ".dl-bar",
-  ".sheet",
-  ".dialog",
-  ".menu",
-  ".system-nav",
-  ".view-tabs",
-  ".card",
-  ".dl-flat-card",
-  ".notice",
-  ".problem",
-  ".mod-row",
-  ".mod-update-row",
-  ".stat",
-  ".setting",
-  ".material-option",
-  ".custom-download-status",
-  ".mod-problem-popover",
-  ".toast",
-  ".together-room",
-  ".hud-capsule",
-  ".hud-queue",
-  ".btn",
-  ".nav-button",
-  ".view-tab",
-  ".seg",
-  ".seg button",
-  ".toggle",
-].join(",");
+/** Kept for callers that used to wait for a capture; the board is always ready. */
+export function prepareGlassFrame(): Promise<void> {
+  return Promise.resolve();
+}
 
-const EDGE_ALWAYS = ".callout,.detail-panel,.dl-bar,.sheet,.dialog,.menu,.hud-capsule";
+/** Last accepted tuner values (reference 300×200 surface). */
+const GLASS = {
+  thickness: 122,
+  bezel: 44,
+  ior: 2.34,
+  scale: 2,
+  blur: 0,
+  specular: 0.18,
+  tint: 0,
+} as const;
 
-/** Surfaces that get the centre-clear radial blur layer in addition to their glass fill. */
-const LENS_TARGET = [
-  ".btn",
-  ".callout",
-  ".detail-panel",
-  ".dialog",
-  ".menu",
-  ".card",
-  ".dl-flat-card",
-  ".hud-capsule",
-  ".hud-queue",
-  ".system-nav",
-  ".view-tabs",
-].join(",");
+export interface GlassTuning {
+  thickness: number;
+  bezel: number;
+  ior: number;
+  scale: number;
+  blur: number;
+  specular: number;
+  tint: number;
+  innerBlur: number;
+  innerSpread: number;
+  outerBlur: number;
+  outerOpacity: number;
+}
 
-/** Capsule controls get the circular water-fill reveal and a lighter light pass. */
-const DROP_TARGET = ".btn,.nav-button,.view-tab,.seg,.toggle,.system-nav,.view-tabs,.hud-capsule";
-const CONTROL_TARGET = ".btn,.nav-button,.view-tab,.seg,.seg button,.toggle";
+let tuningHook: ((patch: Partial<GlassTuning>) => void) | undefined;
 
-/** The time constant of the optical follow; smaller is snappier. */
-const FOLLOW_MS = 52;
+/** Live-update all mounted glass surfaces (used by the in-app Y-key tuner). */
+export function updateGlassTuning(patch: Partial<GlassTuning>): void {
+  tuningHook?.(patch);
+}
+
+interface GlassSurface {
+  element: HTMLElement;
+  canvas: HTMLCanvasElement;
+  tint: HTMLSpanElement;
+  context: CanvasRenderingContext2D;
+  pointer: Vector2;
+  pointerActive: boolean;
+  addedPosition: boolean;
+  originalPosition: string;
+  width: number;
+  height: number;
+}
+
+const vertexShader = /* glsl */ `
+  varying vec2 vUv;
+  void main() {
+    vUv = uv;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const fragmentShader = /* glsl */ `
+  precision highp float;
+  uniform sampler2D uScene;
+  uniform vec2 uViewport;
+  uniform vec2 uSize;
+  uniform vec4 uRect;
+  uniform vec2 uPointer;
+  uniform float uPointerActive;
+  uniform float uRadius;
+  uniform float uBezel;
+  uniform float uThickness;
+  uniform float uIOR;
+  uniform float uScale;
+  uniform float uBlur;
+  uniform float uSpecular;
+  uniform float uBody;
+  uniform float uEdge;
+  uniform float uLift;
+  uniform float uTint;
+  uniform float uDim;
+  uniform float uTime;
+  varying vec2 vUv;
+
+  float sdRoundedRect(vec2 p, vec2 halfSize, float r) {
+    vec2 q = abs(p) - halfSize + r;
+    return min(max(q.x, q.y), 0.0) + length(max(q, 0.0)) - r;
+  }
+
+  float surfaceHeight(float t) {
+    float s = 1.0 - t;
+    return pow(1.0 - s * s * s * s, 0.25);
+  }
+
+  vec3 sampleBg(vec2 uv) {
+    return texture2D(uScene, clamp(uv, vec2(0.001), vec2(0.999))).rgb;
+  }
+
+  vec3 sampleSoft(vec2 uv, float radius) {
+    if (radius < 0.5) return sampleBg(uv);
+    vec2 px = vec2(radius) / max(uViewport, vec2(1.0));
+    vec2 offsets[16];
+    offsets[0]  = vec2(-0.94201, -0.39906);
+    offsets[1]  = vec2( 0.94558, -0.76890);
+    offsets[2]  = vec2(-0.09418, -0.92938);
+    offsets[3]  = vec2( 0.34495,  0.29387);
+    offsets[4]  = vec2(-0.91588, -0.45771);
+    offsets[5]  = vec2(-0.81544,  0.48568);
+    offsets[6]  = vec2(-0.38277, -0.56071);
+    offsets[7]  = vec2(-0.12675,  0.84686);
+    offsets[8]  = vec2( 0.89642,  0.41254);
+    offsets[9]  = vec2( 0.18150, -0.30020);
+    offsets[10] = vec2(-0.01445, -0.16001);
+    offsets[11] = vec2( 0.59614,  0.71118);
+    offsets[12] = vec2( 0.49742, -0.47280);
+    offsets[13] = vec2( 0.80685,  0.04588);
+    offsets[14] = vec2(-0.32490, -0.03965);
+    offsets[15] = vec2(-0.60975,  0.06566);
+    vec3 sum = vec3(0.0);
+    for (int i = 0; i < 16; i++) sum += sampleBg(uv + offsets[i] * px);
+    return sum / 16.0;
+  }
+
+  void main() {
+    vec2 localPx = (vUv - 0.5) * uSize;
+    vec2 halfSize = uSize * 0.5;
+    float sd = sdRoundedRect(localPx, halfSize, uRadius);
+    if (sd > 1.25) discard;
+
+    float alpha = 1.0 - smoothstep(-1.0, 1.25, sd);
+    float distFromEdge = max(0.0, -sd);
+    float bezel = max(1.0, min(uBezel, min(uRadius, min(halfSize.x, halfSize.y)) - 1.0));
+    float t = clamp(distFromEdge / bezel, 0.0, 1.0);
+    float h = surfaceHeight(t);
+    float h2 = surfaceHeight(min(t + 0.001, 1.0));
+    float dh = (h2 - h) / 0.001;
+
+    float slopeAngle = atan(dh * (uThickness / bezel));
+    float sinR = clamp(sin(slopeAngle) / uIOR, -1.0, 1.0);
+    float thetaR = asin(sinR);
+    float displacement = h * uThickness * (tan(slopeAngle) - tan(thetaR));
+
+    float eps = 0.5;
+    vec2 grad;
+    grad.x = sdRoundedRect(localPx + vec2(eps, 0.0), halfSize, uRadius) - sd;
+    grad.y = sdRoundedRect(localPx + vec2(0.0, eps), halfSize, uRadius) - sd;
+    grad = normalize(grad);
+
+    vec2 offset = -grad * displacement / max(uViewport, vec2(1.0)) * uScale;
+    vec2 screenUv = vec2(
+      (uRect.x + vUv.x * uRect.z) / uViewport.x,
+      1.0 - (uRect.y + (1.0 - vUv.y) * uRect.w) / uViewport.y
+    );
+    vec3 colour = sampleSoft(screenUv + offset, uBlur);
+    colour = mix(colour, vec3(1.0), uLift);
+
+    vec2 lightDir = normalize(vec2(0.5, -0.7));
+    float rim = 1.0 - smoothstep(0.0, bezel, distFromEdge);
+    float rimDot = abs(dot(grad, lightDir));
+    float highlight = pow(rimDot * rim, 1.35);
+    colour += vec3(highlight * uSpecular * 0.42);
+    float innerRim = smoothstep(0.0, 2.0, distFromEdge) * (1.0 - smoothstep(2.0, 6.0, distFromEdge));
+    colour += vec3(innerRim * uSpecular * 0.08);
+
+    colour *= 1.0 - uDim;
+    colour = mix(colour, vec3(1.0), uTint);
+    // Clear centre, visible refracted rim: the live page below must remain
+    // visible through the glass instead of being covered by an opaque board.
+    float edgeBand = 1.0 - smoothstep(0.0, max(1.0, bezel), distFromEdge);
+    gl_FragColor = vec4(colour, alpha * (uBody + edgeBand * uEdge));
+  }
+`;
+
+function borderRadius(element: HTMLElement): number {
+  const style = getComputedStyle(element);
+  const values = style.borderTopLeftRadius.split(/[ /]/).map(Number.parseFloat).filter(Number.isFinite);
+  const rect = element.getBoundingClientRect();
+  return Math.max(2, Math.min(values[0] ?? 18, rect.width * 0.5, rect.height * 0.5));
+}
+
+function visible(element: HTMLElement): boolean {
+  if (!element.isConnected) return false;
+  const rect = element.getBoundingClientRect();
+  if (rect.width < 12 || rect.height < 12 || rect.bottom <= 0 || rect.right <= 0 || rect.top >= innerHeight || rect.left >= innerWidth) return false;
+  const style = getComputedStyle(element);
+  return style.display !== "none" && style.visibility !== "hidden" && Number(style.opacity) > 0.02;
+}
+
+function makeSurface(element: HTMLElement): GlassSurface {
+  const addedPosition = getComputedStyle(element).position === "static";
+  const originalPosition = element.style.position;
+  element.classList.add(HOST_CLASS);
+  if (addedPosition) element.style.position = "relative";
+  const canvas = document.createElement("canvas");
+  canvas.className = LAYER_CLASS;
+  canvas.setAttribute("aria-hidden", "true");
+  canvas.tabIndex = -1;
+  element.prepend(canvas);
+  const tint = document.createElement("span");
+  tint.className = TINT_CLASS;
+  tint.setAttribute("aria-hidden", "true");
+  element.append(tint);
+  const context = canvas.getContext("2d", { alpha: true, desynchronized: true });
+  if (!context) {
+    tint.remove();
+    canvas.remove();
+    element.classList.remove(HOST_CLASS);
+    if (addedPosition) element.style.position = originalPosition;
+    throw new Error("Canvas 2D is unavailable for the glass surface.");
+  }
+  return { element, canvas, tint, context, pointer: new Vector2(0.5, 0.5), pointerActive: false, addedPosition, originalPosition, width: 0, height: 0 };
+}
 
 export function installLiquidGlass(root: HTMLElement): () => void {
-  let active: HTMLElement | null = null;
-  let tiltPanel: HTMLElement | null = null;
-  let targetX = 50;
-  let targetY = 18;
-  let currentX = 50;
-  let currentY = 18;
-  let targetTiltX = 0;
-  let targetTiltY = 0;
-  let currentTiltX = 0;
-  let currentTiltY = 0;
-  let frame = 0;
-  let lastTime = 0;
-  let edgeSeed = 0;
-  const reducedQuery = matchMedia("(prefers-reduced-motion: reduce)");
-  let reduced = reducedQuery.matches;
+  const rendererCanvas = document.createElement("canvas");
+  let renderer: WebGLRenderer;
+  try {
+    renderer = new WebGLRenderer({
+      canvas: rendererCanvas,
+      alpha: true,
+      antialias: false,
+      powerPreference: "high-performance",
+      preserveDrawingBuffer: true,
+    });
+  } catch (error) {
+    console.warn("Vitrine liquid glass: WebGL is unavailable; using transparent surfaces.", error);
+    return () => undefined;
+  }
 
-  const paintSheen = () => {
-    if (!active) return;
-    active.style.setProperty("--liquid-x", `${currentX.toFixed(2)}%`);
-    active.style.setProperty("--liquid-y", `${currentY.toFixed(2)}%`);
-    // A normal points out of the glass at the centre and leans toward the
-    // pointer at the rim. CSS turns this into the moving specular angle.
-    const nx = currentX / 50 - 1;
-    const ny = currentY / 50 - 1;
-    const radius = Math.min(1, Math.hypot(nx, ny));
-    active.style.setProperty("--liquid-nx", nx.toFixed(3));
-    active.style.setProperty("--liquid-ny", ny.toFixed(3));
-    active.style.setProperty("--liquid-edge", radius.toFixed(3));
-    active.style.setProperty("--liquid-centre", (1 - radius).toFixed(3));
-    active.style.setProperty("--liquid-angle", `${(Math.atan2(ny, nx) * 180 / Math.PI + 360) % 360}deg`);
+  renderer.setPixelRatio(1);
+  renderer.setSize(1, 1, false);
+  renderer.setClearColor(0x000000, 0);
+  renderer.outputColorSpace = SRGBColorSpace;
+  renderer.toneMapping = NoToneMapping;
+
+  const scene = new Scene();
+  const camera = new OrthographicCamera(-0.5, 0.5, 0.5, -0.5, 0, 2);
+  camera.position.z = 1;
+  const uniforms = {
+    uScene: { value: null as Texture | null },
+    uViewport: { value: new Vector2(innerWidth, innerHeight) },
+    uSize: { value: new Vector2(1, 1) },
+    uRect: { value: new Vector4(0, 0, 1, 1) },
+    uPointer: { value: new Vector2(0.5, 0.5) },
+    uPointerActive: { value: 0 },
+    uRadius: { value: 18 },
+    uBezel: { value: Number(GLASS.bezel) },
+    uThickness: { value: Number(GLASS.thickness) },
+    uIOR: { value: Number(GLASS.ior) },
+    uScale: { value: Number(GLASS.scale) },
+    uBlur: { value: Number(GLASS.blur) },
+    uSpecular: { value: Number(GLASS.specular) },
+    uBody: { value: 0.14 },
+    uEdge: { value: 0.46 },
+    uLift: { value: 0.02 },
+    uTime: { value: 0 },
+    uTint: { value: Number(GLASS.tint) },
+    uDim: { value: 0 },
   };
-
-  const paintTilt = () => {
-    if (!tiltPanel) return;
-    tiltPanel.style.setProperty("--liquid-rot-x", `${currentTiltX.toFixed(2)}deg`);
-    tiltPanel.style.setProperty("--liquid-rot-y", `${currentTiltY.toFixed(2)}deg`);
-  };
-
-  const clearSheen = () => {
-    active?.classList.remove("liquid-hot");
-    active = null;
-  };
-
-  const clearTilt = (reset = true) => {
-    if (!tiltPanel) return;
-    tiltPanel.classList.remove("liquid-tilt-live");
-    if (reset) {
-      tiltPanel.style.setProperty("--liquid-rot-x", "0deg");
-      tiltPanel.style.setProperty("--liquid-rot-y", "0deg");
-    }
-    tiltPanel = null;
-  };
-
-  const ensureEdge = (target: HTMLElement) => {
-    if (!target.matches(EDGE_TARGET)) return;
-    if (getComputedStyle(target).position === "static") target.style.position = "relative";
-    const seed = edgeSeed++;
-    if (!target.querySelector(":scope > .liquid-flow")) {
-      const flow = document.createElement("span");
-      flow.className = "liquid-flow";
-      flow.setAttribute("aria-hidden", "true");
-      flow.style.setProperty("--flow-delay", `${-(seed % 11) * 1.15}s`);
-      target.append(flow);
-    }
-    if (target.matches(DROP_TARGET) && !target.querySelector(":scope > .liquid-drop")) {
-      const drop = document.createElement("span");
-      drop.className = "liquid-drop";
-      drop.setAttribute("aria-hidden", "true");
-      target.append(drop);
-      target.classList.add("liquid-drop-host");
-    }
-    if (target.matches(CONTROL_TARGET)) target.classList.add("liquid-light-control");
-    if (target.matches(LENS_TARGET) && !target.querySelector(":scope > .liquid-lens")) {
-      const lens = document.createElement("span");
-      lens.className = "liquid-lens";
-      lens.setAttribute("aria-hidden", "true");
-      target.prepend(lens);
-    }
-    if (!target.querySelector(":scope > .liquid-edge")) {
-      const edge = document.createElement("span");
-      edge.className = "liquid-edge";
-      edge.setAttribute("aria-hidden", "true");
-      edge.style.setProperty("--edge-delay", `${-(seed % 8) * 0.85}s`);
-      target.append(edge);
-    }
-    target.classList.add("liquid-edge-host");
-    if (target.matches(EDGE_ALWAYS)) target.classList.add("liquid-edge-always");
+  const params: GlassTuning = {
+    thickness: GLASS.thickness,
+    bezel: GLASS.bezel,
+    ior: GLASS.ior,
+    scale: GLASS.scale,
+    blur: GLASS.blur,
+    specular: GLASS.specular,
+    tint: GLASS.tint,
+    innerBlur: 20,
+    innerSpread: -5,
+    outerBlur: 24,
+    outerOpacity: 0.18,
   };
 
-  const scanEdges = (from: ParentNode) => {
-    if (from instanceof Element) ensureEdge(from as HTMLElement);
-    for (const element of from.querySelectorAll<HTMLElement>(EDGE_TARGET)) ensureEdge(element);
-  };
-  scanEdges(root);
-  const edgeQueue = new Set<Element>();
-  let edgeFrame = 0;
-  const flushEdges = () => {
-    edgeFrame = 0;
-    for (const node of edgeQueue) scanEdges(node);
-    edgeQueue.clear();
-  };
-  const edgeObserver = new MutationObserver((records) => {
-    for (const record of records) {
-      // A surface that is populated by replacing innerHTML keeps its class but
-      // loses the light spans. Re-scan the container as well as its new
-      // children so the travelling rim and water bead are restored.
-      if (record.target instanceof Element) edgeQueue.add(record.target);
-      for (const node of record.addedNodes) if (node instanceof Element) edgeQueue.add(node);
-    }
-    if (edgeQueue.size && !edgeFrame) edgeFrame = requestAnimationFrame(flushEdges);
+  const material = new ShaderMaterial({
+    uniforms: uniforms as never,
+    vertexShader,
+    fragmentShader,
+    transparent: true,
+    depthWrite: false,
+    depthTest: false,
   });
-  edgeObserver.observe(root, { childList: true, subtree: true });
+  const plane = new Mesh(new PlaneGeometry(1, 1), material);
+  scene.add(plane);
 
-  const flush = (now: number) => {
-    frame = 0;
-    if (!active && !tiltPanel) return;
-    const elapsed = lastTime ? Math.min(64, Math.max(1, now - lastTime)) : 16.667;
-    lastTime = now;
-    const follow = reduced ? 1 : 1 - Math.exp(-elapsed / FOLLOW_MS);
-    let moving = false;
-    if (active) {
-      currentX += (targetX - currentX) * follow;
-      currentY += (targetY - currentY) * follow;
-      const settled = Math.abs(targetX - currentX) < 0.03 && Math.abs(targetY - currentY) < 0.03;
-      if (settled) {
-        currentX = targetX;
-        currentY = targetY;
-      }
-      paintSheen();
-      moving ||= !settled;
+  const surfaces = new Map<HTMLElement, GlassSurface>();
+  const releaseSurface = (surface: GlassSurface) => {
+    surface.canvas.remove();
+    surface.tint.remove();
+    surface.element.classList.remove(HOST_CLASS);
+    delete surface.element.dataset.glassReady;
+    if (surface.addedPosition) surface.element.style.position = surface.originalPosition;
+  };
+  let snapshotTexture: Texture | null = null;
+  let sceneTexture: Texture | null = null;
+  let frozenSceneTexture: Texture | null = null;
+  const frozenSceneCanvas = document.createElement("canvas");
+  let renderFrame = 0;
+  let renderAll = true;
+  let disposed = false;
+  let pointerTarget: GlassSurface | null = null;
+  const dirtySurfaces = new Set<GlassSurface>();
+  const diagnostics = { renderCalls: 0, candidates: 0, dirty: 0, ready: 0, surfaces: 0, unreadyVisible: 0, scans: 0, matched: 0, added: 0, error: "" };
+  (window as unknown as { __vitrineGlassDiagnostics?: unknown }).__vitrineGlassDiagnostics = diagnostics;
+
+  // A fully transparent fallback board. Large surfaces sample the live 3D
+  // scene instead; the board never adds a paper/white overlay of its own.
+  const emptyCanvas = document.createElement("canvas");
+  emptyCanvas.width = 1;
+  emptyCanvas.height = 1;
+  const emptyTexture = new Texture(emptyCanvas);
+  emptyTexture.colorSpace = SRGBColorSpace;
+  emptyTexture.magFilter = LinearFilter;
+  emptyTexture.minFilter = LinearFilter;
+  emptyTexture.generateMipmaps = false;
+  emptyTexture.needsUpdate = true;
+  snapshotTexture = emptyTexture;
+  uniforms.uScene.value = emptyTexture;
+
+  const liveSceneSurface = (element: HTMLElement) =>
+    element.matches(".callout, .dl-bar, .launch-card, .detail-panel, .sheet, .dialog");
+
+  const getSceneTexture = (): Texture | null => {
+    const canvas = root.querySelector<HTMLCanvasElement>(".three-scene canvas");
+    if (!canvas) return null;
+    if (!sceneTexture || sceneTexture.image !== canvas) {
+      sceneTexture?.dispose();
+      sceneTexture = new Texture(canvas);
+      sceneTexture.colorSpace = SRGBColorSpace;
+      sceneTexture.magFilter = LinearFilter;
+      sceneTexture.minFilter = LinearFilter;
+      sceneTexture.generateMipmaps = false;
     }
-    if (tiltPanel) {
-      currentTiltX += (targetTiltX - currentTiltX) * follow;
-      currentTiltY += (targetTiltY - currentTiltY) * follow;
-      const settled = Math.abs(targetTiltX - currentTiltX) < 0.01 && Math.abs(targetTiltY - currentTiltY) < 0.01;
-      if (settled) {
-        currentTiltX = targetTiltX;
-        currentTiltY = targetTiltY;
-      }
-      paintTilt();
-      moving ||= !settled;
-    }
-    if (moving) frame = requestAnimationFrame(flush);
-    else lastTime = 0;
+    return sceneTexture;
   };
 
-  const schedule = () => {
-    if (!frame) frame = requestAnimationFrame(flush);
+  const freezeSceneForModal = () => {
+    const canvas = root.querySelector<HTMLCanvasElement>(".three-scene canvas");
+    if (!canvas || !canvas.width || !canvas.height) return;
+    frozenSceneCanvas.width = canvas.width;
+    frozenSceneCanvas.height = canvas.height;
+    const context = frozenSceneCanvas.getContext("2d");
+    if (!context) return;
+    context.clearRect(0, 0, frozenSceneCanvas.width, frozenSceneCanvas.height);
+    context.drawImage(canvas, 0, 0);
+    frozenSceneTexture?.dispose();
+    frozenSceneTexture = new Texture(frozenSceneCanvas);
+    frozenSceneTexture.colorSpace = SRGBColorSpace;
+    frozenSceneTexture.magFilter = LinearFilter;
+    frozenSceneTexture.minFilter = LinearFilter;
+    frozenSceneTexture.generateMipmaps = false;
+    frozenSceneTexture.needsUpdate = true;
+    for (const surface of surfaces.values()) {
+      if (surface.element.closest("#modal-root")) dirtySurfaces.add(surface);
+    }
+    if (dirtySurfaces.size) scheduleRender(false);
   };
+
+  const renderSurfaces = () => {
+    renderFrame = 0;
+    diagnostics.renderCalls++;
+    if (disposed || !snapshotTexture) return;
+    const viewportWidth = Math.max(1, innerWidth);
+    const viewportHeight = Math.max(1, innerHeight);
+    uniforms.uViewport.value.set(viewportWidth, viewportHeight);
+    const now = performance.now();
+    uniforms.uTime.value = now * 0.001;
+    const wantsAll = renderAll;
+    const dirtyCandidates = [...dirtySurfaces].filter((surface) => visible(surface.element));
+    // Newly opened sheets and their settings rows must get the next available
+    // frames. Previously an all-surface refresh could keep them waiting behind
+    // home glass, which is why the sidebar updated while adjacent rows stayed
+    // on their old CSS fallback.
+    const candidates = dirtyCandidates.length
+      ? dirtyCandidates
+      : wantsAll
+        ? [...surfaces.values()].filter((surface) => visible(surface.element)).sort((a, b) => {
+            const ar = a.element.getBoundingClientRect();
+            const br = b.element.getBoundingClientRect();
+            return (br.width * br.height) - (ar.width * ar.height);
+          }).slice(0, MAX_SURFACES)
+        : [];
+    diagnostics.candidates = candidates.length;
+    diagnostics.dirty = dirtySurfaces.size;
+    if (!dirtyCandidates.length) renderAll = false;
+    dirtySurfaces.clear();
+    // Spread newly revealed views across several frames. Music/download views
+    // can add 20+ surfaces at once; rendering them all in one frame caused the
+    // one-second hitch after switching.
+    const BATCH = 6;
+    const batch = candidates.slice(0, BATCH);
+    for (const pending of candidates.slice(BATCH)) dirtySurfaces.add(pending);
+
+    for (const surface of batch) {
+      const rect = surface.element.getBoundingClientRect();
+      const ratio = Math.min(
+        PIXEL_RATIO_CAP,
+        Math.max(1, devicePixelRatio || 1),
+        RENDER_DIMENSION_CAP / Math.max(1, rect.width, rect.height),
+      );
+      const width = Math.max(1, Math.min(4096, Math.round(rect.width * ratio)));
+      const height = Math.max(1, Math.min(4096, Math.round(rect.height * ratio)));
+      if (surface.canvas.width !== width || surface.canvas.height !== height) {
+        surface.canvas.width = width;
+        surface.canvas.height = height;
+        surface.width = width;
+        surface.height = height;
+      }
+      surface.canvas.style.width = "100%";
+      surface.canvas.style.height = "100%";
+      uniforms.uRect.value.set(rect.left * ratio, rect.top * ratio, rect.width * ratio, rect.height * ratio);
+      uniforms.uViewport.value.set(viewportWidth * ratio, viewportHeight * ratio);
+      const inModal = Boolean(surface.element.closest("#modal-root"));
+      const useScene = Boolean(sceneTexture) && liveSceneSurface(surface.element);
+      uniforms.uScene.value = inModal
+        ? (frozenSceneTexture ?? sceneTexture ?? snapshotTexture)
+        : (useScene ? sceneTexture : snapshotTexture);
+      uniforms.uSize.value.set(width, height);
+      const minDim = Math.min(rect.width, rect.height);
+      uniforms.uRadius.value = borderRadius(surface.element) * ratio;
+      uniforms.uBezel.value = Math.min(params.bezel, Math.max(8, minDim * 0.18)) * ratio;
+      uniforms.uThickness.value = Math.min(params.thickness, Math.max(10, minDim * 0.27));
+      uniforms.uIOR.value = params.ior;
+      uniforms.uScale.value = params.scale;
+      const sheet = surface.element.matches(".sheet, .dialog");
+      const detail = surface.element.matches(".detail-panel");
+      const callout = surface.element.matches(".callout");
+      const major = surface.element.matches(".settings-nav, .menu, .card, .launch-card, .dl-bar, .hud-left, .hud-capsule");
+      uniforms.uBlur.value = (sheet ? 14 : detail ? 10 : callout ? 6 : 0) + params.blur;
+      uniforms.uSpecular.value = params.specular;
+      uniforms.uTint.value = params.tint;
+      uniforms.uDim.value = sheet ? 0.16 : detail ? 0.06 : callout ? 0.03 : 0;
+      uniforms.uBody.value = sheet ? 0.84 : detail ? 0.62 : callout ? 0.38 : major ? 0.24 : 0.12;
+      uniforms.uEdge.value = sheet ? 0.14 : detail ? 0.28 : callout ? 0.40 : 0.46;
+      uniforms.uLift.value = sheet ? 0.10 : detail ? 0.06 : callout ? 0.04 : major ? 0.025 : 0.015;
+      uniforms.uPointer.value.copy(surface.pointer);
+      uniforms.uPointerActive.value = surface.pointerActive ? 1 : 0;
+      renderer.setSize(width, height, false);
+      renderer.clear();
+      renderer.render(scene, camera);
+      surface.context.clearRect(0, 0, width, height);
+      surface.context.drawImage(renderer.domElement, 0, 0, width, height);
+      surface.element.dataset.glassReady = "true";
+      diagnostics.ready++;
+    }
+    if (dirtySurfaces.size) scheduleRender(false);
+  };
+
+  const scheduleRender = (all = true) => {
+    if (all) renderAll = true;
+    if (!renderFrame) renderFrame = requestAnimationFrame(renderSurfaces);
+  };
+
+  const applyShadowVariables = () => {
+    const css = document.documentElement.style;
+    css.setProperty("--glass-inner-shadow", `inset 0 0 ${params.innerBlur}px ${params.innerSpread}px #ffffff`);
+    css.setProperty("--glass-outer-shadow", `0 4px ${params.outerBlur}px rgba(0, 0, 0, ${params.outerOpacity})`);
+  };
+  applyShadowVariables();
+  tuningHook = (patch) => {
+    Object.assign(params, patch);
+    applyShadowVariables();
+    scheduleRender(true);
+  };
+
+  let rescanTimer = 0;
+  const scan = () => {
+    diagnostics.scans++;
+    let added = false;
+    let removed = false;
+    const matches = root.querySelectorAll<HTMLElement>(GLASS_TARGETS);
+    diagnostics.matched = matches.length;
+    for (const element of matches) {
+      if (surfaces.has(element)) continue;
+      try {
+        const surface = makeSurface(element);
+        surfaces.set(element, surface);
+        dirtySurfaces.add(surface);
+        added = true;
+      } catch (error) {
+        console.warn("Vitrine could not attach a glass surface.", error);
+      }
+    }
+    for (const [element, surface] of surfaces) {
+      if (element.isConnected && root.contains(element) && element.matches(GLASS_TARGETS)) continue;
+      releaseSurface(surface);
+      surfaces.delete(element);
+      removed = true;
+    }
+    // A panel can add its rows while they are still transparent/transformed by
+    // the opening animation. Catch those that were skipped, and re-scan once
+    // after the animation has settled.
+    let unready = false;
+    for (const [element, surface] of surfaces) {
+      if (element.dataset.glassReady === "true" || !visible(element)) continue;
+      dirtySurfaces.add(surface);
+      unready = true;
+    }
+    diagnostics.added = added ? 1 : 0;
+    if ((added || unready) && snapshotTexture) scheduleRender(false);
+    if (added) {
+      clearTimeout(rescanTimer);
+      rescanTimer = window.setTimeout(() => scan(), 420);
+    }
+    if (removed) dirtySurfaces.clear();
+  };
+
+  scan();
+  let scanTimer = 0;
+  const observer = new MutationObserver(() => {
+    if (scanTimer) return;
+    scanTimer = window.setTimeout(() => {
+      scanTimer = 0;
+      scan();
+    }, 90);
+  });
+  observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+
 
   const onPointerMove = (event: PointerEvent) => {
     if (event.pointerType === "touch") return;
-    const resolver = (selector: string) => (event.target as Element | null)?.closest<HTMLElement>(selector) ?? null;
-
-    const dropTarget = resolver(DROP_TARGET);
-    if (dropTarget && root.contains(dropTarget)) {
-      const rect = dropTarget.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        dropTarget.style.setProperty("--drop-x", `${Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100)).toFixed(2)}%`);
-        dropTarget.style.setProperty("--drop-y", `${Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100)).toFixed(2)}%`);
+    const target = (event.target as Element | null)?.closest<HTMLElement>(GLASS_TARGETS) ?? null;
+    if (!target) {
+      if (pointerTarget) {
+        pointerTarget.pointerActive = false;
+        dirtySurfaces.add(pointerTarget);
+        pointerTarget = null;
+        scheduleRender(false);
       }
+      return;
     }
-
-    const target = resolver(LIQUID_TARGET);
-    if (target && root.contains(target)) {
-      const rect = target.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        targetX = Math.max(0, Math.min(100, ((event.clientX - rect.left) / rect.width) * 100));
-        targetY = Math.max(0, Math.min(100, ((event.clientY - rect.top) / rect.height) * 100));
-      }
-      if (target !== active) {
-        clearSheen();
-        active = target;
-        target.classList.add("liquid-target", "liquid-hot");
-        if (getComputedStyle(target).position === "static") target.style.position = "relative";
-        if (!target.querySelector(":scope > .liquid-sheen")) {
-          const sheen = document.createElement("span");
-          sheen.className = "liquid-sheen";
-          sheen.setAttribute("aria-hidden", "true");
-          target.prepend(sheen);
-        }
-        currentX = targetX;
-        currentY = targetY;
-        lastTime = 0;
-        paintSheen();
-      }
-    } else {
-      clearSheen();
+    const surface = surfaces.get(target);
+    if (!surface) return;
+    const rect = target.getBoundingClientRect();
+    surface.pointer.set(
+      Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))),
+      1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, rect.height))),
+    );
+    if (pointerTarget && pointerTarget !== surface) {
+      pointerTarget.pointerActive = false;
+      dirtySurfaces.add(pointerTarget);
     }
-
-    const panel = resolver(TILT_TARGET);
-    if (panel && root.contains(panel)) {
-      const rect = panel.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        const nx = Math.max(-1, Math.min(1, ((event.clientX - rect.left) / rect.width) * 2 - 1));
-        const ny = Math.max(-1, Math.min(1, ((event.clientY - rect.top) / rect.height) * 2 - 1));
-        const broad = panel.matches(".callout,.detail-panel,.dl-bar,.dialog,.menu");
-        targetTiltX = -ny * (broad ? 2.05 : 3.4);
-        targetTiltY = nx * (broad ? 2.45 : 4.1);
-      }
-      if (panel !== tiltPanel) {
-        clearTilt(true);
-        tiltPanel = panel;
-        if (getComputedStyle(panel).position === "static") panel.style.position = "relative";
-        panel.classList.add("liquid-tiltable", "liquid-tilt-live");
-        currentTiltX = targetTiltX;
-        currentTiltY = targetTiltY;
-        paintTilt();
-      }
-    } else {
-      clearTilt(true);
-    }
-
-    if (active || tiltPanel) schedule();
-  };
-
-  const onLeave = () => {
-    clearSheen();
-    clearTilt(true);
-    cancelAnimationFrame(frame);
-    frame = 0;
-    lastTime = 0;
-  };
-
-  const onReducedChange = () => {
-    reduced = reducedQuery.matches;
-    if (!reduced) return;
-    currentX = targetX;
-    currentY = targetY;
-    currentTiltX = targetTiltX;
-    currentTiltY = targetTiltY;
-    paintSheen();
-    paintTilt();
+    pointerTarget = surface;
+    surface.pointerActive = true;
+    dirtySurfaces.add(surface);
+    scheduleRender(false);
   };
 
   root.addEventListener("pointermove", onPointerMove, { passive: true });
-  root.addEventListener("pointerleave", onLeave);
-  root.addEventListener("pointercancel", onLeave);
-  window.addEventListener("blur", onLeave);
-  reducedQuery.addEventListener("change", onReducedChange);
+  const onPointerLeave = () => {
+    if (pointerTarget) {
+      pointerTarget.pointerActive = false;
+      dirtySurfaces.add(pointerTarget);
+      pointerTarget = null;
+      scheduleRender(false);
+    }
+  };
+  root.addEventListener("pointerleave", onPointerLeave);
+
+  // Only surfaces touched by the pointer need repainting. There is no
+  // continuous 30 fps full-scene pass: when the cursor is still, the glass
+  // canvases are static and cost no GPU work.
+
+  const onBoardChange = () => scheduleRender(true);
+  window.addEventListener("vitrine-wallpaper-changed", onBoardChange);
+
+  const onResize = () => {
+    uniforms.uViewport.value.set(Math.max(1, innerWidth), Math.max(1, innerHeight));
+    scheduleRender(true);
+  };
+  window.addEventListener("resize", onResize, { passive: true });
+  document.addEventListener("visibilitychange", onResize);
+  const themeObserver = new MutationObserver(() => scheduleRender(true));
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-dark-surface", "data-theme"] });
+
+  // Large home surfaces refract the live 3D scene (the ring) rather than the
+  // flat board. Only these few surfaces are refreshed, at 8 fps, so the glass
+  // gains visible edge refraction without a full 60 fps redraw of every panel.
+  // Rows can appear while the sheet is still animating and may miss the
+  // initial dirty batch. Keep a low-frequency readiness pass so every visible
+  // panel eventually gets its own shader layer.
+  const readinessPulse = window.setInterval(() => {
+    if (disposed || !snapshotTexture || document.hidden) return;
+    diagnostics.surfaces = surfaces.size;
+    let unreadyVisible = 0;
+    for (const surface of surfaces.values()) {
+      if (surface.element.dataset.glassReady === "true" || !visible(surface.element)) continue;
+      dirtySurfaces.add(surface);
+      unreadyVisible++;
+    }
+    diagnostics.unreadyVisible = unreadyVisible;
+    diagnostics.dirty = dirtySurfaces.size;
+    if (dirtySurfaces.size) scheduleRender(false);
+  }, 300);
+
+  const scenePulse = window.setInterval(() => {
+    if (disposed || document.hidden || !document.hasFocus()) return;
+    if (document.querySelector('#modal-root[data-open="true"]')) return;
+    const first = !sceneTexture;
+    const texture = getSceneTexture();
+    if (!texture) return;
+    texture.needsUpdate = true;
+    if (first) {
+      scheduleRender(true);
+      return;
+    }
+    for (const surface of surfaces.values()) {
+      if (!liveSceneSurface(surface.element) || !visible(surface.element)) continue;
+      dirtySurfaces.add(surface);
+    }
+    if (dirtySurfaces.size) scheduleRender(false);
+  }, 200);
+
+
+  const modalRoot = document.querySelector<HTMLElement>("#modal-root");
+  const modalObserver = modalRoot
+    ? new MutationObserver(() => {
+        if (modalRoot.dataset.open === "true") freezeSceneForModal();
+      })
+    : null;
+  modalObserver?.observe(modalRoot!, { attributes: true, attributeFilter: ["data-open"] });
+
   return () => {
-    edgeObserver.disconnect();
-    cancelAnimationFrame(edgeFrame);
-    onLeave();
+    disposed = true;
+    window.clearInterval(scenePulse);
+    window.clearInterval(readinessPulse);
+    window.removeEventListener("vitrine-wallpaper-changed", onBoardChange);
+    modalObserver?.disconnect();
+    clearTimeout(scanTimer);
+    clearTimeout(rescanTimer);
+    cancelAnimationFrame(renderFrame);
+    observer.disconnect();
     root.removeEventListener("pointermove", onPointerMove);
-    root.removeEventListener("pointerleave", onLeave);
-    root.removeEventListener("pointercancel", onLeave);
-    window.removeEventListener("blur", onLeave);
-    reducedQuery.removeEventListener("change", onReducedChange);
+    root.removeEventListener("pointerleave", onPointerLeave);
+    window.removeEventListener("resize", onResize);
+    document.removeEventListener("visibilitychange", onResize);
+    themeObserver.disconnect();
+    for (const surface of surfaces.values()) releaseSurface(surface);
+    snapshotTexture?.dispose();
+    sceneTexture?.dispose();
+    frozenSceneTexture?.dispose();
+    if (tuningHook === tuningHook) tuningHook = undefined;
+    material.dispose();
+    plane.geometry.dispose();
+    renderer.dispose();
   };
 }

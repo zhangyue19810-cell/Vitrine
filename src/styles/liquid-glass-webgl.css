@@ -1,0 +1,213 @@
+/*
+ * Real-time Liquid Glass surfaces.
+ *
+ * Electron captures the composited page, and one shared Three.js renderer
+ * draws every visible glass surface from that texture. No CSS
+ * backdrop-filter, SVG feDisplacementMap or per-frame filter rasterisation is
+ * involved: the refraction lives entirely in the WebGL shader.
+ */
+
+.liquid-shader-host:not(.accent):not(.primary):not(.danger) {
+  isolation: isolate !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border-color: transparent !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  box-shadow: var(--glass-outer-shadow, 0 4px 24px rgba(0, 0, 0, 0.18)) !important;
+}
+
+.liquid-shader-host:not([data-glass-ready="true"]):not(.accent):not(.primary):not(.danger) {
+  background: rgba(var(--glass-strong-rgb), 0.34) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(1.12) !important;
+  backdrop-filter: blur(18px) saturate(1.12) !important;
+}
+
+.liquid-shader-layer {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: -1 !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: inherit !important;
+  pointer-events: none !important;
+  overflow: hidden;
+  background: transparent !important;
+  opacity: 1;
+  contain: strict;
+}
+
+/* Tint is 0% in the current preset; this layer only carries the white inner
+ * shadow (20px / -5px) from the tuner. */
+.liquid-shader-tint {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 6 !important;
+  display: block !important;
+  border-radius: inherit !important;
+  pointer-events: none !important;
+  background: transparent !important;
+  box-shadow: var(--glass-inner-shadow, inset 0 0 20px -5px #ffffff);
+}
+
+.liquid-shader-host[data-glass-ready="true"] {
+  border-color: transparent;
+}
+
+/* 46 / 26 / 22 / pill mapping from the tuner. */
+:root:root .liquid-shader-host.sheet,
+:root:root .liquid-shader-host.dialog,
+:root:root .liquid-shader-host.detail-panel,
+:root:root .liquid-shader-host.callout,
+:root:root .liquid-shader-host.dl-bar,
+:root:root .liquid-shader-host.launch-card,
+:root:root .liquid-shader-host.settings-nav,
+:root:root .liquid-shader-host.menu,
+:root:root .liquid-shader-host.together-room,
+:root:root .liquid-shader-host.custom-download-status,
+:root:root .liquid-shader-host.hud-capsule {
+  border-radius: 46px !important;
+}
+
+:root:root .liquid-shader-host.card,
+:root:root .liquid-shader-host.dl-flat-card,
+:root:root .liquid-shader-host.proj,
+:root:root .liquid-shader-host.notice,
+:root:root .liquid-shader-host.problem,
+:root:root .liquid-shader-host.stat,
+:root:root .liquid-shader-host.setting,
+:root:root .liquid-shader-host.mod-row,
+:root:root .liquid-shader-host.mod-update-row,
+:root:root .liquid-shader-host.material-option,
+:root:root .liquid-shader-host.hud-left,
+:root:root .liquid-shader-host.hud-float,
+:root:root .liquid-shader-host.item,
+:root:root .liquid-shader-host.empty,
+:root:root .liquid-shader-host.logview,
+:root:root .liquid-shader-host.toast,
+:root:root .liquid-shader-host.version-row,
+:root:root .liquid-shader-host.pick {
+  border-radius: 26px !important;
+}
+
+:root:root .liquid-shader-host.btn:not(.icon),
+:root:root .liquid-shader-host.input,
+:root:root .liquid-shader-host.select,
+:root:root .liquid-shader-host.textarea,
+:root:root .liquid-shader-host.mod-problem-trigger {
+  border-radius: 22px !important;
+}
+
+:root:root .liquid-shader-host.system-nav,
+:root:root .liquid-shader-host.view-tabs,
+:root:root .liquid-shader-host.nav-button,
+:root:root .liquid-shader-host.view-tab,
+:root:root .liquid-shader-host.seg,
+:root:root .liquid-shader-host.tabs,
+:root:root .liquid-shader-host.toggle,
+:root:root .liquid-shader-host.chip,
+:root:root .liquid-shader-host.hud-capsule {
+  border-radius: 999px !important;
+}
+
+:root:root .liquid-shader-host.btn.icon,
+:root:root .liquid-shader-host.arrow-btn,
+:root:root .liquid-shader-host .window-controls button {
+  border-radius: 50% !important;
+}
+
+/* Preserve the floating sheet geometry from the previous material system. */
+:root:root .sheet {
+  border: 1px solid rgba(var(--rim-rgb), 0.3);
+  inset: clamp(12px, 2vw, 24px);
+  width: auto;
+  max-width: 1180px;
+  margin-inline: auto;
+  overflow: hidden;
+  border-radius: 46px;
+}
+
+/* Large panels and the detail page use a stable stage behind the WebGL glass;
+ * the glass texture is the static CSS/wallpaper board, not a page capture. */
+#stage:has(.modal-root[data-open="true"]) > .three-scene,
+#stage:has(.modal-root[data-open="true"]) > .scene-aura,
+#stage:has(.modal-root[data-open="true"]) > .scene-atmosphere,
+#stage:has(.modal-root[data-open="true"]) > .brand,
+#stage:has(.modal-root[data-open="true"]) > .system-nav,
+#stage:has(.modal-root[data-open="true"]) > .view-tabs,
+#stage:has(.modal-root[data-open="true"]) > .home,
+#stage:has(.modal-root[data-open="true"]) > .download,
+#stage:has(.modal-root[data-open="true"]) > .detail,
+#stage:has(.modal-root[data-open="true"]) > .system-footer {
+  filter: none !important;
+  opacity: 0.22 !important;
+  transition: opacity 0.3s var(--ease), filter 0.3s var(--ease);
+}
+
+.scrim {
+  background: rgba(4, 8, 12, 0.38) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+#stage:has(.modal-root[data-open="true"]) > .music-hud {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .liquid-shader-layer {
+    opacity: 0.35;
+  }
+}
+
+
+/* Layout and motion still come from the older component sheets, but their
+ * painted glass layers and rim pseudo-elements must not sit over the WebGL
+ * canvas. Toggles keep their knob pseudo-element. */
+:root:root .liquid-shader-host:not(.toggle)::before,
+:root:root .liquid-shader-host:not(.toggle)::after {
+  content: none !important;
+  display: none !important;
+}
+
+/* In-app liquid-glass tuner (Y). Kept above modals so it can be used while
+ * checking settings-sheet glass. */
+.glass-tuner {
+  position: fixed;
+  top: 18px;
+  right: 18px;
+  z-index: 10000;
+  width: min(320px, calc(100vw - 36px));
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(10, 14, 18, 0.9);
+  color: #eef3f8;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(18px) saturate(1.15);
+  -webkit-backdrop-filter: blur(18px) saturate(1.15);
+  font: 12px/1.4 "Segoe UI", "Microsoft YaHei", sans-serif;
+  display: none;
+}
+.glass-tuner[data-open="true"] { display: block; }
+.glass-tuner-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
+.glass-tuner-head b { display: block; font-size: 13px; letter-spacing: 0.04em; }
+.glass-tuner-head span { display: block; color: rgba(238, 243, 248, 0.55); font-size: 11px; }
+.glass-tuner-close { border: 0; background: transparent; color: #fff; font-size: 20px; line-height: 1; cursor: pointer; padding: 0 2px; }
+.glass-tuner-body { display: grid; gap: 7px; }
+.glass-tuner-row { display: grid; grid-template-columns: 86px 1fr 42px; align-items: center; gap: 8px; }
+.glass-tuner-row span { color: rgba(238, 243, 248, 0.78); white-space: nowrap; }
+.glass-tuner-row input { width: 100%; accent-color: #8ecbff; }
+.glass-tuner-row output { text-align: right; color: #b9e2ff; font-variant-numeric: tabular-nums; }
+.glass-tuner-foot { display: flex; gap: 8px; margin-top: 12px; }
+.glass-tuner-foot button { flex: 1; border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 8px; background: rgba(255, 255, 255, 0.08); color: #eef3f8; padding: 6px 0; cursor: pointer; }
+.glass-tuner-foot button:hover { background: rgba(255, 255, 255, 0.14); }

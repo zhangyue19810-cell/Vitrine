@@ -812,3 +812,163 @@ body {
 :root[data-render-tier="minimal"] .system-nav::after {
   animation-play-state: paused !important;
 }
+
+/* ------------------------------------------------------------------------------------------ wallpaper + simulated depth */
+
+.stage-wallpaper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #030303;
+  opacity: 1;
+  visibility: hidden;
+  transition: opacity 0.55s var(--ease), visibility 0s linear 0.55s;
+}
+
+#stage[data-wallpaper="true"] .stage-wallpaper {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.55s var(--ease), visibility 0s;
+}
+
+.stage-wallpaper .wallpaper-media {
+  position: absolute;
+  inset: -6%;
+  transform: translate3d(var(--wallpaper-pan-x, 0px), var(--wallpaper-pan-y, 0px), 0) scale(var(--wallpaper-scale, 1.06));
+  transform-origin: 50% 46%;
+  transition: transform 1.15s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform;
+}
+
+.stage-wallpaper .wallpaper-image,
+.stage-wallpaper .wallpaper-video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.92) contrast(1.03);
+  transform: translateZ(0);
+}
+
+.stage-wallpaper .wallpaper-depth {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 58% 54% at 50% 48%, transparent 28%, rgba(0, 0, 0, calc(0.12 + var(--wallpaper-depth, 0.7) * 0.24)) 76%, rgba(0, 0, 0, 0.62) 100%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.12), transparent 28%, transparent 66%, rgba(0, 0, 0, 0.5));
+  mix-blend-mode: multiply;
+}
+
+.stage-wallpaper .wallpaper-veil {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(145deg, rgba(var(--ambient-depth-rgb), calc(var(--wallpaper-dim, 0.4) * 0.5)), rgba(0, 0, 0, var(--wallpaper-dim, 0.4)) 62%, rgba(0, 0, 0, calc(var(--wallpaper-dim, 0.4) * 1.08))),
+    radial-gradient(ellipse 70% 56% at 50% 48%, transparent 20%, rgba(0, 0, 0, calc(var(--wallpaper-dim, 0.4) * 0.36)) 100%);
+}
+
+.stage-wallpaper .wallpaper-grain {
+  position: absolute;
+  inset: 0;
+  background-image: var(--liquid-grain);
+  background-size: 160px 160px;
+  opacity: 0.045;
+  mix-blend-mode: soft-light;
+}
+
+.stage-wallpaper[data-error="true"] .wallpaper-image,
+.stage-wallpaper[data-error="true"] .wallpaper-video {
+  opacity: 0;
+}
+
+.stage-wallpaper[data-kind="none"] {
+  opacity: 0;
+}
+
+#stage[data-wallpaper="true"] .three-scene {
+  z-index: 1;
+  isolation: auto;
+}
+
+#stage[data-wallpaper="true"] .three-scene canvas {
+  mix-blend-mode: normal;
+}
+
+#stage[data-wallpaper="true"] .scene-aura {
+  opacity: 0.22;
+  mix-blend-mode: soft-light;
+}
+
+#stage[data-wallpaper="true"] .scene-atmosphere {
+  background:
+    linear-gradient(180deg, rgba(0, 0, 0, 0.08), transparent 24%, transparent 72%, rgba(0, 0, 0, 0.28)),
+    radial-gradient(ellipse at 50% 45%, transparent 46%, rgba(0, 0, 0, 0.2) 100%);
+}
+
+/* ------------------------------------------------------------------------------------------ personalisation wallpaper controls */
+
+.background-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+  max-width: 260px;
+  overflow: hidden;
+  padding: 6px 11px;
+  border: 1px solid rgba(var(--ambient-accent-rgb), 0.28);
+  border-radius: 999px;
+  background: rgba(var(--glass-strong-rgb), 0.22);
+  color: var(--muted);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.personalization-divider {
+  height: 1px;
+  margin: 3px 0;
+  background: linear-gradient(90deg, transparent, rgba(var(--rim-rgb), 0.26), transparent);
+}
+
+.background-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.background-sliders {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 8px 18px;
+}
+
+.background-sliders[data-disabled="true"] {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.background-sliders label {
+  display: grid;
+  grid-template-columns: 42px 1fr 42px;
+  align-items: center;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.background-sliders .range {
+  width: 100%;
+}
+
+.background-sliders output {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 10px;
+  text-align: right;
+}
+
+:root[data-perf="economy"] .stage-wallpaper .wallpaper-media {
+  transition: none;
+}

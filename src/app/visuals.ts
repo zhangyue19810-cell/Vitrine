@@ -11,18 +11,14 @@ function read(): VisualPreferencesState {
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return { ...DEFAULT_STATE };
-    const value = JSON.parse(raw) as (Partial<VisualPreferencesState> & { background?: unknown }) | undefined;
-    const state: VisualPreferencesState = { ringMaterial: ringMaterialById(String(value?.ringMaterial)).id };
-    // The old wallpaper build stored a large background object in this same
-    // key. Drop it the next time the old value is read.
-    if (value?.background !== undefined) localStorage.setItem(KEY, JSON.stringify(state));
-    return state;
+    const value = JSON.parse(raw) as Partial<VisualPreferencesState> | undefined;
+    return { ringMaterial: ringMaterialById(String(value?.ringMaterial)).id };
   } catch {
     return { ...DEFAULT_STATE };
   }
 }
 
-/** A tiny app-wide preference store for visual choices that live in CSS/WebGL rather than the core settings file. */
+/** App-wide visual choices that live in CSS/WebGL rather than the core settings file. */
 class VisualPreferences {
   private state = read();
   private readonly listeners = new Set<(state: VisualPreferencesState) => void>();
