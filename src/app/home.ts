@@ -1,4 +1,4 @@
-import { createRollingNumber, createRollingText } from "@kitlangton/rolling-number";
+import { createRollingText } from "@kitlangton/rolling-number";
 import { records } from "../data";
 import { $, $$, html, setHtml } from "./dom";
 import { avatar, instanceChips, lastPlayedText, shelfPosition } from "./ui-bits";
@@ -8,12 +8,11 @@ import { formatSpeed } from "./format";
 import { PRODUCT, brandHeading, markSvg } from "../brand";
 
 /**
- * The home screen's overlay: brand, navigation, the description of the selected instance, the counters and the footer.
+ * The home screen's overlay: brand, navigation, the description of the selected instance and the footer.
  * It is built once; `update()` only touches what changed (text nodes, attributes), so selecting is cheap.
  */
 
 type Rolling = ReturnType<typeof createRollingText>;
-type RollingNumber = ReturnType<typeof createRollingNumber>;
 
 export const STAGE_TEMPLATE = `
   <div class="three-scene" id="three-scene"></div>
@@ -51,21 +50,6 @@ const HOME_TEMPLATE = `
     <div class="callout-note" data-f="note"></div>
     <div class="callout-actions" data-f="actions"></div>
   </section>
-  <section class="counter" aria-label="序号">
-    <div class="label">INSTANCE / SELECT</div>
-    <div class="value"><b data-f="counter"></b><i data-f="total"></i></div>
-  </section>
-  <div class="ticks">
-    <button class="arrow-btn" data-act="step-file" data-dir="up" data-step="-1" aria-label="上一个实例">↑</button>
-    <div class="marks" data-f="marks" aria-hidden="true"></div>
-    <button class="arrow-btn" data-act="step-file" data-dir="down" data-step="1" aria-label="下一个实例">↓</button>
-  </div>
-  <div class="lane-nav">
-    <button class="arrow-btn" data-act="step-lane" data-dir="prev" data-step="-1" aria-label="上一个分组">←</button>
-    <div class="name"><small data-f="lane-label"></small><b data-f="lane-name"></b></div>
-    <button class="arrow-btn" data-act="step-lane" data-dir="next" data-step="1" aria-label="下一个分组">→</button>
-  </div>
-  <div class="hint"><span class="hint-ring"><kbd>←</kbd><kbd>→</kbd> 转动环 <kbd>PgUp</kbd><kbd>PgDn</kbd> 切换分组 </span><span class="hint-grid"><kbd>↑</kbd><kbd>↓</kbd> 切换实例 <kbd>←</kbd><kbd>→</kbd> 切换分组 </span><kbd>Enter</kbd> 启动 <kbd>Space</kbd> 管理 <kbd>/</kbd> 搜索</div>
 `;
 
 const FOOTER_TEMPLATE = `
@@ -78,9 +62,6 @@ export class HomeView {
   private readonly footer = $("#footer");
   private navCloseTimer?: ReturnType<typeof setTimeout>;
   private rollTitle!: Rolling;
-  private rollLane!: Rolling;
-  private rollCounter!: RollingNumber;
-  private rollTotal!: RollingNumber;
   private shown = { id: "", signature: "" };
   private field = new Map<string, HTMLElement>();
   animated = true;
@@ -91,10 +72,6 @@ export class HomeView {
     for (const element of [...$$("[data-f]", this.home), ...$$("[data-f]", this.footer)]) this.field.set(element.dataset.f!, element);
     const options = { duration: 460, motionBlur: true, transition: "direct" as const, stagger: "none" as const, animated: false };
     this.rollTitle = createRollingText(this.f("title"), { ...options, text: "" });
-    this.rollLane = createRollingText(this.f("lane-name"), { ...options, text: "" });
-    const numberOptions = { duration: 460, motionBlur: true, animated: false, locales: "en-US", format: { minimumIntegerDigits: 2, useGrouping: false } };
-    this.rollCounter = createRollingNumber(this.f("counter"), { ...numberOptions, value: 0 });
-    this.rollTotal = createRollingNumber(this.f("total"), { ...numberOptions, value: 0 });
     this.wireNav();
     this.renderNav();
   }
@@ -138,30 +115,10 @@ export class HomeView {
     }
     this.shown.id = record.id;
 
-    const total = records.filter((entry) => entry.kind === "instance").length;
-    this.rollCounter.update({ value: record.kind === "instance" ? record.number : 0, animated, direction: direction === "down" ? "down" : "up" });
-    this.rollTotal.update({ value: total, animated: false });
-
-    // Ticks: at most seven marks for the instances of this lane.
-    const marks = Math.min(info.size, 7);
-    const active = info.size <= 7 ? info.position : Math.round((info.position / Math.max(1, info.size - 1)) * (marks - 1));
-    const wanted = Array.from({ length: marks }, (_, i) => (i === active ? "1" : "0")).join("");
-    const marksElement = this.f("marks");
-    if (marksElement.dataset.state !== wanted) {
-      marksElement.dataset.state = wanted;
-      marksElement.innerHTML = [...wanted].map((on) => `<i data-on="${on === "1"}"></i>`).join("");
-    }
-    this.text("lane-label", `COLUMN ${String(info.lane + 1).padStart(2, "0")} / ${String(info.laneCount).padStart(2, "0")}`);
-    this.rollLane.update({ text: info.laneName, animated: animated && direction === "auto" ? false : animated });
-    const single = info.size < 2;
-    for (const button of $$("[data-act='step-file']", this.home)) button.toggleAttribute("disabled", single);
-    for (const button of $$("[data-act='step-lane']", this.home)) button.toggleAttribute("disabled", info.laneCount < 2);
   }
 
   finishRolling() {
     this.rollTitle.finish();
-    this.rollLane.finish();
-    this.rollCounter.finish();
   }
 
   private actions(record: (typeof records)[number], instance: ReturnType<typeof store.instance>, running: boolean, launching: boolean) {
