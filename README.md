@@ -4,7 +4,7 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 界面用 Three.js 写，前端基于 [RhineLabUI](https://github.com/LBEILC/RhineLabUI)（MIT）修改，后端是 TypeScript。项目与 Mojang、Microsoft 没有关联。
 
-状态：0.1.0。这次整合了 2026-11-22 的黑洞音乐播放器、3D 歌词与黑金光影，2026-11-24 的深黑配色、交错切页和 3D 卡片动效，以及 2026-11-25 的 PBR 环体材质、自定义下载、顶部灵动岛和更厚的档案玻璃边缘；具体改动见 [docs/CHANGES-2026-11-22-black-hole-music.md](docs/CHANGES-2026-11-22-black-hole-music.md)、[docs/CHANGES-2026-11-24-cinematic-ui.md](docs/CHANGES-2026-11-24-cinematic-ui.md) 与 [docs/CHANGES-2026-11-25-personalization.md](docs/CHANGES-2026-11-25-personalization.md)。界面和 Electron 外壳在 Linux 上做过浏览器与冒烟测试，Windows 版仍建议先在测试目录试用。
+状态：0.1.0。这次整合了 2026-11-22 的黑洞音乐播放器、3D 歌词与黑金光影，2026-11-24 的深黑配色、交错切页和 3D 卡片动效，以及 2026-11-25 的 PBR 环体材质、自定义下载、顶部灵动岛和更厚的档案玻璃边缘；具体改动见 [docs/CHANGES-2026-11-22-black-hole-music.md](docs/CHANGES-2026-11-22-black-hole-music.md)、[docs/CHANGES-2026-11-24-cinematic-ui.md](docs/CHANGES-2026-11-24-cinematic-ui.md) 与 [docs/CHANGES-2026-11-25-personalization.md](docs/CHANGES-2026-11-25-personalization.md)
 
 ## 能做什么
 
@@ -30,11 +30,11 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 文件先写入 `.vtmp` / `.vseg` 临时文件，按可用的 SHA-512 / SHA-256 / SHA-1 校验，然后原子替换正式文件；校验失败不会覆盖已有文件。支持断点续传、失败换源、限速和重试。游戏文件和模组内容默认优先使用镜像，失败后再回退官方源。
 
-右上角账号胶囊展开后可以打开“自定义下载”，粘贴任意 HTTP(S) 地址并选择保存文件夹。GitHub 地址会同时测速直连、阿里云/华清云镜像和 GH 云加速，自动采用实际最快且返回文件内容的来源，其他可用来源保留为回退；大文件沿用多段 Range 下载。
+可以打开“自定义下载”，粘贴任意 HTTP(S) 地址并选择保存文件夹。GitHub 地址会同时测速直连、阿里云/华清云镜像和 GH 云加速，自动采用实际最快且返回文件内容的来源，其他可用来源保留为回退；大文件沿用多段 Range 下载。
 
 **音乐**
 
-新增“音乐”页：内置网易云网页版客户端、扫码登录、推荐/榜单/每日推荐/我的歌单、搜索与播放队列，并接入网易云“一起听”房间（创建/加入/心跳/播放状态同步）。音乐页沿用更新包的黑洞与吸积盘、金色光子环、跟随音乐跳动的 3D 歌词、右侧抽出的档案卡和“点击黑洞播放/拖动光子环跳转”的交互；播放器控制条和来源控制板在页面下方。歌曲、歌手和歌词在无网络或未登录时按服务提示降级。
+新增“音乐”页：内置网易云网页版客户端、扫码登录、推荐/榜单/每日推荐/我的歌单、搜索与播放队列，并接入网易云“一起听”房间（创建/加入/心跳/播放状态同步）。音乐页沿用更新包的黑洞与吸积盘、金色光子环、跟随音乐跳动的 3D 歌词、右侧抽出的档案卡和“点击黑洞播放/拖动光子环跳转”的交互；播放器控制条和来源控制板在页面下方
 
 **其他**
 
@@ -53,11 +53,10 @@ Vitrine 是一个 Minecraft Java 版启动器，目前主要面向 Windows x64�
 
 下载 `Vitrine-0.1.0-win-x64.zip`，解压后运行 `Vitrine\Vitrine.exe`，不需要安装。更详细的说明在 [docs/WINDOWS-README.txt](docs/WINDOWS-README.txt)。
 
-启动器数据默认放在 `%APPDATA%\Vitrine`。如果想让数据跟着程序目录走，在 `Vitrine.exe` 旁边新建一个空的 `portable.txt`，数据会写进 `data\`。如果更新后不小心弄丢了 `portable.txt`，但 `data\` 里还有设置和缓存，启动器会自动继续使用这份数据。
 
 Minecraft 游戏目录默认使用系统桌面的 `Minecraft` 文件夹。第一次运行时，如果启动器自己的数据目录里已经有旧的 `minecraft`，会把它整体移动到桌面，并把游戏目录切过去；如果桌面已经有同名文件夹，不会覆盖里面的文件。
 
-官方 Windows 包已经内置 CurseForge 访问配置，不需要用户填写密钥。
+Windows 包已经内置 CurseForge 访问配置，不需要用户填写密钥。
 
 ## 从源码运行
 
