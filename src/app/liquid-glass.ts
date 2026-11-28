@@ -83,6 +83,14 @@ interface GlassSurface {
   context: CanvasRenderingContext2D;
   pointer: Vector2;
   pointerActive: boolean;
+  /** Pointer/press spring values and their velocities (0…1, lightly underdamped). */
+  hover: number;
+  hoverVelocity: number;
+  press: number;
+  pressVelocity: number;
+  hoverTarget: number;
+  pressTarget: number;
+  pointerStrength: number;
   addedPosition: boolean;
   originalPosition: string;
   width: number;
@@ -118,6 +126,9 @@ const fragmentShader = /* glsl */ `
   uniform float uTint;
   uniform float uDim;
   uniform float uTime;
+  uniform float uHover;
+  uniform float uPress;
+  uniform float uPointerStrength;
   varying vec2 vUv;
 
   float sdRoundedRect(vec2 p, vec2 halfSize, float r) {
@@ -185,6 +196,22 @@ const fragmentShader = /* glsl */ `
     grad = normalize(grad);
 
     vec2 offset = -grad * displacement / max(uViewport, vec2(1.0)) * uScale;
+
+    // Direct manipulation: the glass bead follows the pointer and compresses
+    // under a press. Mouse/trackpad input is deliberately quieter than touch,
+    // matching Apple's Liquid Glass emphasis hierarchy.
+    float pointerActive = clamp(uHover, 0.0, 1.0) * uPointerActive;
+    float pressed = clamp(uPress, 0.0, 1.0);
+    vec2 pointerPx = (vUv - uPointer) * uSize;
+    float pointerDistance = length(pointerPx);
+    float pointerRadius = max(1.0, min(halfSize.x, halfSize.y));
+    vec2 radial = pointerPx / max(pointerDistance, 1.0);
+    float bead = exp(-dot(pointerPx, pointerPx) / max(1.0, pointerRadius * pointerRadius * 0.2));
+    float pressBead = exp(-dot(pointerPx, pointerPx) / max(1.0, pointerRadius * pointerRadius * 0.07));
+    float pointerAmount = pointerActive * uPointerStrength;
+    offset += radial * bead * (8.0 + 18.0 * pressed) * pointerAmount / max(uSize, vec2(1.0));
+    offset -= radial * pressBead * 9.0 * pressed * pointerAmount / max(uSize, vec2(1.0));
+
     vec2 screenUv = vec2(
       (uRect.x + vUv.x * uRect.z) / uViewport.x,
       1.0 - (uRect.y + (1.0 - vUv.y) * uRect.w) / uViewport.y
@@ -193,19 +220,26 @@ const fragmentShader = /* glsl */ `
     colour = mix(colour, vec3(1.0), uLift);
 
     vec2 lightDir = normalize(vec2(0.5, -0.7));
+    vec2 touchLight = normalize(vec2(0.001) + (uPointer - 0.5) * 2.0);
+    lightDir = normalize(mix(lightDir, touchLight, pointerActive * 0.58));
     float rim = 1.0 - smoothstep(0.0, bezel, distFromEdge);
     float rimDot = abs(dot(grad, lightDir));
     float highlight = pow(rimDot * rim, 1.35);
     colour += vec3(highlight * uSpecular * 0.42);
     float innerRim = smoothstep(0.0, 2.0, distFromEdge) * (1.0 - smoothstep(2.0, 6.0, distFromEdge));
     colour += vec3(innerRim * uSpecular * 0.08);
+    float touchGlow = bead * pointerAmount * (0.045 + pressed * 0.16);
+    float ringRadius = 0.12 + pressed * 0.22;
+    float pressRing = exp(-pow((pointerDistance / pointerRadius - ringRadius) * 15.0, 2.0)) * pressed * pointerAmount * 0.16;
+    colour += vec3((touchGlow + pressRing) * (0.55 + uSpecular));
 
     colour *= 1.0 - uDim;
     colour = mix(colour, vec3(1.0), uTint);
     // Clear centre, visible refracted rim: the live page below must remain
     // visible through the glass instead of being covered by an opaque board.
     float edgeBand = 1.0 - smoothstep(0.0, max(1.0, bezel), distFromEdge);
-    gl_FragColor = vec4(colour, alpha * (uBody + edgeBand * uEdge));
+    float interactionEdge = pressed * bead * pointerAmount * 0.028;
+    gl_FragColor = vec4(colour, alpha * (uBody + edgeBand * uEdge + interactionEdge));
   }
 `;
 
@@ -246,7 +280,25 @@ function makeSurface(element: HTMLElement): GlassSurface {
     if (addedPosition) element.style.position = originalPosition;
     throw new Error("Canvas 2D is unavailable for the glass surface.");
   }
-  return { element, canvas, tint, context, pointer: new Vector2(0.5, 0.5), pointerActive: false, addedPosition, originalPosition, width: 0, height: 0 };
+  return {
+    element,
+    canvas,
+    tint,
+    context,
+    pointer: new Vector2(0.5, 0.5),
+    pointerActive: false,
+    hover: 0,
+    hoverVelocity: 0,
+    press: 0,
+    pressVelocity: 0,
+    hoverTarget: 0,
+    pressTarget: 0,
+    pointerStrength: 1,
+    addedPosition,
+    originalPosition,
+    width: 0,
+    height: 0,
+  };
 }
 
 export function installLiquidGlass(root: HTMLElement): () => void {
@@ -294,6 +346,9 @@ export function installLiquidGlass(root: HTMLElement): () => void {
     uTime: { value: 0 },
     uTint: { value: Number(GLASS.tint) },
     uDim: { value: 0 },
+    uHover: { value: 0 },
+    uPress: { value: 0 },
+    uPointerStrength: { value: 1 },
   };
   const params: GlassTuning = {
     thickness: GLASS.thickness,
@@ -471,7 +526,10 @@ export function installLiquidGlass(root: HTMLElement): () => void {
       uniforms.uEdge.value = sheet ? 0.14 : detail ? 0.28 : callout ? 0.40 : 0.46;
       uniforms.uLift.value = sheet ? 0.10 : detail ? 0.06 : callout ? 0.04 : major ? 0.025 : 0.015;
       uniforms.uPointer.value.copy(surface.pointer);
-      uniforms.uPointerActive.value = surface.pointerActive ? 1 : 0;
+      uniforms.uPointerActive.value = Math.max(surface.hover, surface.press) > 0.004 ? 1 : 0;
+      uniforms.uHover.value = Math.max(0, surface.hover);
+      uniforms.uPress.value = Math.max(0, surface.press);
+      uniforms.uPointerStrength.value = surface.pointerStrength;
       renderer.setSize(width, height, false);
       renderer.clear();
       renderer.render(scene, camera);
@@ -554,42 +612,148 @@ export function installLiquidGlass(root: HTMLElement): () => void {
   observer.observe(root, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
 
 
-  const onPointerMove = (event: PointerEvent) => {
-    if (event.pointerType === "touch") return;
-    const target = (event.target as Element | null)?.closest<HTMLElement>(GLASS_TARGETS) ?? null;
-    if (!target) {
-      if (pointerTarget) {
-        pointerTarget.pointerActive = false;
-        dirtySurfaces.add(pointerTarget);
-        pointerTarget = null;
-        scheduleRender(false);
-      }
-      return;
+  const interactionSurfaces = new Set<GlassSurface>();
+  let pressedSurface: GlassSurface | null = null;
+  let interactionFrame = 0;
+  let interactionLast = 0;
+
+  const springTowards = (
+    value: number,
+    velocity: number,
+    target: number,
+    stiffness: number,
+    dampingRatio: number,
+    dt: number,
+  ): [number, number] => {
+    const damping = 2 * dampingRatio * Math.sqrt(stiffness);
+    let x = value;
+    let v = velocity;
+    let remaining = Math.max(0, dt);
+    while (remaining > 0) {
+      const h = Math.min(1 / 120, remaining);
+      const acceleration = -stiffness * (x - target) - damping * v;
+      v += acceleration * h;
+      x += v * h;
+      remaining -= h;
     }
-    const surface = surfaces.get(target);
-    if (!surface) return;
+    if (Math.abs(x - target) < 0.001 && Math.abs(v) < 0.004) return [target, 0];
+    return [x, v];
+  };
+
+  const ensureInteractions = () => {
+    if (interactionFrame) return;
+    interactionLast = 0;
+    interactionFrame = requestAnimationFrame(tickInteractions);
+  };
+
+  const tickInteractions = (now: number) => {
+    interactionFrame = 0;
+    if (disposed) return;
+    const dt = interactionLast ? Math.min(0.2, Math.max(0.001, (now - interactionLast) / 1000)) : 1 / 60;
+    interactionLast = now;
+    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(root.closest(".reduce-motion"));
+    for (const surface of [...interactionSurfaces]) {
+      if (reduced) {
+        surface.hover = surface.hoverTarget;
+        surface.press = surface.pressTarget;
+        surface.hoverVelocity = 0;
+        surface.pressVelocity = 0;
+        dirtySurfaces.add(surface);
+        interactionSurfaces.delete(surface);
+        continue;
+      }
+      [surface.hover, surface.hoverVelocity] = springTowards(surface.hover, surface.hoverVelocity, surface.hoverTarget, 210, 0.82, dt);
+      [surface.press, surface.pressVelocity] = springTowards(surface.press, surface.pressVelocity, surface.pressTarget, 330, 0.58, dt);
+      surface.hover = Math.max(0, surface.hover);
+      surface.press = Math.max(0, surface.press);
+      dirtySurfaces.add(surface);
+      if (
+        Math.abs(surface.hover - surface.hoverTarget) < 0.002 &&
+        Math.abs(surface.press - surface.pressTarget) < 0.002 &&
+        Math.abs(surface.hoverVelocity) < 0.006 &&
+        Math.abs(surface.pressVelocity) < 0.006
+      ) {
+        surface.hover = surface.hoverTarget;
+        surface.press = surface.pressTarget;
+        surface.hoverVelocity = 0;
+        surface.pressVelocity = 0;
+        interactionSurfaces.delete(surface);
+      }
+    }
+    if (dirtySurfaces.size) scheduleRender(false);
+    if (interactionSurfaces.size) interactionFrame = requestAnimationFrame(tickInteractions);
+  };
+
+  const aimAt = (surface: GlassSurface, target: HTMLElement, event: PointerEvent) => {
     const rect = target.getBoundingClientRect();
     surface.pointer.set(
       Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))),
       1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, rect.height))),
     );
+    surface.pointerStrength = event.pointerType === "touch" || event.pointerType === "pen" ? 1 : 0.58;
+  };
+
+  const onPointerMove = (event: PointerEvent) => {
+    const target = (event.target as Element | null)?.closest<HTMLElement>(GLASS_TARGETS) ?? null;
+    if (!target) {
+      if (pointerTarget) {
+        pointerTarget.pointerActive = false;
+        pointerTarget.hoverTarget = 0;
+        interactionSurfaces.add(pointerTarget);
+        ensureInteractions();
+        pointerTarget = null;
+      }
+      return;
+    }
+    const surface = surfaces.get(target);
+    if (!surface) return;
+    aimAt(surface, target, event);
     if (pointerTarget && pointerTarget !== surface) {
       pointerTarget.pointerActive = false;
-      dirtySurfaces.add(pointerTarget);
+      pointerTarget.hoverTarget = 0;
+      interactionSurfaces.add(pointerTarget);
     }
     pointerTarget = surface;
     surface.pointerActive = true;
-    dirtySurfaces.add(surface);
-    scheduleRender(false);
+    surface.hoverTarget = 1;
+    interactionSurfaces.add(surface);
+    ensureInteractions();
+  };
+
+  const onPointerDown = (event: PointerEvent) => {
+    const target = (event.target as Element | null)?.closest<HTMLElement>(GLASS_TARGETS) ?? null;
+    const surface = target ? surfaces.get(target) : undefined;
+    if (!target || !surface) return;
+    aimAt(surface, target, event);
+    pointerTarget = surface;
+    pressedSurface = surface;
+    surface.pointerActive = true;
+    surface.hoverTarget = 1;
+    surface.pressTarget = 1;
+    interactionSurfaces.add(surface);
+    ensureInteractions();
+  };
+
+  const releasePress = () => {
+    if (!pressedSurface) return;
+    pressedSurface.pressTarget = 0;
+    if (pressedSurface.pointerStrength >= 0.99) pressedSurface.hoverTarget = 0;
+    interactionSurfaces.add(pressedSurface);
+    pressedSurface = null;
+    ensureInteractions();
   };
 
   root.addEventListener("pointermove", onPointerMove, { passive: true });
+  root.addEventListener("pointerdown", onPointerDown, { passive: true });
+  window.addEventListener("pointerup", releasePress, { passive: true });
+  window.addEventListener("pointercancel", releasePress, { passive: true });
   const onPointerLeave = () => {
-    if (pointerTarget) {
+    if (pointerTarget && !pressedSurface) {
       pointerTarget.pointerActive = false;
-      dirtySurfaces.add(pointerTarget);
+      pointerTarget.hoverTarget = 0;
+      interactionSurfaces.add(pointerTarget);
+      ensureInteractions();
       pointerTarget = null;
-      scheduleRender(false);
     }
   };
   root.addEventListener("pointerleave", onPointerLeave);
@@ -668,7 +832,11 @@ export function installLiquidGlass(root: HTMLElement): () => void {
     cancelAnimationFrame(renderFrame);
     observer.disconnect();
     root.removeEventListener("pointermove", onPointerMove);
+    root.removeEventListener("pointerdown", onPointerDown);
+    window.removeEventListener("pointerup", releasePress);
+    window.removeEventListener("pointercancel", releasePress);
     root.removeEventListener("pointerleave", onPointerLeave);
+    cancelAnimationFrame(interactionFrame);
     window.removeEventListener("resize", onResize);
     document.removeEventListener("visibilitychange", onResize);
     themeObserver.disconnect();
