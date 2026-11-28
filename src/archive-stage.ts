@@ -4,6 +4,7 @@ import { BAND, BOUNCE, BandPath, TRACK, newPlate, lapFlip, plateAt, turnPlate, u
 import type { SpectrumField } from "./spectrum";
 import { FinMesh } from "./fin-mesh";
 import { WaterMobiusRing } from "./water-mobius-ring";
+import { WaterCard } from "./water-card";
 import { ROW, rowFrame } from "./row-track";
 import {
   TIMING,
@@ -249,6 +250,7 @@ class Card {
   readonly matrix = new THREE.Matrix4();
   readonly hover: Spring = { value: 0, velocity: 0 };
   drawn = false;
+  drawnIndex = -1;
   face?: Face;
   constructor(readonly id: number) {}
 }
@@ -256,6 +258,7 @@ class Card {
 const scratch = {
   frame: newFrame() as RingFrame,
   basis: new THREE.Matrix4(),
+  matrix: new THREE.Matrix4(),
   a: new THREE.Vector3(),
   b: new THREE.Vector3(),
   c: new THREE.Vector3(),
@@ -306,7 +309,10 @@ export class ArchiveStage {
   /** The Möbius ring's plates (the same ones become the track of the download view). */
   readonly fins = new FinMesh();
   private readonly waterRing = new WaterMobiusRing();
+  private readonly waterCard = new WaterCard();
   private waterRingActive = false;
+  private waterCardActive = false;
+  private waterCardTarget?: Card;
   private faceTint = new THREE.Color("#ffffff");
   private faceTone?: import("./ring-materials").RingMaterialId;
   private readonly bandPath = new BandPath();
@@ -395,7 +401,7 @@ export class ArchiveStage {
     this.detailFace = new Face("detail", this.painter, this.faceGeometry, this.anisotropy);
     this.group.add(this.infoFace.mesh, this.detailFace.mesh);
 
-    this.group.add(this.fins.mesh, this.waterRing.group);
+    this.group.add(this.fins.mesh, this.waterRing.group, this.waterCard.group);
     this.group.add(this.sky.group, this.hole.group, this.turntable.group, this.lyrics.group);
     this.glow.userData.ownLight = true;
     this.glow.castShadow = false;
@@ -1401,6 +1407,7 @@ export class ArchiveStage {
     this.fins.update({ turn, shift, morph, clock: this.clock, presence, audio: this.audio, dt, world });
     const waterVisible = this.waterRingActive && this.started && presence > 0.002 && morph < 0.58;
     this.waterRing.update({ clock: this.clock, presence, morph, started: this.started });
+    this.waterCard.update({ clock: this.clock, presence, morph, started: this.started });
     this.waterRing.group.visible = waterVisible;
     this.fins.setVisible(!waterVisible && this.started && this.presence > 0.002);
     // The turntable rises out of the dark as the plates come in rings round its place.
@@ -1574,6 +1581,7 @@ export class ArchiveStage {
       scratch.b.set(0, CARD.mid * scale, CARD.midZ * scale).applyQuaternion(quat);
       card.matrix.compose(scratch.hit.set(px - scratch.b.x, py - scratch.b.y, pz - scratch.b.z), quat, scratch.a.set(scale, scale, scale));
       card.matrix.toArray(this.matrices, drawn * 16);
+      card.drawnIndex = drawn;
       this.distances[drawn] = this.layout === "ring" ? Math.abs(wrapSigned(card.item - this.ringPos.value, Math.max(1, this.items.length))) : Math.abs(card.item - this.rowPos.value);
       drawn++;
       card.drawn = true;
@@ -1585,8 +1593,22 @@ export class ArchiveStage {
       }
     }
     this.count = drawn;
-    this.composeFaces(detailCard, detailWeight);
     const front = detailCard ?? this.cards.find((card) => card.drawn && card.item === this.selected);
+    this.waterCardTarget = this.waterCardActive && front && this.morph.value < 0.58 ? front : undefined;
+    if (this.waterCardTarget) {
+      // Replace the selected archive shell with the thick water slab. The
+      // original instance is collapsed in the draw buffer, while the water
+      // mesh takes over its exact pose and orientation.
+      this.matrices.fill(0, this.waterCardTarget.drawnIndex * 16, this.waterCardTarget.drawnIndex * 16 + 16);
+      const m = scratch.matrix.copy(this.waterCardTarget.matrix);
+      m.multiply(scratch.basis.makeTranslation(0, CARD.mid, CARD.midZ));
+      m.multiply(scratch.basis.makeScale(0.7, 0.7, 0.7));
+      this.waterCard.place(m);
+      this.waterCard.group.visible = true;
+    } else {
+      this.waterCard.group.visible = false;
+    }
+    this.composeFaces(detailCard, detailWeight);
     if (front) this.focus.copy(front.pose.pos);
     // In the world the picture is the black hole, so the lens focuses there: its disk and its debris stand within a few radii of it.
     if (this.systemOn) {
@@ -1632,6 +1654,10 @@ export class ArchiveStage {
     for (const card of this.cards) {
       const face = card.face;
       if (!face) continue;
+      if (this.waterCardTarget === card) {
+        face.mesh.visible = false;
+        continue;
+      }
       if (!card.drawn) {
         face.mesh.visible = false;
         continue;
@@ -1644,7 +1670,7 @@ export class ArchiveStage {
       if (face.material.opacity < 0.01) face.mesh.visible = false;
     }
     const detailOwner = detailCard && detailShown > 0.01 ? detailCard : undefined;
-    this.detailFace.mesh.visible = Boolean(detailOwner);
+    this.detailFace.mesh.visible = Boolean(detailOwner) && detailOwner !== this.waterCardTarget;
     if (detailOwner) {
       this.detailFace.mesh.matrix.copy(detailOwner.matrix);
       this.detailFace.mesh.matrixWorldNeedsUpdate = true;
@@ -1696,10 +1722,11 @@ export class ArchiveStage {
   setRingMaterial(preset: RingMaterialPreset | undefined) {
     this.fins.setRingMaterial(preset);
     this.waterRingActive = preset?.id === "liquid-water";
+    this.waterCardActive = preset?.id === "water-card";
     this.faceTone = preset?.id;
     const tint = !preset || preset.original
       ? "#ffffff"
-      : preset.id === "liquid-water"
+      : preset.id === "liquid-water" || preset.id === "water-card"
         ? "#e9fbff"
         : preset.id === "flow-white"
           ? "#eaf4ff"
@@ -1736,6 +1763,7 @@ export class ArchiveStage {
     this.faceGeometry.dispose();
     this.fins.dispose();
     this.waterRing.dispose();
+    this.waterCard.dispose();
     this.sky.dispose();
     this.lyrics.dispose();
     this.turntable.dispose();

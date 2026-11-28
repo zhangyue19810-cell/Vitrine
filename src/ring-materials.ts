@@ -7,7 +7,7 @@
  * keeps readable highlights and depth at every angle.
  */
 
-export type RingMaterialId = "black-gold" | "crimson" | "violet" | "azure" | "pearl" | "jade" | "copper" | "obsidian" | "carbon" | "flow-white" | "liquid-water";
+export type RingMaterialId = "black-gold" | "crimson" | "violet" | "azure" | "pearl" | "jade" | "copper" | "obsidian" | "carbon" | "flow-white" | "liquid-water" | "water-card";
 
 export interface RingMaterialPreset {
   id: RingMaterialId;
@@ -213,6 +213,26 @@ export const RING_MATERIALS: readonly RingMaterialPreset[] = [
     thickness: 0.38,
     attenuation: "#eef3fb",
     attenuationDistance: 1.9,
+  },
+  {
+    id: "water-card",
+    label: "厚实水卡片",
+    tag: "WATER SLAB",
+    description: "有真实厚度和圆润倒角的透明水卡片，表面带流动波纹与折射。",
+    swatch: "linear-gradient(135deg,#eafbff,#8dd4e2 48%,#ffffff)",
+    metal: "#dff7ff",
+    glass: "#eafbff",
+    accent: "#ffffff",
+    dark: "#8ccbd9",
+    metalness: 0,
+    roughness: 0.02,
+    clearcoat: 1,
+    clearcoatRoughness: 0.018,
+    envMapIntensity: 1.3,
+    transmission: 1,
+    thickness: 0.82,
+    attenuation: "#e5f5ff",
+    attenuationDistance: 5.8,
   },
   {
     id: "liquid-water",
