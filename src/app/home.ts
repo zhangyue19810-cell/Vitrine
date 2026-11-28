@@ -1,4 +1,3 @@
-import { createRollingText } from "@kitlangton/rolling-number";
 import { records } from "../data";
 import { $, $$, html, setHtml } from "./dom";
 import { avatar, instanceChips, lastPlayedText, shelfPosition } from "./ui-bits";
@@ -6,13 +5,12 @@ import { displayName } from "./records";
 import { store } from "./store";
 import { formatSpeed } from "./format";
 import { PRODUCT, brandHeading, markSvg } from "../brand";
+import { currentSpringForce, springElement, springNumber } from "./spring-ui";
 
 /**
  * The home screen's overlay: brand, navigation, the description of the selected instance and the footer.
  * It is built once; `update()` only touches what changed (text nodes, attributes), so selecting is cheap.
  */
-
-type Rolling = ReturnType<typeof createRollingText>;
 
 export const STAGE_TEMPLATE = `
   <div class="three-scene" id="three-scene"></div>
@@ -50,9 +48,26 @@ const HOME_TEMPLATE = `
     <div class="callout-note" data-f="note"></div>
     <div class="callout-actions" data-f="actions"></div>
   </section>
+  <section class="counter" aria-label="实例序号">
+    <div class="label">INSTANCE / SELECT</div>
+    <div class="value"><b data-f="counter">00</b><i data-f="total">00</i></div>
+  </section>
+  <div class="ticks" aria-label="实例导航">
+    <button class="arrow-btn" data-act="step-file" data-dir="up" data-step="-1" aria-label="上一个实例">↑</button>
+    <div class="marks" data-f="marks" aria-hidden="true"></div>
+    <button class="arrow-btn" data-act="step-file" data-dir="down" data-step="1" aria-label="下一个实例">↓</button>
+  </div>
+  <div class="lane-nav" aria-label="分组导航">
+    <button class="arrow-btn" data-act="step-lane" data-dir="prev" data-step="-1" aria-label="上一个分组">←</button>
+    <div class="name"><small data-f="lane-label">COLUMN 01 / 01</small><b data-f="lane-name"></b></div>
+    <button class="arrow-btn" data-act="step-lane" data-dir="next" data-step="1" aria-label="下一个分组">→</button>
+  </div>
+  <div class="hint"><span class="hint-ring"><kbd>←</kbd><kbd>→</kbd> 转动环 <kbd>PgUp</kbd><kbd>PgDn</kbd> 切换分组 </span><span class="hint-grid"><kbd>↑</kbd><kbd>↓</kbd> 切换实例 <kbd>←</kbd><kbd>→</kbd> 切换分组 </span><kbd>Enter</kbd> 启动 <kbd>Space</kbd> 管理 <kbd>/</kbd> 搜索</div>
 `;
 
 const FOOTER_TEMPLATE = `
+  <span><i class="status-light" data-f="light" data-state="off"></i><span data-f="core">正在连接核心…</span></span>
+  <span class="footer-net" data-f="net"></span>
   <span class="push"><button data-act="open-about" title="关于">${PRODUCT.name.toUpperCase()} ${PRODUCT.nameCn} ↗</button></span>
 `;
 
@@ -61,7 +76,7 @@ export class HomeView {
   private readonly home = $("#home");
   private readonly footer = $("#footer");
   private navCloseTimer?: ReturnType<typeof setTimeout>;
-  private rollTitle!: Rolling;
+  private navMotion = 0;
   private shown = { id: "", signature: "" };
   private field = new Map<string, HTMLElement>();
   animated = true;
@@ -70,10 +85,9 @@ export class HomeView {
     this.home.innerHTML = HOME_TEMPLATE;
     this.footer.innerHTML = FOOTER_TEMPLATE;
     for (const element of [...$$("[data-f]", this.home), ...$$("[data-f]", this.footer)]) this.field.set(element.dataset.f!, element);
-    const options = { duration: 460, motionBlur: true, transition: "direct" as const, stagger: "none" as const, animated: false };
-    this.rollTitle = createRollingText(this.f("title"), { ...options, text: "" });
     this.wireNav();
     this.renderNav();
+    this.renderFooter();
   }
 
   private f(name: string): HTMLElement {
@@ -99,9 +113,24 @@ export class HomeView {
     const callout = $("#callout");
     callout.dataset.kind = record.kind;
 
+    const changed = this.shown.id !== "" && this.shown.id !== record.id;
+    const title = this.f("title");
     this.text("lane", info.laneName);
     this.text("eyebrow", record.kind === "instance" ? `实例 ${String(record.number).padStart(2, "0")}` : "快速开始");
-    this.rollTitle.update({ text: record.title, animated: animated && this.shown.id !== "" && this.shown.id !== record.id, direction: direction === "down" ? "down" : "up" });
+    if (title.textContent !== record.title) title.textContent = record.title;
+    if (changed && animated) {
+      void springElement(title, {
+        fromY: direction === "down" ? -15 : 15,
+        toY: 0,
+        fromScale: 0.965,
+        toScale: 1,
+        fromOpacity: 0,
+        toOpacity: 1,
+        response: 0.34,
+        dampingRatio: 0.8,
+        force: currentSpringForce(),
+      });
+    }
     this.text("subtitle", record.subtitle);
     this.text("side", instance ? lastPlayedText(instance) : "");
 
@@ -113,12 +142,48 @@ export class HomeView {
       setHtml(this.f("actions"), this.actions(record, instance, Boolean(game), launching));
       this.shown.signature = signature;
     }
+
+    const total = records.filter((entry) => entry.kind === "instance").length;
+    this.text("counter", record.kind === "instance" ? String(record.number).padStart(2, "0") : "00");
+    this.text("total", String(total).padStart(2, "0"));
+    this.text("lane-label", `COLUMN ${String(info.lane + 1).padStart(2, "0")} / ${String(info.laneCount).padStart(2, "0")}`);
+    this.text("lane-name", info.laneName);
+    if (changed && animated) {
+      const counter = this.home.querySelector<HTMLElement>(".counter .value");
+      if (counter) void springElement(counter, { fromY: 12, toY: 0, fromOpacity: 0, toOpacity: 1, response: 0.36, dampingRatio: 0.78, force: currentSpringForce() });
+      const lane = this.home.querySelector<HTMLElement>(".lane-nav .name b");
+      if (lane) void springElement(lane, { fromY: direction === "down" ? -10 : 10, toY: 0, fromOpacity: 0, toOpacity: 1, response: 0.34, dampingRatio: 0.8, force: currentSpringForce() });
+    }
+
+    const marksElement = this.f("marks");
+    const marks = Math.min(info.size, 7);
+    const active = info.size <= 7 ? info.position : Math.round((info.position / Math.max(1, info.size - 1)) * (marks - 1));
+    if (marksElement.children.length !== marks) {
+      marksElement.innerHTML = Array.from({ length: marks }, () => `<i data-on="false" style="--tick:.38;--tick-bg:0"></i>`).join("");
+    }
+    [...marksElement.children].forEach((mark, index) => {
+      const element = mark as HTMLElement;
+      const on = index === active;
+      if (element.dataset.on === String(on)) return;
+      element.dataset.on = String(on);
+      const from = Number.parseFloat(element.style.getPropertyValue("--tick")) || (on ? 0.38 : 1);
+      const to = on ? 1 : 0.38;
+      void springNumber({
+        from,
+        to,
+        response: 0.32,
+        dampingRatio: 0.78,
+        force: currentSpringForce(),
+        onUpdate: (value) => {
+          element.style.setProperty("--tick", value.toFixed(4));
+          element.style.setProperty("--tick-bg", String(on ? Math.min(1, Math.max(0, value)) : Math.max(0, 1 - value)));
+        },
+      });
+    });
+    const single = info.size < 2;
+    for (const button of $$("[data-act='step-file']", this.home)) button.toggleAttribute("disabled", single);
+    for (const button of $$("[data-act='step-lane']", this.home)) button.toggleAttribute("disabled", info.laneCount < 2);
     this.shown.id = record.id;
-
-  }
-
-  finishRolling() {
-    this.rollTitle.finish();
   }
 
   private actions(record: (typeof records)[number], instance: ReturnType<typeof store.instance>, running: boolean, launching: boolean) {
@@ -167,24 +232,21 @@ export class HomeView {
         <button class="nav-button" data-act="open-settings" title="设置 (Ctrl+,)"><span class="glyph">⚙</span><span>设置</span></button>
       </div>
       ${options.windowControls ? html`<div class="window-controls"><button data-act="win-minimize" aria-label="最小化">–</button><button data-act="win-maximize" aria-label="最大化">▢</button><button data-act="win-close" aria-label="关闭">✕</button></div>` : ""}`.value;
-    requestAnimationFrame(() => this.measureNavReveal());
   }
 
   private wireNav() {
-    const setOpen = (open: boolean) => {
-      this.nav.classList.toggle("is-open", open);
-      this.nav.querySelector<HTMLElement>(".nav-master")?.setAttribute("aria-expanded", String(open));
-    };
+    const setOpen = (open: boolean) => this.setNavOpen(open);
     const keepOpen = () => {
       clearTimeout(this.navCloseTimer);
       setOpen(true);
     };
     const closeSoon = () => {
       clearTimeout(this.navCloseTimer);
+      const wait = 90;
       this.navCloseTimer = setTimeout(() => {
         if (this.nav.matches(":hover") || this.nav.contains(document.activeElement)) return;
         setOpen(false);
-      }, 110);
+      }, wait);
     };
     this.nav.addEventListener("pointerover", (event) => {
       if ((event.target as Element | null)?.closest(".nav-master")) keepOpen();
@@ -204,13 +266,113 @@ export class HomeView {
     if (matchMedia("(hover: none) and (pointer: coarse)").matches) setOpen(true);
   }
 
-  private measureNavReveal() {
+  /** Expand/collapse the nav with width, opacity and button springs, never a CSS duration. */
+  private setNavOpen(open: boolean) {
     const reveal = this.nav.querySelector<HTMLElement>(".nav-reveal");
     if (!reveal) return;
-    let width = 0;
+    const token = ++this.navMotion;
     const buttons = [...reveal.querySelectorAll<HTMLElement>(".nav-button")];
-    for (const button of buttons) width += button.offsetWidth;
-    width += Math.max(0, buttons.length - 1) * 2;
-    this.nav.style.setProperty("--nav-reveal-width", `${Math.ceil(width)}px`);
+    const chevron = this.nav.querySelector<HTMLElement>(".nav-master-chevron");
+    this.nav.querySelector<HTMLElement>(".nav-master")?.setAttribute("aria-expanded", String(open));
+    if (chevron) {
+      const target = open ? 180 : 0;
+      const current = Number.parseFloat(this.nav.style.getPropertyValue("--nav-chevron-angle")) || 0;
+      void springNumber({
+        from: current,
+        to: target,
+        response: 0.36,
+        dampingRatio: 0.76,
+        force: currentSpringForce(),
+        onUpdate: (value) => this.nav.style.setProperty("--nav-chevron-angle", `${value.toFixed(2)}deg`),
+      });
+    }
+    if (open) {
+      this.nav.classList.add("is-open");
+      reveal.style.visibility = "visible";
+      reveal.style.pointerEvents = "auto";
+      void springElement(reveal, {
+        fromX: 18,
+        toX: 0,
+        fromY: -6,
+        toY: 0,
+        fromOpacity: 0,
+        toOpacity: 1,
+        fromScale: 0.94,
+        toScale: 1,
+        response: 0.42,
+        dampingRatio: 0.8,
+        force: currentSpringForce(),
+        transformOrigin: "100% 0%",
+      });
+      void springElement(buttons[0] ?? reveal, {
+        fromX: 14,
+        toX: 0,
+        fromY: -2,
+        toY: 0,
+        fromOpacity: 0,
+        toOpacity: 1,
+        response: 0.34,
+        dampingRatio: 0.82,
+        delay: 30,
+      });
+      buttons.slice(1).forEach((button, index) => {
+        void springElement(button, {
+          fromX: 12,
+          toX: 0,
+          fromY: -2,
+          toY: 0,
+          fromOpacity: 0,
+          toOpacity: 1,
+          fromScale: 0.96,
+          toScale: 1,
+          response: 0.34,
+          dampingRatio: 0.8,
+          delay: 58 + index * 38,
+        });
+      });
+    } else {
+      void springElement(reveal, {
+        fromX: 0,
+        toX: 12,
+        fromY: 0,
+        toY: -5,
+        fromOpacity: 1,
+        toOpacity: 0,
+        fromScale: 1,
+        toScale: 0.96,
+        response: 0.3,
+        dampingRatio: 0.94,
+        retainFinal: true,
+      }).then(() => {
+        if (token !== this.navMotion) return;
+        this.nav.classList.remove("is-open");
+        reveal.style.removeProperty("visibility");
+        reveal.style.removeProperty("pointer-events");
+        reveal.style.removeProperty("translate");
+        reveal.style.removeProperty("scale");
+        reveal.style.removeProperty("opacity");
+        reveal.style.removeProperty("will-change");
+        for (const button of buttons) {
+          button.style.removeProperty("translate");
+          button.style.removeProperty("scale");
+          button.style.removeProperty("opacity");
+          button.style.removeProperty("will-change");
+        }
+      });
+    }
   }
+
+  /** The quiet status line that belongs to the shelf, not to a modal. */
+  renderFooter() {
+    if (!store.ready) return;
+    this.text("core", `核心已连接${store.coreVersion ? ` · v${store.coreVersion}` : ""}`);
+    const light = this.f("light");
+    const state = !store.connected ? "off" : store.activeDownloads().length || store.launching ? "busy" : "ok";
+    if (light.dataset.state !== state) light.dataset.state = state;
+    const settings = store.settings;
+    const policy = { "official-first": "官方源优先", "mirror-first": "镜像源优先", "official-only": "仅官方源", "mirror-only": "仅镜像源" }[settings.sources.policy] ?? "官方源优先";
+    this.text("net", `下载 ${policy} · ${settings.download.concurrency} 线程 × ${settings.download.segments} 分段`);
+  }
+
+
 }

@@ -15,7 +15,8 @@ import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
 import { installGlassTuner } from "./glass-tuner";
 import { installWaterRingTuner } from "./water-ring-tuner";
-import { currentSpringForce, springReveal } from "./spring-ui";
+import { installSpringMotion } from "./spring-motion";
+import { currentSpringForce, springElement, springReveal } from "./spring-ui";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { MusicDock } from "./music/dock";
@@ -104,7 +105,6 @@ export class App implements PerfApp {
   private pointer = { x: 0, y: 0 };
   private lastShade = -1;
   private overlayShown = false;
-  private closeDetailTimer?: ReturnType<typeof setTimeout>;
   private readonly taskStates = new Map<string, string>();
   private readonly timers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -194,10 +194,12 @@ export class App implements PerfApp {
     const stage = this.stage;
     stage.innerHTML = STAGE_TEMPLATE;
     stage.dataset.entered = "false";
+    stage.dataset.booted = "false";
     document.title = `${PRODUCT.name} ${PRODUCT.nameCn}`;
     installLiquidGlass(stage);
     installGlassTuner();
     installWaterRingTuner();
+    installSpringMotion();
     wireModals();
     this.layout = new Layout(this.viewport, stage);
 
@@ -276,6 +278,7 @@ export class App implements PerfApp {
     this.host.setSpectrum(this.player.spectrum);
     this.applySettings(true);
     this.syncShelf(true);
+    this.home.renderFooter();
     await this.host.ensure();
     this.stage.dataset.scene = this.host.status;
     this.stage.dataset.ring = this.host.stage ? "on" : "off";
@@ -287,6 +290,7 @@ export class App implements PerfApp {
       toast(`无法启动 3D 画面：${reason}。已切换到兼容界面，键盘、右侧按钮和搜索仍可用。`, "error", 12_000);
     }
     this.perf.sceneReady();
+    this.host.present(false, true);
     splash?.status("准备就绪", 1);
 
     this.subscribe();
@@ -297,28 +301,146 @@ export class App implements PerfApp {
     const wanted = style === "full" ? 2600 : style === "short" ? 900 : 0;
     await Promise.race([sleep(Math.max(0, wanted - (performance.now() - started))), splash?.skipped ?? Promise.resolve()]);
     this.splashActive = false;
-    this.stage.dataset.booted = "true";
     this.updateInert();
     this.perf.refresh();
-    this.host.present(true);
+    // Keep every surface in its first frame while the splash springs away.
+    this.host.present(false, true);
     await splash?.finish();
-    this.stage.dataset.entered = "true";
     this.island?.start();
-    const entrance = this.stage.querySelectorAll<HTMLElement>(
-      ".brand, .system-nav, .view-tabs, .home > *, .download > *, .detail > *, .system-footer",
-    );
-    void springReveal(entrance, {
-      origin: "top-right",
-      distance: 40,
-      stagger: 320,
-      stiffness: 150,
-      dampingRatio: 0.72,
-      force: 1.08,
-    });
+    this.animateEntrance();
     this.exposeDebug();
 
     if (!store.instances.length) toast("先点“新建实例”安装一个版本，或把整合包文件拖进窗口导入。", "info", 9000);
     else if (!store.accounts.length) toast("右上角可以添加账号（微软 / 离线）。", "info", 6000);
+  }
+
+  /**
+   * The interface arrives as one radial water wave. The board appears first,
+   * the Möbius stage grows from a tiny disc in the top-right corner, and each
+   * UI group follows on its own spring. No element jumps straight to its
+   * final opacity or size.
+   */
+  private animateEntrance() {
+    const stage = this.stage;
+    const primary = [...stage.querySelectorAll<HTMLElement>(
+      ".brand, .system-nav, .view-tabs, .home > *, .system-footer, .dynamic-island",
+    )];
+    const inner = [...stage.querySelectorAll<HTMLElement>(
+      ".home .callout > *, .ticks .arrow-btn, .lane-nav > *, .nav-reveal .nav-button, .system-footer > span",
+    )].filter((element) => !primary.includes(element));
+    const scene = stage.querySelector<HTMLElement>(".three-scene");
+    const board = stage.querySelector<HTMLElement>(".scene-atmosphere");
+    const aura = stage.querySelector<HTMLElement>(".scene-aura");
+    const cleanup = (items: HTMLElement[]) => {
+      for (const item of items) {
+        item.style.removeProperty("clip-path");
+        item.style.removeProperty("will-change");
+      }
+    };
+
+    if (board) {
+      void springElement(board, {
+        fromY: -18,
+        toY: 0,
+        fromScale: 0.965,
+        toScale: 1,
+        fromOpacity: 0,
+        toOpacity: 1,
+        fromBlur: 18,
+        toBlur: 0,
+        response: 0.62,
+        dampingRatio: 0.9,
+        force: 1.05,
+        transformOrigin: "100% 0%",
+      });
+    }
+    if (aura) {
+      void springElement(aura, {
+        fromX: 46,
+        fromY: -24,
+        toX: 0,
+        toY: 0,
+        fromScale: 0.9,
+        toScale: 1,
+        fromOpacity: 0,
+        toOpacity: 1,
+        fromBlur: 22,
+        toBlur: 0,
+        response: 0.72,
+        dampingRatio: 0.88,
+        force: 1.06,
+        transformOrigin: "100% 0%",
+        delay: 60,
+      });
+    }
+    if (scene) {
+      let presented = false;
+      void springElement(scene, {
+        fromX: 38,
+        fromY: -32,
+        toX: 0,
+        toY: 0,
+        fromScale: 0.13,
+        toScale: 1,
+        fromOpacity: 0,
+        toOpacity: 1,
+        fromBlur: 20,
+        toBlur: 0,
+        fromClip: 0,
+        toClip: 160,
+        response: 0.68,
+        dampingRatio: 0.78,
+        force: 1.12,
+        transformOrigin: "100% 0%",
+        clipOrigin: "100% 0%",
+        delay: 110,
+        onFrame: (state) => {
+          // Start the archives' own drop only once the growing stage is
+          // actually visible. This keeps the ring from finishing its fall
+          // under a hidden canvas.
+          if (!presented && state.opacity > 0.045) {
+            presented = true;
+            this.host.present(true);
+          }
+        },
+      }).then(() => {
+        scene.style.removeProperty("clip-path");
+        scene.style.removeProperty("will-change");
+      });
+    } else {
+      this.host.present(false, true);
+    }
+
+    void springReveal(primary, {
+      origin: "top-right",
+      distance: 96,
+      stagger: 760,
+      fromScale: 0.48,
+      fromBlur: 9,
+      fromClip: 0,
+      toClip: 160,
+      response: 0.5,
+      dampingRatio: 0.8,
+      force: 1.08,
+    }).then(() => cleanup(primary));
+    void springReveal(inner, {
+      origin: "top-right",
+      distance: 48,
+      stagger: 520,
+      fromScale: 0.66,
+      fromBlur: 4,
+      fromClip: 0,
+      toClip: 160,
+      response: 0.44,
+      dampingRatio: 0.82,
+      force: 1.06,
+    }).then(() => cleanup(inner));
+
+    // The initial styles are already written by springElement synchronously.
+    // Releasing the CSS gate now therefore cannot produce a one-frame flash.
+    stage.dataset.booted = "true";
+    stage.dataset.entered = "true";
+    void stage.offsetWidth;
   }
 
   private async connect(splash: Splash | undefined) {
@@ -358,6 +480,7 @@ export class App implements PerfApp {
     this.host.setCardSize(ui.cardSize, first);
     this.controls.setSize(ui.cardSize);
     this.applyTheme(ui.theme, first);
+    this.home.renderFooter();
     this.perf.refresh();
   }
 
@@ -479,38 +602,77 @@ export class App implements PerfApp {
     void tryRpc("settings.update", { patch: { ui: { cardSize: size } } });
   }
 
+  /** The page that is currently allowed to own the screen. */
+  private currentPageRoot(): HTMLElement | undefined {
+    if (this.mode === "detail") return this.stage.querySelector<HTMLElement>(".detail") ?? undefined;
+    if (this.view === "home") return this.stage.querySelector<HTMLElement>(".home") ?? undefined;
+    if (this.tab === "music") return this.stage.querySelector<HTMLElement>(".music-hud") ?? this.stage.querySelector<HTMLElement>(".download") ?? undefined;
+    return this.stage.querySelector<HTMLElement>(".download") ?? undefined;
+  }
+
+  /** Send an old page away on an interruptible spring. The page's CSS visibility rules hide it from input immediately. */
+  private springExitPage(root: HTMLElement, direction: -1 | 1) {
+    void springElement(root, {
+      fromY: 0,
+      toY: direction * 24,
+      fromScale: 1,
+      toScale: 0.986,
+      fromOpacity: 1,
+      toOpacity: 0,
+      response: 0.34,
+      dampingRatio: 0.92,
+      retainFinal: true,
+    }).then(() => {
+      root.style.removeProperty("translate");
+      root.style.removeProperty("scale");
+      root.style.removeProperty("rotate");
+      root.style.removeProperty("opacity");
+    });
+  }
+
   /**
-   * Restart a short, ornamental page switch. Each page's top-level pieces are
-   * tagged with 100 ms offsets and their framed children with a faster second
-   * pass; the blur and stagger attributes are cleared independently so the
-   * interface lands sharp before the last child has finished settling.
+   * Page changes follow Apple's continuity rule: the container and its pieces
+   * move as one physical group, with a radial stagger for subordinate content.
+   * The old page leaves in the opposite direction or falls away; there is no
+   * cross-fade duration and no page-part keyframe.
    */
-  private pulsePageTransition() {
-    const stage = this.stage;
-    for (const item of stage.querySelectorAll<HTMLElement>("[data-page-item]")) {
-      delete item.dataset.pageItem;
-      item.style.removeProperty("--page-delay");
-    }
-    delete stage.dataset.staggering;
-    const targets = new Set<HTMLElement>();
-    for (const page of stage.querySelectorAll<HTMLElement>(".home, .download, .detail")) {
-      for (const child of page.children) if (child instanceof HTMLElement) targets.add(child);
-      for (const parent of page.querySelectorAll<HTMLElement>(".callout, .dl-bar, .detail-panel")) {
-        for (const child of parent.children) {
-          if (!(child instanceof HTMLElement)) continue;
-          if (child.classList.contains("liquid-edge") || child.classList.contains("liquid-sheen")) continue;
-          if (child.classList.contains("liquid-glass-layer") || child.classList.contains("liquid-glass-tint")) continue;
-          targets.add(child);
-        }
-      }
-    }
-    void springReveal(targets, {
-      origin: "bottom",
-      distance: 42,
-      stagger: 230,
-      stiffness: 165,
-      dampingRatio: 0.72,
+  private pulsePageTransition(root = this.currentPageRoot(), direction: -1 | 1 = 1) {
+    if (!root) return;
+    const top = [...root.children].filter((child): child is HTMLElement => child instanceof HTMLElement);
+    const nested = [...root.querySelectorAll<HTMLElement>(
+      ".callout > *, .detail-head > *, .detail-tabs, .detail-body, .dl-bar > *, .music-hud .hud-left > *, .music-hud .hud-capsule > *",
+    )];
+    void springElement(root, {
+      fromY: direction > 0 ? 42 : -22,
+      toY: 0,
+      fromScale: 0.985,
+      toScale: 1,
+      fromOpacity: 0,
+      toOpacity: 1,
+      response: 0.5,
+      dampingRatio: 0.82,
       force: currentSpringForce(),
+    });
+    void springReveal([...top, ...nested], {
+      origin: direction > 0 ? "bottom" : "top-right",
+      distance: 34,
+      stagger: 170,
+      fromScale: 0.82,
+      fromBlur: 3,
+      fromClip: 0,
+      toClip: 160,
+      response: 0.44,
+      dampingRatio: 0.8,
+      force: currentSpringForce(),
+    }).then(() => {
+      for (const item of top) {
+        item.style.removeProperty("clip-path");
+        item.style.removeProperty("will-change");
+      }
+      for (const item of nested) {
+        item.style.removeProperty("clip-path");
+        item.style.removeProperty("will-change");
+      }
     });
   }
 
@@ -529,8 +691,11 @@ export class App implements PerfApp {
     if (id === "home") return this.showHome();
     // Without WebGL the download view renders its DOM rail instead. Music needs the 3D picture.
     if (!this.host.stage && id === "music") return void toast("音乐页要在 3D 画面里使用，现在没有 3D 画面。", "info", 5000);
-    this.pulsePageTransition();
     const from = this.tab;
+    const previousPage = this.currentPageRoot();
+    if (previousPage && (this.view !== "browse" || previousPage !== this.stage.querySelector(".download"))) {
+      this.springExitPage(previousPage, -1);
+    }
     this.tab = id;
     this.renderTabs();
     // Keep the floating now-playing dock on the home ring only. The download row has its own dense controls and the
@@ -547,15 +712,22 @@ export class App implements PerfApp {
         this.stage.dataset.browse = "music";
         await this.music?.enter(true);
       } else if (id !== "music") await this.download.switchKind(id);
+      this.pulsePageTransition();
       return;
     }
     this.setView("browse");
     sound.play("open");
     if (id === "music") {
+      // The music HUD is created and marked visible by enter(); animate it
+      // once, after it exists, instead of starting a hidden animation.
       this.stage.dataset.browse = "music";
       await this.music?.enter();
+      this.pulsePageTransition();
     } else {
+      // The download controls exist before the network request. Animate them
+      // once now and let the result cards own their small arrival springs.
       this.stage.dataset.browse = "download";
+      this.pulsePageTransition();
       await this.download.enter(id);
     }
   }
@@ -564,27 +736,31 @@ export class App implements PerfApp {
   private async openContent(kind: ContentKind, preset: { instanceId?: string; query?: string } = {}) {
     if (this.splashActive || modals.open || launchOverlay.open) return;
     if (this.mode === "detail") this.exitDetail();
-    this.pulsePageTransition();
+    const previousPage = this.currentPageRoot();
+    if (previousPage) this.springExitPage(previousPage, -1);
     this.tab = kind;
     this.renderTabs();
     this.dock?.setBig(false);
     this.dock?.setVisible(false);
     this.setView("browse");
+    this.pulsePageTransition();
     sound.play("open");
     await this.download.enter(kind, preset);
   }
 
   private showHome() {
-    if (this.view !== "home") this.pulsePageTransition();
+    if (this.view === "home") return;
+    const previous = this.currentPageRoot();
     this.tab = "home";
     this.renderTabs();
     this.dock?.setBig(false);
     this.dock?.setVisible(true);
-    if (this.view === "home") return;
+    if (previous) this.springExitPage(previous, -1);
     this.download.leave();
     this.music?.leave();
     this.setView("home");
     this.host.showRing();
+    this.pulsePageTransition(this.currentPageRoot(), 1);
     sound.play("close");
   }
 
@@ -632,19 +808,45 @@ export class App implements PerfApp {
 
   private setMode(next: Mode) {
     if (this.mode === next) return;
-    this.pulsePageTransition();
+    const previous = next === "detail" ? this.currentPageRoot() : undefined;
+    if (previous) this.springExitPage(previous, -1);
+    if (next === "archive") this.stage.dataset.leavingMode = "detail";
+    else delete this.stage.dataset.leavingMode;
     this.mode = next;
     this.stage.dataset.mode = next;
     this.host.setMode(next);
     this.setHover(null);
-    clearTimeout(this.closeDetailTimer);
     if (next === "detail") {
       const record = records[this.selected];
       if (record?.kind === "instance") this.detail.openFor(record.id);
+      this.pulsePageTransition(this.currentPageRoot(), 1);
       sound.play("open");
     } else {
-      // Keep the panel's contents until its fade-out is over.
-      this.closeDetailTimer = setTimeout(() => this.mode === "archive" && this.detail.close(), 480);
+      // Keep the panel mounted until the spring has returned it to the
+      // shelf; the close is driven by its own completion, not a timeout.
+      const detail = this.stage.querySelector<HTMLElement>(".detail");
+      const finishClose = () => {
+        if (this.mode !== "archive") return;
+        this.detail.close();
+        delete this.stage.dataset.leavingMode;
+        // Only reveal the shelf if the person did not navigate away while the
+        // detail panel was leaving. A pending page transition owns the screen
+        // in that case.
+        if (this.view === "home") this.pulsePageTransition(this.currentPageRoot(), 1);
+      };
+      if (detail) {
+        void springElement(detail, {
+          fromY: 0,
+          toY: 22,
+          fromScale: 1,
+          toScale: 0.982,
+          fromOpacity: 1,
+          toOpacity: 0,
+          response: 0.34,
+          dampingRatio: 0.92,
+          retainFinal: true,
+        }).then(finishClose);
+      } else finishClose();
       sound.play("close");
     }
     this.updateInert();
@@ -724,6 +926,7 @@ export class App implements PerfApp {
         this.host.refreshRing();
         this.home.update(this.selected, "auto");
         this.home.renderNav({ windowControls: Boolean(this.bridge?.window) });
+        this.home.renderFooter();
       });
     };
     store.on("games", () => {

@@ -2,6 +2,7 @@ import { markSvg } from "../brand";
 import { formatSpeed } from "./format";
 import type { MusicPlayer, PlayerChange } from "./music/player";
 import type { TaskSnapshot } from "./types";
+import { currentSpringForce, springElement } from "./spring-ui";
 
 /**
  * The top quick island, ported from the spring geometry of Lumina UI's
@@ -96,6 +97,7 @@ export class DynamicIsland {
   private readonly height = new Spring(BAR_H, 240, 19);
   private readonly y = new Spring(-24, 200, 17);
   private readonly alpha = new Spring(0, 120, 16);
+  private readonly progressSpring = new Spring(0, 190, 21);
   private geometryFrame = 0;
   private lastFrame = 0;
   private state: IslandState = "hidden";
@@ -297,7 +299,7 @@ export class DynamicIsland {
           : "正在准备…";
     this.lyrics.hidden = true;
     this.progressTrack.hidden = false;
-    this.progress.style.width = `${Math.round(value * 1000) / 10}%`;
+    this.setProgressPercent(value * 100);
     this.root.dataset.progress = String(value);
   }
 
@@ -320,8 +322,23 @@ export class DynamicIsland {
       if (text && text !== this.lastLyricText) {
         this.lastLyricText = text;
         this.lyricCurrent.classList.remove("island-lyric-pop");
-        void this.lyricCurrent.offsetWidth;
-        this.lyricCurrent.classList.add("island-lyric-pop");
+        // Each new lyric line is a spring of its own. The previous line's
+        // spring is interrupted in place, matching Apple's fluid-interface
+        // rule that motion must always be redirectable.
+        void springElement(this.lyricCurrent, {
+          fromY: 10,
+          toY: 0,
+          fromScale: 0.94,
+          toScale: 1,
+          fromOpacity: 0.22,
+          toOpacity: 1,
+          fromClip: 0,
+          toClip: 160,
+          clipOrigin: "0% 100%",
+          response: 0.38,
+          dampingRatio: 0.72,
+          force: currentSpringForce(),
+        }).then(() => this.lyricCurrent.style.removeProperty("clip-path"));
       }
     } else {
       this.lyrics.hidden = true;
@@ -359,7 +376,7 @@ export class DynamicIsland {
     this.meta.textContent = failed ? task.error ?? "下载失败" : "下载完成 · 3 秒后收起";
     this.lyrics.hidden = true;
     this.progressTrack.hidden = false;
-    this.progress.style.width = "100%";
+    this.setProgressPercent(100);
     this.state = "open";
     this.applyGeometry();
     this.collapseTimer = window.setTimeout(() => {
@@ -383,6 +400,14 @@ export class DynamicIsland {
     const wanted = geometry[this.mode];
     const available = Math.max(180, (this.root.parentElement?.clientWidth ?? 1352) - 32);
     return { ...wanted, w: Math.min(wanted.w, available), y: 0, a: 1, r: Math.min(wanted.h / 2, 15) };
+  }
+
+  private setProgressPercent(value: number) {
+    this.progressSpring.to(Math.max(0, Math.min(100, value)));
+    if (!this.geometryFrame) {
+      this.lastFrame = 0;
+      this.geometryFrame = requestAnimationFrame(this.tickGeometry);
+    }
   }
 
   private applyGeometry(immediate = false) {
@@ -411,14 +436,16 @@ export class DynamicIsland {
 
   private readonly tickGeometry = (now: number) => {
     this.geometryFrame = 0;
-    const dt = this.lastFrame ? Math.min(0.05, Math.max(0.001, (now - this.lastFrame) / 1000)) : 1 / 60;
+    const dt = this.lastFrame ? Math.min(0.2, Math.max(0.001, (now - this.lastFrame) / 1000)) : 1 / 60;
     this.lastFrame = now;
     this.width.step(dt);
     this.height.step(dt);
     this.y.step(dt);
     this.alpha.step(dt);
+    this.progressSpring.step(dt);
     this.paintGeometry();
-    const settled = this.width.settled() && this.height.settled() && this.y.settled() && this.alpha.settled();
+    this.progress.style.width = `${Math.max(0, Math.min(100, this.progressSpring.value)).toFixed(2)}%`;
+    const settled = this.width.settled() && this.height.settled() && this.y.settled() && this.alpha.settled() && this.progressSpring.settled();
     if (!settled) this.geometryFrame = requestAnimationFrame(this.tickGeometry);
   };
 
@@ -429,6 +456,11 @@ export class DynamicIsland {
     style.setProperty("--island-y", `${this.y.value.toFixed(2)}px`);
     style.setProperty("--island-a", String(Math.max(0, Math.min(1, this.alpha.value)).toFixed(4)));
     style.setProperty("--island-r", `${radius.toFixed(2)}px`);
+    // Keep the content mounted while the island is still shrinking into its
+    // sensor bar; otherwise a wide, empty black pill is visible for a few
+    // frames at the five-second hold boundary.
+    const compact = this.state === "bar" && this.width.value <= BAR_W + 16;
+    this.root.dataset.state = this.state !== "bar" || compact ? this.state : "open";
     if (this.state === "hidden" && this.alpha.value < 0.01) style.visibility = "hidden";
     else style.visibility = "visible";
   }

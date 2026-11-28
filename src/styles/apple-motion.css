@@ -1,0 +1,652 @@
+/*
+ * Apple-style motion layer for Vitrine.
+ *
+ * Physical transitions (position, size, scale, rotation, opacity that enters or
+ * leaves a view) are integrated by src/app/spring-ui.ts at 60 fps. This sheet
+ * removes the legacy duration/keyframe paths that used to fight those springs,
+ * keeps only quick colour crossfades for state, and restores the real home
+ * chrome that had been missing from the shelf.
+ *
+ * Following Apple's HIG: obey reduced motion, prefer quiet feedback for
+ * frequent controls, and keep delegated hover/press movement subordinate to
+ * the page transition rather than animating every element all the time.
+ */
+
+/* Only non-spatial properties may cross-fade in CSS. Every transform, width,
+ * height, clip-path and opacity transition is owned by the spring runner. */
+*,
+*::before,
+*::after {
+  transition-property: color, background-color, border-color, box-shadow, fill, stroke, text-decoration-color !important;
+  transition-duration: 140ms !important;
+  transition-timing-function: ease !important;
+  transition-delay: 0s !important;
+}
+
+/* ------------------------------------------------------------------------------------------ legacy timeline removal */
+
+.sheet,
+.sheet.leaving,
+.dialog,
+.dialog.leaving,
+.scrim,
+.scrim.leaving,
+.toast,
+.toast.leaving,
+.launch,
+.launch.leaving,
+.lightbox,
+.menu,
+.menu button,
+.nav-reveal,
+.nav-reveal .nav-button,
+.nav-master-chevron,
+.account-card,
+.dynamic-island .island-lyrics strong,
+.dynamic-island .island-lyrics strong.island-lyric-pop,
+.mod-update-row,
+.mod-problem-popover,
+.mod-problem-trigger,
+.mod-problem-trigger::before,
+.problem,
+.view-tabs::after,
+.system-nav::after,
+.callout::after,
+.callout-rule::after,
+.nav-button .dot,
+.hud-hint i,
+.hud-capsule[data-loading="true"] .hud-thumb,
+.liquid-edge,
+.liquid-flow,
+.liquid-flow::before,
+.liquid-flow::after,
+.liquid-drop,
+.liquid-drop::after,
+.scene-aura,
+.scene-aura::before,
+.scene-aura::after,
+#stage.ui-entering .brand,
+#stage.ui-entering .system-nav,
+#stage.ui-entering .view-tabs,
+#stage.ui-entering .home > *,
+#stage.ui-entering .download > *,
+#stage.ui-entering .detail > *,
+#stage.ui-entering .system-footer,
+#stage[data-staggering="true"] [data-page-item],
+#stage[data-staggering="true"] .dl-flat-track > .dl-flat-card {
+  animation: none !important;
+}
+
+/* The old travelling frame, sheen, rim and water layers are not part of the
+ * live WebGL glass. Hiding them removes the square corner ghosts that could
+ * survive behind panels whose radii had changed. */
+.liquid-edge,
+.liquid-sheen,
+.liquid-glass-layer,
+.liquid-glass-tint,
+.liquid-drop,
+.liquid-flow,
+.liquid-fringe,
+.liquid-lens,
+.liquid-rim {
+  display: none !important;
+}
+
+/* Every pre-WebGL glass surface painted a second pseudo-element wall on top
+ * of the body. On rounded panels with a clipped backdrop this could leave
+ * vertical dark slivers at the corners. The live shader owns the silhouette
+ * now, so those walls are removed together with the old travelling rims. */
+:root:root .liquid-shader-host:not(.toggle)::before,
+:root:root .liquid-shader-host:not(.toggle)::after,
+:root:root .sheet::before,
+:root:root .sheet::after,
+:root:root .dialog::before,
+:root:root .dialog::after,
+:root:root .callout::before,
+:root:root .callout::after,
+:root:root .detail-panel::before,
+:root:root .detail-panel::after,
+:root:root .dl-bar::before,
+:root:root .dl-bar::after,
+:root:root .system-nav::before,
+:root:root .system-nav::after,
+:root:root .view-tabs::before,
+:root:root .view-tabs::after,
+:root:root .menu::before,
+:root:root .menu::after,
+:root:root .nav-reveal::before,
+:root:root .nav-reveal::after,
+:root:root .toast::before,
+:root:root .hud-capsule::after,
+:root:root .card::after,
+:root:root .stat::after,
+:root:root .settings .setting::after,
+:root:root .mod-row::after,
+:root:root .mod-update-row::after,
+:root:root .material-option::after,
+:root:root .custom-download-status::after,
+:root:root .mod-problem-popover::before {
+  content: none !important;
+  display: none !important;
+}
+
+/* ------------------------------------------------------------------------------------------ stage arrival + page visibility */
+
+.three-scene,
+.home,
+.detail,
+.download,
+.music-hud,
+.view-tabs {
+  transition: none !important;
+}
+
+#stage[data-booted="false"] .three-scene {
+  opacity: 0 !important;
+}
+
+#stage[data-booted="false"] .scene-atmosphere,
+#stage[data-booted="false"] .scene-aura {
+  visibility: hidden !important;
+}
+
+#stage[data-entered="false"] .brand,
+#stage[data-entered="false"] .system-nav,
+#stage[data-entered="false"] .view-tabs,
+#stage[data-entered="false"] .home > *,
+#stage[data-entered="false"] .download > *,
+#stage[data-entered="false"] .detail > *,
+#stage[data-entered="false"] .system-footer,
+#stage[data-entered="false"] .dynamic-island {
+  opacity: 0;
+}
+
+.home,
+.detail,
+.download {
+  transform: none !important;
+}
+
+#stage[data-mode="detail"] .home,
+#stage[data-view="browse"] .home,
+#stage[data-leaving-mode="detail"] .home {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#stage:not([data-mode="detail"]) .detail {
+  opacity: 0;
+}
+
+#stage[data-mode="detail"] .detail {
+  opacity: 1;
+}
+
+#stage:not([data-view="browse"]) .download {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#stage[data-view="browse"] .download {
+  opacity: 1;
+  visibility: visible;
+}
+
+#stage[data-browse="music"] .download {
+  opacity: 0;
+  visibility: hidden;
+}
+
+#stage[data-mode="detail"] .view-tabs {
+  opacity: 0;
+  transform: translateX(-50%) !important;
+  pointer-events: none;
+}
+
+#stage[data-rail="on"] .view-tabs {
+  visibility: visible;
+  pointer-events: auto;
+}
+
+/* The music layer's old delayed opacity transition is replaced by the page
+ * spring; it must not reveal itself while the stage is regrouping. */
+.music-hud {
+  transition: none !important;
+}
+
+/* ------------------------------------------------------------------------------------------ navigation */
+
+.nav-reveal {
+  width: 0;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  animation: none !important;
+}
+
+.system-nav.is-open .nav-reveal {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  animation: none !important;
+}
+
+.system-nav .nav-reveal {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-auto-flow: row;
+  align-content: start;
+  align-items: stretch;
+  justify-content: stretch;
+  justify-items: stretch;
+}
+
+.nav-reveal .nav-button {
+  flex: none;
+  width: 100%;
+  opacity: 0;
+  animation: none !important;
+}
+
+.system-nav.is-open .nav-reveal .nav-button {
+  opacity: 1;
+  animation: none !important;
+}
+
+.nav-master-chevron {
+  transform: rotate(var(--nav-chevron-angle, 0deg));
+  transform-origin: center;
+}
+
+.system-nav.is-open .nav-master-chevron {
+  transform: rotate(var(--nav-chevron-angle, 180deg));
+}
+
+/* The fallback tab strip expands with one spring progress variable. The
+ * WebGL control rail draws its own tabs; this path is for the flat fallback. */
+.view-tabs .view-tab:not([aria-current="page"]) {
+  max-width: calc(140px * var(--tabs-open, 1)) !important;
+  padding-left: calc(14px * var(--tabs-open, 1)) !important;
+  padding-right: calc(14px * var(--tabs-open, 1)) !important;
+  opacity: var(--tabs-open, 1) !important;
+  translate: calc((1 - var(--tabs-open, 1)) * -5px) 0 !important;
+  scale: calc(0.96 + 0.04 * var(--tabs-open, 1)) !important;
+}
+
+.view-tabs:not(.view-tabs-open) .view-tab:not([aria-current="page"]) {
+  pointer-events: none;
+}
+
+.view-tabs .view-tabs-peek {
+  width: calc(24px * (1 - var(--tabs-open, 1))) !important;
+  padding-right: calc(5px * (1 - var(--tabs-open, 1))) !important;
+  opacity: calc(0.78 * (1 - var(--tabs-open, 1))) !important;
+}
+
+/* ------------------------------------------------------------------------------------------ toggles and press feedback */
+
+.toggle {
+  --toggle-knob: 0;
+}
+
+.toggle[aria-checked="true"] {
+  --toggle-knob: 1;
+}
+
+.toggle::after {
+  left: 3px;
+  transform: translateX(calc(var(--toggle-knob, 0) * 18px));
+}
+
+.toggle[aria-checked="true"]::after {
+  transform: translateX(calc(var(--toggle-knob, 1) * 18px));
+}
+
+/* The delegated spring owns translation and scale for these controls. The old
+ * CSS hover/press transforms would otherwise add a second, instant motion. */
+.btn:hover:not(:disabled),
+.btn:active:not(:disabled),
+.nav-button:hover,
+.nav-button:active,
+.view-tab:hover,
+.view-tab:active,
+.detail-tabs button:hover,
+.detail-tabs button:active,
+.settings-nav button:hover,
+.settings-nav button:active,
+.tabs button:hover,
+.tabs button:active,
+.seg button:hover,
+.seg button:active,
+.material-option:hover,
+.material-option:active,
+.dl-flat-card:hover,
+.dl-flat-card[data-selected="true"],
+.dl-flat-more:hover,
+.system-nav.is-open .nav-reveal .nav-button:hover {
+  transform: none !important;
+}
+
+.callout-actions .btn:hover:not(:disabled),
+.callout-actions .btn:active:not(:disabled),
+.ticks .arrow-btn:hover,
+.ticks .arrow-btn:active,
+.lane-nav .arrow-btn:hover,
+.lane-nav .arrow-btn:active,
+.system-nav.is-open .nav-reveal .nav-button:hover {
+  transform: none !important;
+}
+
+.btn .arrow,
+.back-button .arrow,
+.callout-title .arrow {
+  transition: none !important;
+}
+
+.btn:hover:not(:disabled) .arrow,
+.callout-title button:hover .arrow,
+.back-button:hover .arrow {
+  transform: none !important;
+}
+
+/* The hit target itself receives the spring; paragraphs and nested labels do
+ * not become independent animated objects. */
+.btn,
+.nav-button,
+.view-tab,
+.detail-tabs button,
+.settings-nav button,
+.tabs button,
+.seg button,
+.material-option,
+.dl-flat-card,
+.dl-flat-more {
+  will-change: auto;
+}
+
+/* ------------------------------------------------------------------------------------------ restored home chrome */
+
+.callout-title span[data-f="title"] {
+  display: inline-block;
+  transform-origin: 0 50%;
+}
+
+.counter {
+  z-index: 6;
+  pointer-events: none;
+}
+
+.counter .label {
+  letter-spacing: 1.8px;
+}
+
+.counter .value b {
+  font-variant-numeric: tabular-nums;
+  transform-origin: 0 100%;
+}
+
+.ticks,
+.lane-nav {
+  z-index: 6;
+}
+
+.ticks .marks {
+  border: 0;
+  background: rgba(var(--glass-strong-rgb), 0.24);
+  box-shadow: inset 0 0 0 1px rgba(var(--rim-rgb), 0.18);
+}
+
+.ticks .marks i {
+  width: 1px;
+  height: 36px;
+  background: var(--ink);
+  opacity: calc(0.18 + var(--tick-bg, 0) * 0.82);
+  transform: scaleY(var(--tick, 0.38));
+  transform-origin: center;
+  transition: none !important;
+}
+
+.ticks .marks i[data-on="true"] {
+  height: 36px;
+  background: var(--ink);
+}
+
+.ticks .arrow-btn,
+.lane-nav .arrow-btn {
+  transition: none !important;
+}
+
+.lane-nav {
+  border-color: rgba(var(--rim-rgb), 0.34);
+  background: rgba(var(--glass-strong-rgb), 0.28);
+  box-shadow: inset 0 1px 0 rgba(var(--rim-rgb), 0.42);
+}
+
+.hint {
+  border-color: rgba(var(--rim-rgb), 0.22);
+  background: rgba(var(--glass-strong-rgb), 0.24);
+}
+
+.status-light {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--muted);
+  box-shadow: 0 0 0 3px rgba(var(--ink-rgb), 0.06);
+}
+
+.status-light[data-state="ok"] {
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(var(--ok-rgb), 0.13);
+}
+
+.status-light[data-state="busy"] {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+
+.status-light[data-state="off"] {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(var(--danger-rgb), 0.12);
+}
+
+.system-footer > span {
+  border-color: transparent;
+  background: rgba(var(--glass-strong-rgb), 0.2);
+}
+
+.system-footer > .footer-net {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------------------------------ clean glass silhouette */
+
+/* Large modal surfaces need enough body to keep text legible over the archive
+ * scene. This is a tint on the glass, not a captured bitmap: the shader canvas
+ * still provides the live refraction, while the tint gives Apple-HIG contrast. */
+:root:root .liquid-shader-host.sheet {
+  background:
+    linear-gradient(145deg, rgba(250, 248, 243, 0.86), rgba(231, 229, 224, 0.78)) !important;
+  box-shadow:
+    0 22px 64px rgba(25, 45, 52, 0.11),
+    0 2px 10px rgba(25, 45, 52, 0.06) !important;
+}
+
+:root:root .liquid-shader-host.dialog {
+  background:
+    linear-gradient(150deg, rgba(251, 249, 244, 0.93), rgba(234, 231, 225, 0.84)) !important;
+  box-shadow:
+    0 24px 72px rgba(25, 45, 52, 0.14),
+    0 2px 10px rgba(25, 45, 52, 0.07) !important;
+}
+
+:root:root .liquid-shader-host.settings-nav {
+  background: rgba(var(--glass-strong-rgb), 0.28) !important;
+}
+
+:root:root .liquid-shader-host.setting {
+  background: rgba(var(--glass-strong-rgb), 0.18) !important;
+}
+
+:root:root .liquid-shader-host.nav-reveal,
+:root:root .liquid-shader-host.menu {
+  background:
+    linear-gradient(148deg, rgba(250, 248, 243, 0.9), rgba(231, 229, 224, 0.82)) !important;
+  box-shadow:
+    0 18px 52px rgba(25, 45, 52, 0.13),
+    0 2px 8px rgba(25, 45, 52, 0.06) !important;
+}
+
+.toast-root {
+  bottom: 118px !important;
+}
+
+/* The inner tint child normally sits above the shader to carry the inset
+ * highlight. For the large sheets we move that same layer just above the
+ * shader but below all text/controls, which gives the glass an Apple-style
+ * translucent body without washing out or hiding any UI. */
+.sheet > .liquid-shader-tint,
+.dialog > .liquid-shader-tint {
+  z-index: -1 !important;
+  background:
+    linear-gradient(145deg, rgba(248, 246, 240, 0.62), rgba(234, 231, 224, 0.52)) !important;
+  box-shadow:
+    inset 0 0 18px -5px rgba(255, 255, 255, 0.84),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.22) !important;
+}
+
+.settings-nav > .liquid-shader-tint,
+.setting > .liquid-shader-tint,
+.mod-row > .liquid-shader-tint,
+.mod-update-row > .liquid-shader-tint,
+.item > .liquid-shader-tint,
+.empty > .liquid-shader-tint,
+.logview > .liquid-shader-tint {
+  z-index: -1 !important;
+  background: rgba(250, 248, 243, 0.32) !important;
+  box-shadow:
+    inset 0 0 12px -4px rgba(255, 255, 255, 0.8),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.16) !important;
+}
+
+.system-nav .nav-reveal {
+  background:
+    linear-gradient(148deg, rgba(250, 248, 243, 0.97), rgba(233, 230, 223, 0.93)) !important;
+  box-shadow:
+    0 18px 52px rgba(25, 45, 52, 0.14),
+    0 2px 8px rgba(25, 45, 52, 0.07),
+    inset 0 1px 0 rgba(255, 255, 255, 0.68) !important;
+}
+
+:root {
+  --glass-outer-shadow:
+    0 18px 48px rgba(23, 42, 48, 0.12),
+    0 3px 10px rgba(23, 42, 48, 0.07);
+}
+
+:root:root .liquid-shader-host.sheet,
+:root:root .liquid-shader-host.dialog,
+:root:root .liquid-shader-host.callout,
+:root:root .liquid-shader-host.detail-panel,
+:root:root .liquid-shader-host.dl-bar,
+:root:root .liquid-shader-host.system-nav,
+:root:root .liquid-shader-host.view-tabs {
+  border-color: transparent !important;
+}
+
+:root:root .sheet {
+  border-color: transparent;
+}
+
+/* Do not leave the old date-panel filter/dim transition running on the stage
+ * when a sheet opens; the sheet itself is the foreground. */
+#stage:has(.modal-root[data-open="true"]) > .three-scene,
+#stage:has(.modal-root[data-open="true"]) > .scene-aura,
+#stage:has(.modal-root[data-open="true"]) > .scene-atmosphere,
+#stage:has(.modal-root[data-open="true"]) > .brand,
+#stage:has(.modal-root[data-open="true"]) > .system-nav,
+#stage:has(.modal-root[data-open="true"]) > .view-tabs,
+#stage:has(.modal-root[data-open="true"]) > .home,
+#stage:has(.modal-root[data-open="true"]) > .download,
+#stage:has(.modal-root[data-open="true"]) > .detail,
+#stage:has(.modal-root[data-open="true"]) > .system-footer {
+  transition: none !important;
+}
+
+#stage:has(.modal-root[data-open="true"]) > .brand,
+#stage:has(.modal-root[data-open="true"]) > .system-nav,
+#stage:has(.modal-root[data-open="true"]) > .view-tabs,
+#stage:has(.modal-root[data-open="true"]) > .home,
+#stage:has(.modal-root[data-open="true"]) > .download,
+#stage:has(.modal-root[data-open="true"]) > .detail,
+#stage:has(.modal-root[data-open="true"]) > .system-footer {
+  opacity: 0.16 !important;
+}
+
+#stage:has(.modal-root[data-open="true"]) > .three-scene,
+#stage:has(.modal-root[data-open="true"]) > .scene-aura,
+#stage:has(.modal-root[data-open="true"]) > .scene-atmosphere {
+  opacity: 0.4 !important;
+}
+
+/* ------------------------------------------------------------------------------------------ accessibility */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.001ms !important;
+    transition-delay: 0s !important;
+    animation-duration: 0.001ms !important;
+    animation-delay: 0s !important;
+  }
+
+  .ticks .marks i {
+    transform: scaleY(1);
+    opacity: 1;
+  }
+}
+
+#stage.reduce-motion .ticks .marks i {
+  transform: scaleY(1);
+  opacity: 1;
+}
+
+@media (max-width: 1120px) {
+  .counter {
+    left: 32px;
+    transform: scale(0.84);
+    transform-origin: left bottom;
+  }
+
+  .ticks {
+    left: 192px;
+  }
+
+  .lane-nav {
+    right: 32px;
+  }
+
+  .hint {
+    font-size: 9.5px;
+    letter-spacing: 0.8px;
+  }
+}
+
+@media (max-height: 700px) {
+  .counter {
+    bottom: 58px;
+  }
+
+  .ticks {
+    bottom: 63px;
+  }
+
+  .lane-nav {
+    bottom: 58px;
+  }
+}

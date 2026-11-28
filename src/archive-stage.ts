@@ -7,14 +7,11 @@ import { WaterMobiusRing } from "./water-mobius-ring";
 import { WaterCard } from "./water-card";
 import { ROW, rowFrame } from "./row-track";
 import {
-  TIMING,
   delayOf,
   enterOffset,
   exitOffset,
   flightDelay,
-  flightEase,
   flightOffset,
-  FLIGHT,
   seedOf,
   type Offset,
   type Seed,
@@ -239,8 +236,10 @@ class Card {
    *  index space changes with the layout, so the item object is what identifies the printed content). */
   shown = -1;
   shownItem: StageItem | undefined;
+  /** Negative while waiting for the stagger delay; then elapsed stopwatch. */
   t = 0;
-  duration = 1;
+  /** Physically integrated 0 → 1 progress for this enter/fly/leave transition. */
+  readonly transition: Spring = { value: 0, velocity: 0 };
   style: Style = "spiral";
   seed: Seed = [0, 0, 0, 0];
   side = 0;
@@ -793,7 +792,8 @@ export class ArchiveStage {
     card.style = style;
     card.mode = "enter";
     card.t = -(delayOf(style, order, card.seed) + extraDelay);
-    card.duration = TIMING[style].enter;
+    card.transition.value = 0;
+    card.transition.velocity = 0;
     card.side = 0;
     this.cardOfItem.set(item, card);
     this.show(card, item);
@@ -807,7 +807,8 @@ export class ArchiveStage {
     card.spare = spare;
     card.mode = "fly";
     card.t = -(flightDelay(order, card.seed) + extraDelay);
-    card.duration = FLIGHT.duration;
+    card.transition.value = 0;
+    card.transition.velocity = 0;
     if (!spare) this.cardOfItem.set(item, card);
     if (this.instant) {
       card.mode = spare ? "away" : "rest";
@@ -824,7 +825,8 @@ export class ArchiveStage {
     card.side = side;
     card.spare = false;
     card.t = -delayOf("scatter", order, card.seed) * 0.5;
-    card.duration = TIMING.scatter.exit;
+    card.transition.value = 0;
+    card.transition.velocity = 0;
     if (this.instant) this.release(card);
   }
 
@@ -940,7 +942,8 @@ export class ArchiveStage {
           card.mode = "fly";
           card.seed = this.nextSeed(card);
           card.t = -0.04 * order++;
-          card.duration = 0.75;
+          card.transition.value = 0;
+          card.transition.velocity = 0;
         }
         const shown = card.shownItem;
         // The same print as before (nothing about this archive changed): keep the painted face instead of repainting it.
@@ -1138,7 +1141,7 @@ export class ArchiveStage {
   // ───────────────────────────── per-frame ─────────────────────────────
 
   update(dt: number) {
-    dt = clamp(dt, 0, 0.05);
+    dt = clamp(dt, 0, 0.2);
     const fast = this.instant;
     this.updateCamera(dt, fast);
     const rate = fast ? 40 : 7;
@@ -1194,16 +1197,35 @@ export class ArchiveStage {
     for (const card of this.cards) {
       if (card.mode === "away" || card.mode === "rest") continue;
       card.t += dt;
-      if (card.t < card.duration) continue;
-      if (card.mode === "fly") {
-        card.mode = card.spare ? "away" : "rest";
-        if (card.spare) this.release(card);
-        else if (!this.fresh(card)) this.show(card, card.item);
-      } else if (card.mode === "enter") {
-        card.mode = "rest";
-        if (!this.fresh(card) && card.item >= 0) this.show(card, card.item);
+      if (card.t < 0) continue;
+      // A card's journey is another damped spring. Stagger delays sequence the
+      // wave, but there is no authored duration or easing curve after release.
+      const stiffness = card.mode === "fly" ? 118 : card.mode === "enter" ? 92 : 132;
+      const dampingRatio = card.mode === "fly" ? 0.86 : card.mode === "enter" ? 0.8 : 0.92;
+      const damping = 2 * dampingRatio * Math.sqrt(stiffness);
+      let remaining = dt;
+      while (remaining > 0) {
+        const h = Math.min(1 / 120, remaining);
+        const acceleration = -stiffness * (card.transition.value - 1) - damping * card.transition.velocity;
+        card.transition.velocity += acceleration * h;
+        card.transition.value += card.transition.velocity * h;
+        remaining -= h;
       }
-      else if (card.mode === "leave") this.release(card);
+      if (Math.abs(card.transition.value - 1) < 0.002 && Math.abs(card.transition.velocity) < 0.008) {
+        card.transition.value = 1;
+        card.transition.velocity = 0;
+        if (card.mode === "fly") {
+          card.mode = card.spare ? "away" : "rest";
+          if (card.spare) this.release(card);
+          else if (!this.fresh(card)) this.show(card, card.item);
+        } else if (card.mode === "enter") {
+          card.mode = "rest";
+          if (!this.fresh(card) && card.item >= 0) this.show(card, card.item);
+        } else {
+          this.release(card);
+        }
+        this.updateBusy();
+      }
     }
   }
 
@@ -1322,7 +1344,28 @@ export class ArchiveStage {
 
   private updateFins(dt: number) {
     if (this.ambient && this.layout === "ring") this.clock += dt;
-    damp(this.assemble, this.started ? 1 : 0, this.instant ? 40 : 1.45, dt);
+    // The ribbon itself is laid down by a damped spring (damping ratio 0.8),
+    // not an exponential tween. Reduced motion snaps it to rest.
+    if (this.instant) {
+      this.assemble.value = this.started ? 1 : 0;
+      this.assemble.velocity = 0;
+    } else {
+      const target = this.started ? 1 : 0;
+      const stiffness = 58;
+      const damping = 2 * 0.8 * Math.sqrt(stiffness);
+      let remaining = dt;
+      while (remaining > 0) {
+        const h = Math.min(1 / 120, remaining);
+        const acceleration = -stiffness * (this.assemble.value - target) - damping * this.assemble.velocity;
+        this.assemble.velocity += acceleration * h;
+        this.assemble.value += this.assemble.velocity * h;
+        remaining -= h;
+      }
+      if (Math.abs(this.assemble.value - target) < 0.0003 && Math.abs(this.assemble.velocity) < 0.003) {
+        this.assemble.value = target;
+        this.assemble.velocity = 0;
+      }
+    }
     const count = Math.max(1, this.items.length);
     const turn = this.layout === "ring" ? this.ringPos.value / count : this.finTurn;
     const shift = this.layout === "ring" ? turn : this.finTurn + (this.rowPos.value - this.finAnchor) / (TRACK.to - TRACK.from);
@@ -1533,10 +1576,10 @@ export class ArchiveStage {
       } else if (card.mode === "fly") {
         this.restPose(card, target);
         if (card.spare) target.scale = 0;
-        const p = clamp(card.t / card.duration, 0, 1);
+        const p = clamp(card.transition.value, 0, 1);
         if (card.t < 0) pose.copy(card.from);
         else {
-          const e = flightEase(p);
+          const e = p;
           const f = flightOffset(p, card.seed);
           pose.pos.lerpVectors(card.from.pos, target.pos, e);
           pose.pos.x += f.x;
@@ -1554,12 +1597,12 @@ export class ArchiveStage {
           pose.scale = 0;
         } else {
           this.restPose(card, pose);
-          const offset = enterOffset(card.style, clamp(card.t / card.duration, 0, 1), card.seed, scratch.offset);
+          const offset = enterOffset(card.style, clamp(card.transition.value, 0, 1), card.seed, scratch.offset);
           this.applyOffset(pose, offset);
         }
       } else if (card.mode === "leave") {
         pose.copy(card.from);
-        if (card.t > 0) this.applyOffset(pose, exitOffset(card.style, clamp(card.t / card.duration, 0, 1), card.seed, card.side, scratch.offset));
+        if (card.t >= 0) this.applyOffset(pose, exitOffset(card.style, clamp(card.transition.value, 0, 1), card.seed, card.side, scratch.offset));
       }
       if (lift > 0.01) pose.pos.y -= lift;
 

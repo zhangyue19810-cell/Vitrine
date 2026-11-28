@@ -109,10 +109,31 @@ export interface Spring {
   value: number;
   velocity: number;
 }
-export function damp(s: Spring, target: number, rate: number, dt: number) {
-  const delta = s.value - target;
-  const impulse = s.velocity + rate * delta;
-  const decay = Math.exp(-rate * dt);
-  s.value = target + (delta + impulse * dt) * decay;
-  s.velocity = (s.velocity - rate * impulse * dt) * decay;
+
+/**
+ * A real damped spring for the 3D layer. `rate` is the natural frequency;
+ * the damping ratio stays below 1 so ordinary transitions keep a subtle
+ * overshoot. High rates are the existing "snap" path used by reduced motion
+ * and by transitions the motion policy disabled.
+ */
+export function damp(s: Spring, target: number, rate: number, dt: number, dampingRatio = 0.84) {
+  if (rate >= 30) {
+    s.value = target;
+    s.velocity = 0;
+    return;
+  }
+  const stiffness = rate * rate;
+  const damping = 2 * dampingRatio * rate;
+  let remaining = Math.max(0, dt);
+  while (remaining > 0) {
+    const h = Math.min(1 / 120, remaining);
+    const acceleration = -stiffness * (s.value - target) - damping * s.velocity;
+    s.velocity += acceleration * h;
+    s.value += s.velocity * h;
+    remaining -= h;
+  }
+  if (Math.abs(s.value - target) < 0.0003 && Math.abs(s.velocity) < 0.003) {
+    s.value = target;
+    s.velocity = 0;
+  }
 }

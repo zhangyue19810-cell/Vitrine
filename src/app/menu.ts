@@ -1,4 +1,5 @@
 import { el } from "./dom";
+import { currentSpringForce, springElement } from "./spring-ui";
 
 /**
  * A small pop-up menu anchored to a button. It is attached to the stage rather than to the row it belongs to, so list
@@ -52,6 +53,21 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], options: { alig
     if (y + height > stage.offsetHeight - 8) y = Math.max(8, anchorTop - height - 4);
     menu.style.left = `${x}px`;
     menu.style.top = `${y}px`;
+    void springElement(menu, {
+      fromY: -8,
+      toY: 0,
+      fromScale: 0.94,
+      toScale: 1,
+      fromOpacity: 0,
+      toOpacity: 1,
+      fromClip: 0,
+      toClip: 160,
+      clipOrigin: "100% 0%",
+      transformOrigin: "100% 0%",
+      response: 0.34,
+      dampingRatio: 0.78,
+      force: currentSpringForce(),
+    }).then(() => menu.style.removeProperty("clip-path"));
     menu.style.visibility = "visible";
     anchor.setAttribute("aria-expanded", "true");
 
@@ -64,9 +80,19 @@ export function openMenu(anchor: HTMLElement, items: MenuItem[], options: { alig
       document.removeEventListener("wheel", onScroll, true);
       window.removeEventListener("blur", onBlur);
       anchor.removeAttribute("aria-expanded");
-      menu.remove();
+      menu.style.pointerEvents = "none";
       if (current?.close === close) current = undefined;
-      resolve(id);
+      void springElement(menu, {
+        toY: -6,
+        toScale: 0.97,
+        toOpacity: 0,
+        response: 0.26,
+        dampingRatio: 0.94,
+        retainFinal: true,
+      }).then(() => {
+        menu.remove();
+        resolve(id);
+      });
     };
     const onPointer = (event: PointerEvent) => {
       if (!menu.contains(event.target as Node)) {

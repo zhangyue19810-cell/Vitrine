@@ -6,6 +6,7 @@ import { store } from "../store";
 import { ACCOUNT_TYPE_LABEL, memoryOptions } from "../ui-bits";
 import type { InstanceConfig, JavaInstall } from "../types";
 import type { TabContext, TabHandle } from "./detail-types";
+import { currentSpringForce, springElement } from "../spring-ui";
 
 /**
  * Per-instance settings. Like the global settings page, every control saves by itself; the core validates and the
@@ -161,8 +162,34 @@ export function mount(ctx: TabContext): TabHandle {
     state.textContent = text;
     state.dataset.kind = kind;
     state.dataset.show = "true";
+    void springElement(state, {
+      fromY: 0,
+      toY: 0,
+      fromScale: 0.94,
+      toScale: 1,
+      fromOpacity: 0,
+      toOpacity: 1,
+      response: 0.28,
+      dampingRatio: 0.82,
+      force: currentSpringForce(),
+    });
     clearTimeout(Number(state.dataset.timer));
-    if (kind === "ok") state.dataset.timer = String(window.setTimeout(() => (state.dataset.show = "false"), 1600));
+    if (kind === "ok") {
+      state.dataset.timer = String(window.setTimeout(() => {
+        void springElement(state, {
+          toOpacity: 0,
+          response: 0.26,
+          dampingRatio: 0.96,
+          retainFinal: true,
+        }).then(() => {
+          state.dataset.show = "false";
+          state.style.removeProperty("opacity");
+          state.style.removeProperty("translate");
+          state.style.removeProperty("scale");
+          state.style.removeProperty("will-change");
+        });
+      }, 1600));
+    }
   };
 
   async function save(element: HTMLElement, patch: Record<string, unknown>) {

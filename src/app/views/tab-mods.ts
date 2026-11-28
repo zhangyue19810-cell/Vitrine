@@ -8,6 +8,7 @@ import type { LocalMod, ModProblem, ModUpdate } from "../types";
 import { loaderLabel } from "../format";
 import type { TabContext, TabHandle } from "./detail-types";
 import { openDownloads } from "./downloads";
+import { currentSpringForce, springElement, springReveal } from "../spring-ui";
 
 type Filter = "all" | "enabled" | "disabled" | "problem";
 
@@ -356,7 +357,14 @@ export function mount(ctx: TabContext): TabHandle {
       return;
     }
     panel.classList.add("leaving");
-    setTimeout(() => panel.remove(), 180);
+    void springElement(panel, {
+      toY: 6,
+      toScale: 0.97,
+      toOpacity: 0,
+      response: 0.26,
+      dampingRatio: 0.94,
+      retainFinal: true,
+    }).then(() => panel.remove());
   }
 
   function showProblemPopover(pin = false) {
@@ -394,6 +402,21 @@ export function mount(ctx: TabContext): TabHandle {
     if (top + panelHeight > stage.offsetHeight - 8) top = Math.max(8, triggerTop - panelHeight - 8);
     panel.style.left = `${left}px`;
     panel.style.top = `${top}px`;
+    void springElement(panel, {
+      fromY: 10,
+      toY: 0,
+      fromScale: 0.94,
+      toScale: 1,
+      fromOpacity: 0,
+      toOpacity: 1,
+      fromClip: 0,
+      toClip: 160,
+      clipOrigin: "100% 0%",
+      transformOrigin: "100% 0%",
+      response: 0.36,
+      dampingRatio: 0.78,
+      force: currentSpringForce(),
+    }).then(() => panel.style.removeProperty("clip-path"));
     panel.style.visibility = "visible";
 
     const keepOpen = () => clearTimeout(problemCloseTimer);
@@ -560,6 +583,16 @@ export function mount(ctx: TabContext): TabHandle {
       },
     });
     dialog.root.classList.add("mod-update-dialog");
+    const rowElements = [...dialog.body.querySelectorAll<HTMLElement>(".mod-update-row")];
+    void springReveal(rowElements, {
+      origin: "bottom",
+      distance: 20,
+      stagger: 80,
+      fromScale: 0.96,
+      response: 0.34,
+      dampingRatio: 0.8,
+      force: currentSpringForce(),
+    });
   }
 
   async function checkUpdates(button: HTMLElement) {

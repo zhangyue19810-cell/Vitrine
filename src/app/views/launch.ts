@@ -8,6 +8,7 @@ import { sound } from "../sound";
 import { store } from "../store";
 import type { TaskSnapshot } from "../types";
 import { markSvg } from "../../brand";
+import { currentSpringForce, springElement, springNumber } from "../spring-ui";
 
 /**
  * The screen shown while a game starts: the stages of the launch (account, Java, files, natives…) as they happen, the
@@ -46,6 +47,25 @@ export function showLaunchFor(instanceId: string) {
   if (task) openLaunch(task.id, instanceId);
 }
 
+const progressTokens = new WeakMap<HTMLElement, number>();
+
+/** Progress moves on a spring too, so a burst of events cannot make the bar jump between frames. */
+function animateProgress(bar: HTMLElement, value: number) {
+  const token = (progressTokens.get(bar) ?? 0) + 1;
+  progressTokens.set(bar, token);
+  const from = Number.parseFloat(bar.style.getPropertyValue("--p")) || 0;
+  void springNumber({
+    from,
+    to: Math.max(0, Math.min(1, value)),
+    response: 0.34,
+    dampingRatio: 0.84,
+    force: currentSpringForce(),
+    onUpdate: (next) => {
+      if (progressTokens.get(bar) === token) bar.style.setProperty("--p", String(Math.max(0, Math.min(1, next))));
+    },
+  });
+}
+
 export function openLaunch(taskId: string, instanceId: string) {
   if (overlay && !overlay.closing) {
     if (overlay.taskId === taskId) return;
@@ -71,6 +91,36 @@ export function openLaunch(taskId: string, instanceId: string) {
       <div class="launch-foot"><span class="muted" style="font-size:12px" data-f="hint"></span><span class="grow"></span><button class="btn" data-f="details">下载详情</button><button class="btn danger" data-f="cancel">取消启动</button><button class="btn" data-f="dismiss" hidden>关闭</button></div>
     </div>`.value;
   const f = <T extends HTMLElement = HTMLElement>(name: string) => root.querySelector<T>(`[data-f="${name}"]`)!;
+  void springElement(root, {
+    fromY: 18,
+    toY: 0,
+    fromScale: 0.985,
+    toScale: 1,
+    fromOpacity: 0,
+    toOpacity: 1,
+    fromClip: 0,
+    toClip: 160,
+    clipOrigin: "100% 0%",
+    transformOrigin: "100% 0%",
+    response: 0.46,
+    dampingRatio: 0.86,
+    force: currentSpringForce(),
+  }).then(() => root.style.removeProperty("clip-path"));
+  const card = root.querySelector<HTMLElement>(".launch-card");
+  if (card) {
+    void springElement(card, {
+      fromY: 34,
+      toY: 0,
+      fromScale: 0.94,
+      toScale: 1,
+      fromOpacity: 0,
+      toOpacity: 1,
+      response: 0.42,
+      dampingRatio: 0.8,
+      force: currentSpringForce(),
+      delay: 70,
+    });
+  }
   f("details").addEventListener("click", async () => (await import("./downloads")).openDownloads(taskId));
   f("cancel").addEventListener("click", async () => {
     const task = store.tasks.get(taskId);
@@ -143,7 +193,7 @@ function paintProgress(host: HTMLElement, task: TaskSnapshot) {
     const element = host.querySelector<HTMLElement>(`[data-p="${key}"]`);
     if (element && element.textContent !== text) element.textContent = text;
   };
-  host.querySelector<HTMLElement>(".bar")!.style.setProperty("--p", String(Math.min(1, task.fraction ?? done / progress.totalFiles)));
+  animateProgress(host.querySelector<HTMLElement>(".bar")!, Math.min(1, task.fraction ?? done / progress.totalFiles));
   set("files", `补全游戏文件 ${done} / ${progress.totalFiles}${progress.bytesTotal ? ` · ${formatBytes(progress.bytesDone)} / ${formatBytes(progress.bytesTotal)}` : ""}`);
   set("speed", `${active} 线程 · ${formatSpeed(progress.speed)}${progress.eta ? ` · 剩余 ${formatDuration(progress.eta)}` : ""}`);
   const dots = host.querySelector<HTMLElement>("[data-p='dots']")!;
@@ -163,7 +213,14 @@ function close(immediate = false) {
   notify();
   if (immediate) return current.root.remove();
   current.root.classList.add("leaving");
-  setTimeout(() => current.root.remove(), 280);
+  void springElement(current.root, {
+    toY: -16,
+    toScale: 1.012,
+    toOpacity: 0,
+    response: 0.34,
+    dampingRatio: 0.94,
+    retainFinal: true,
+  }).then(() => current.root.remove());
 }
 
 /** Used by the home screen to know whether a launch screen can be reopened for an instance. */

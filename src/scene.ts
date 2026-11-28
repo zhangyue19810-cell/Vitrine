@@ -76,15 +76,30 @@ export class ArchiveScene {
   private controlsLast = 0;
   private presence = 1;
   private presenceTarget = 1;
+  private presenceVelocity = 0;
   setPresentationVisible(visible: boolean, immediate = false) {
-    this.presenceTarget = Number(visible);
-    if (immediate) this.presence = this.presenceTarget;
+    const next = Number(visible);
+    if (next === this.presenceTarget && !immediate) return;
+    this.presenceTarget = next;
+    if (immediate || this.reduced) {
+      this.presence = next;
+      this.presenceVelocity = 0;
+    }
     if (!visible) this.cancelPointer();
   }
   get presentationHidden() { return this.presenceTarget === 0 && this.presence === 0; }
   private presentationDrop(cell: ArchiveCell) {
-    const delay = .15 * (1 + Math.tanh((cell.row - this.selectedCell.row) * .1 + (cell.lane - this.selectedCell.lane) * .25));
-    return 35 * Math.pow(THREE.MathUtils.clamp((1 - this.presence - delay) / .7, 0, 1), 2);
+    // Each archive leaves the sky on its own delayed spring. Because the
+    // master presence spring overshoots, `local` can go slightly past one,
+    // producing a small downward recoil instead of an Hermite ease.
+    const delayed = .24 * (1 + Math.tanh(
+      (cell.row - this.selectedCell.row) * .1 +
+      (cell.lane - this.selectedCell.lane) * .25 +
+      (cell.row < 0 ? .2 : -.2),
+    ));
+    const delay = Math.max(0, Math.min(.32, delayed));
+    const local = (this.presence - delay) / Math.max(.18, 1 - delay);
+    return 35 * (1 - local);
   }
   revealImmediately() { this.reveal = this.targetReveal; }
   dispose() {
@@ -1943,14 +1958,34 @@ export class ArchiveScene {
     cinematic?: { reveal: number; lift: number; zoom: number; time: number },
   ) {
     const elapsed = Math.max(0, time - this.last || 0.016);
-    const dt = Math.min(elapsed, 0.05);
+    const dt = Math.min(elapsed, 0.2);
     this.last = time;
     this.clock = time;
     if (!this.loaded) return;
     if (this.wallpaperMesh?.visible) this.wallpaperMaterial.uniforms.uPointer.value.copy(this.wallpaperPointer);
     this.flushHover();
-    const step = !this.motion.surfaceTransitions ? 1 : Math.min(elapsed, .25) / 1.1;
-    this.presence += Math.sign(this.presenceTarget - this.presence) * Math.min(step, Math.abs(this.presenceTarget - this.presence));
+    if (!this.motion.surfaceTransitions) {
+      this.presence = this.presenceTarget;
+      this.presenceVelocity = 0;
+    } else {
+      // Damped spring, integrated in fixed substeps. The presence overshoot is
+      // intentional: it makes the whole archive field settle with one very
+      // small recoil after falling from above the board.
+      const stiffness = 168;
+      const damping = 2 * 0.79 * Math.sqrt(stiffness);
+      let remaining = dt;
+      while (remaining > 0) {
+        const h = Math.min(1 / 120, remaining);
+        const acceleration = -stiffness * (this.presence - this.presenceTarget) - damping * this.presenceVelocity;
+        this.presenceVelocity += acceleration * h;
+        this.presence += this.presenceVelocity * h;
+        remaining -= h;
+      }
+      if (Math.abs(this.presence - this.presenceTarget) < 0.0004 && Math.abs(this.presenceVelocity) < 0.003) {
+        this.presence = this.presenceTarget;
+        this.presenceVelocity = 0;
+      }
+    }
     this.renderer.domElement.style.opacity = String(THREE.MathUtils.clamp(this.presence / .16, 0, 1));
     this.theme.beginFrame();
     themeEnvironment(this.scene, this.renderer, this.themeAmount, this.deepSpace());

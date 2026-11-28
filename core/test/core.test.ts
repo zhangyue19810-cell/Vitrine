@@ -26,7 +26,7 @@ describe("settings migration", () => {
     assert.equal(custom.download.concurrency, 32);
     assert.equal(custom.download.segments, 4);
     assert.equal(custom.sources.contentPolicy, "official-first");
-    assert.equal(custom.ui.theme, "dark", "legacy auto follows the dark-first release, while explicit colours remain untouched");
+    assert.equal(custom.ui.theme, "light", "legacy defaults now migrate to the light-only release; explicit colours remain untouched");
     const explicitLight = normalizeSettings({ version: 2, ui: { theme: "light" } });
     assert.equal(explicitLight.ui.theme, "light");
     const keptOwner = normalizeSettings({ version: 3, accounts: { ownerUuid: "11111111-2222-4333-8444-555555555555" } });
@@ -34,7 +34,7 @@ describe("settings migration", () => {
     const chosenOwner = normalizeSettings({ version: 4, accounts: { ownerUuid: "00112233-4455-4677-8899-aabbccddeeff" } });
     assert.equal(chosenOwner.accounts.ownerUuid, "00112233-4455-4677-8899-aabbccddeeff");
     const legacyAuto = normalizeSettings({ version: 2, ui: { theme: "auto" } });
-    assert.equal(legacyAuto.ui.theme, "dark");
+    assert.equal(legacyAuto.ui.theme, "light");
     assert.equal(DEFAULT_SETTINGS.version, 4);
   });
 });
@@ -106,7 +106,7 @@ describe("the core over the development transport", () => {
       assert.equal(boot.settings.ui.pauseWhenGameRuns, true);
       assert.equal(boot.settings.ui.whenUnfocused, "pause");
       assert.equal(boot.settings.ui.releaseGpuWhenGameRuns, true);
-      assert.equal(boot.settings.ui.theme, "dark");
+      assert.equal(boot.settings.ui.theme, "light");
       assert.equal(boot.settings.launch.jvmPreset, "auto");
       assert.equal(boot.settings.launch.optimize, true);
       assert.ok(Array.isArray(boot.instances) && Array.isArray(boot.accounts) && Array.isArray(boot.tasks));

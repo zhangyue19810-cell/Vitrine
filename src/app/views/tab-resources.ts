@@ -7,6 +7,7 @@ import { confirmDialog, promptDialog, toast } from "../modal";
 import { store } from "../store";
 import type { ResourcePackInfo, ScreenshotInfo, ShaderPackInfo } from "../types";
 import type { TabContext, TabHandle } from "./detail-types";
+import { currentSpringForce, springElement } from "../spring-ui";
 
 type Section = "resourcepacks" | "shaderpacks" | "screenshots";
 
@@ -197,6 +198,15 @@ export function mount(ctx: TabContext): TabHandle {
     box.tabIndex = -1;
     box.innerHTML = html`<img alt="" /><div style="position:absolute;top:18px;right:22px;display:flex;gap:8px"><button class="btn sm" data-lb="delete">删除</button><button class="btn sm" data-lb="close">关闭 Esc</button></div><button class="btn icon" data-lb="prev" style="position:absolute;left:22px;top:50%" aria-label="上一张">←</button><button class="btn icon" data-lb="next" style="position:absolute;right:22px;top:50%" aria-label="下一张">→</button><div data-lb-cap style="position:absolute;left:0;right:0;bottom:16px;text-align:center;color:#fff;font-size:12px;letter-spacing:.5px"></div>`.value;
     stage.append(box);
+    void springElement(box, {
+      fromScale: 0.97,
+      toScale: 1,
+      fromOpacity: 0,
+      toOpacity: 1,
+      response: 0.36,
+      dampingRatio: 0.86,
+      force: currentSpringForce(),
+    });
     box.focus({ preventScroll: true });
     const image = box.querySelector("img")!;
     const caption = box.querySelector<HTMLElement>("[data-lb-cap]")!;
@@ -215,9 +225,19 @@ export function mount(ctx: TabContext): TabHandle {
       } else caption.textContent += " · 文件太大或无法读取";
     };
     const close = () => {
+      if (box.dataset.closing === "true") return;
+      box.dataset.closing = "true";
       document.removeEventListener("keydown", onKey, true);
-      box.remove();
-      closeLightbox = undefined;
+      void springElement(box, {
+        toScale: 1.015,
+        toOpacity: 0,
+        response: 0.28,
+        dampingRatio: 0.94,
+        retainFinal: true,
+      }).then(() => {
+        box.remove();
+        closeLightbox = undefined;
+      });
     };
     const onKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {

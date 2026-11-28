@@ -4,6 +4,7 @@ import { $, $$, html, onAll, setHtml } from "../dom";
 import { formatBytes, formatDuration, formatSpeed, relativeTime } from "../format";
 import { type ModalHandle, openSheet, toast } from "../modal";
 import { capErrorText } from "../log-limit";
+import { currentSpringForce, springNumber } from "../spring-ui";
 import { store } from "../store";
 import type { InstallContentResult, LaneState, PackInstallResult, TaskSnapshot } from "../types";
 
@@ -122,6 +123,26 @@ export function openDownloads(focusTaskId?: string) {
   paint();
 }
 
+const progressTokens = new WeakMap<HTMLElement, number>();
+
+/** Keep progress bars on a spring even when the core publishes bursts of task events. */
+function setBarProgress(bar: HTMLElement, fraction: number) {
+  const target = Math.max(0, Math.min(1, fraction));
+  const token = (progressTokens.get(bar) ?? 0) + 1;
+  progressTokens.set(bar, token);
+  const from = Number.parseFloat(bar.style.getPropertyValue("--p")) || 0;
+  void springNumber({
+    from,
+    to: target,
+    response: 0.32,
+    dampingRatio: 0.86,
+    force: currentSpringForce(),
+    onUpdate: (value) => {
+      if (progressTokens.get(bar) === token) bar.style.setProperty("--p", String(Math.max(0, Math.min(1, value))));
+    },
+  });
+}
+
 const current = (): Page => page!;
 
 function select(id: string) {
@@ -192,7 +213,7 @@ function paintList(root: HTMLElement, tasks: TaskSnapshot[]) {
     const s = row.querySelector<HTMLElement>("[data-s]")!;
     if (s.textContent !== sub) s.textContent = sub;
     const bar = row.querySelector<HTMLElement>(".bar")!;
-    bar.style.setProperty("--p", fraction.toFixed(4));
+    setBarProgress(bar, fraction);
     bar.dataset.indeterminate = String(task.state === "running" && task.fraction === undefined);
     bar.hidden = task.state === "queued";
   }
@@ -260,7 +281,7 @@ function patchDetail(detail: HTMLElement, task: TaskSnapshot) {
   const fraction = task.state === "done" ? 1 : (task.fraction ?? 0);
   const bar = detail.querySelector<HTMLElement>("[data-f='bar']");
   if (bar) {
-    bar.style.setProperty("--p", fraction.toFixed(4));
+    setBarProgress(bar, fraction);
     bar.dataset.indeterminate = String(task.state === "running" && task.fraction === undefined);
   }
   if (progress) {
@@ -339,7 +360,7 @@ function paintLane(cell: HTMLElement, lane: LaneState, live: boolean) {
   const count = state === "downloading" ? Math.max(1, Math.min(16, lane.parts)) : 0;
   if (parts.childElementCount !== count) parts.innerHTML = "<i></i>".repeat(count);
   const bar = cell.querySelector<HTMLElement>(".bar")!;
-  bar.style.setProperty("--p", lane.total > 0 ? Math.min(1, lane.received / lane.total).toFixed(3) : "0");
+  setBarProgress(bar, lane.total > 0 ? lane.received / lane.total : 0);
   bar.hidden = state === "idle";
 }
 

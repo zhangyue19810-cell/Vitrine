@@ -77,16 +77,25 @@ async function finish(entry: Entry, force = true) {
   entry.root.classList.add("leaving");
   entry.scrim?.classList.add("leaving");
   sound.play("close");
-  await new Promise<void>((resolve) => {
-    let settled = false;
-    const end = () => {
-      if (settled) return;
-      settled = true;
-      resolve();
-    };
-    entry.root.addEventListener("animationend", end, { once: true });
-    setTimeout(end, 320);
-  });
+  const jobs: Promise<void>[] = [
+    springElement(entry.root, {
+      toY: 16,
+      toScale: 0.986,
+      toOpacity: 0,
+      response: 0.34,
+      dampingRatio: 0.94,
+      retainFinal: true,
+    }),
+  ];
+  if (entry.scrim) {
+    jobs.push(springElement(entry.scrim, {
+      toOpacity: 0,
+      response: 0.3,
+      dampingRatio: 0.96,
+      retainFinal: true,
+    }));
+  }
+  await Promise.all(jobs);
   entry.root.remove();
   entry.scrim?.remove();
   const index = stack.indexOf(entry);
@@ -110,6 +119,11 @@ function register(entry: Omit<Entry, "done" | "closing">, root: HTMLElement): { 
   const full: Entry = { ...entry, done, closing: false };
   stack.push(full);
   notify();
+  // A modal owns the foreground; dismiss passive notices so they cannot cover
+  // its controls. Error alerts stay until the person has read them.
+  for (const notice of document.querySelectorAll<HTMLElement>("#toast-root .toast")) {
+    if (notice.dataset.kind !== "error") notice.remove();
+  }
   sound.play("open");
   queueMicrotask(() => focusFirst(root));
   return { entry: full, closed };
@@ -344,9 +358,32 @@ export function toast(message: string, kind: ToastKind = "info", ms = kind === "
   root.append(item);
   while (root.children.length > 3) root.firstElementChild?.remove();
   if (kind === "error") sound.play("error");
+  void springElement(item, {
+    fromY: 14,
+    toY: 0,
+    fromScale: 0.96,
+    toScale: 1,
+    fromOpacity: 0,
+    toOpacity: 1,
+    fromClip: 0,
+    toClip: 160,
+    response: 0.36,
+    dampingRatio: 0.8,
+    force: currentSpringForce(),
+  }).then(() => item.style.removeProperty("clip-path"));
+  let removing = false;
   const remove = () => {
+    if (removing) return;
+    removing = true;
     item.classList.add("leaving");
-    setTimeout(() => item.remove(), 240);
+    void springElement(item, {
+      toY: -9,
+      toScale: 0.98,
+      toOpacity: 0,
+      response: 0.28,
+      dampingRatio: 0.94,
+      retainFinal: true,
+    }).then(() => item.remove());
   };
   const timer = setTimeout(remove, ms);
   item.addEventListener("click", () => {

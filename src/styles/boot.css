@@ -1,4 +1,10 @@
-/* The opening animation. Pure CSS (transform / opacity / stroke-dashoffset) so it costs the main thread nothing. */
+/*
+ * The opening surface. The motion itself lives in src/app/splash.ts and is
+ * integrated by the shared spring runner: the ink mark grows from a point,
+ * letters land in a radial wave, the progress hairline springs forward, and
+ * the whole splash springs away to uncover the shelf. This stylesheet only
+ * paints the static geometry and exposes custom properties for that runner.
+ */
 
 .splash {
   position: absolute;
@@ -12,10 +18,11 @@
     var(--paper);
   color: var(--ink);
   overflow: hidden;
-  transition: opacity 0.55s var(--ease), visibility 0s linear 0.55s;
+  transform-origin: 100% 0%;
 }
 
-/* A wide, soft ink wash sits behind the mark and name. */
+/* A wide, soft ink wash sits behind the mark and name. Its values are written
+ * by the spring runner, never by CSS keyframes. */
 .splash::before {
   content: "";
   position: absolute;
@@ -28,15 +35,8 @@
     radial-gradient(ellipse at 42% 46%, rgba(var(--ink-rgb), 0.13), transparent 56%),
     radial-gradient(ellipse at 68% 58%, rgba(var(--ink-rgb), 0.07), transparent 64%);
   filter: blur(38px);
-  transform: translate(-50%, -50%) scale(0.82);
-  opacity: 0;
-  animation: ink-bloom 1.9s 0.12s ease-out forwards;
-  pointer-events: none;
-}
-
-.splash[data-leaving="true"] {
-  opacity: 0;
-  visibility: hidden;
+  opacity: var(--splash-wash, 0);
+  transform: translate(-50%, -50%) scale(var(--splash-wash-scale, 0.82));
   pointer-events: none;
 }
 
@@ -56,8 +56,8 @@
   top: 45%;
   width: min(780px, 78vw);
   height: 210px;
-  transform: translate(-50%, -50%);
-  opacity: 0;
+  transform: translate(-50%, -50%) scale(var(--splash-droplets-scale, 0.9));
+  opacity: var(--splash-droplets, 0);
   background:
     radial-gradient(circle at 10% 32%, rgba(var(--ink-rgb), 0.32) 0 1px, transparent 2px),
     radial-gradient(circle at 16% 62%, rgba(var(--ink-rgb), 0.2) 0 1.5px, transparent 3px),
@@ -66,7 +66,6 @@
     radial-gradient(circle at 73% 82%, rgba(var(--ink-rgb), 0.18) 0 1.5px, transparent 3px),
     radial-gradient(circle at 28% 18%, rgba(var(--ink-rgb), 0.22) 0 1px, transparent 2px),
     radial-gradient(circle at 6% 76%, rgba(var(--ink-rgb), 0.16) 0 1px, transparent 2px);
-  animation: ink-droplets 1.1s 1.15s ease-out forwards;
   pointer-events: none;
 }
 
@@ -75,6 +74,7 @@
   height: 123px;
   color: var(--ink);
   overflow: visible;
+  transform-origin: 50% 52%;
 }
 
 .splash-mark .loop {
@@ -89,42 +89,17 @@
 .splash-mark .loop-a {
   stroke: currentColor;
   stroke-opacity: 0.92;
-  animation: draw 1.15s 0.15s var(--ease) forwards;
 }
 
 .splash-mark .loop-b {
   stroke: var(--accent);
-  animation: draw 1.15s 0.5s var(--ease) forwards;
 }
 
-/* The point where the loops meet flares once, like the first light of the disk. */
 .splash-mark .core {
   fill: var(--accent-ink);
   opacity: 0;
   transform-box: fill-box;
   transform-origin: center;
-  animation: flare 1.1s 1.3s ease-out forwards;
-}
-
-@keyframes draw {
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-@keyframes flare {
-  0% {
-    opacity: 0;
-    transform: scale(0.4);
-  }
-  35% {
-    opacity: 1;
-    transform: scale(2.6);
-  }
-  100% {
-    opacity: 0;
-    transform: scale(5);
-  }
 }
 
 .splash-word {
@@ -144,7 +119,6 @@
   font-size: clamp(72px, 9.5vw, 118px);
   font-weight: 400;
   letter-spacing: 0;
-  margin-right: 0;
   color: var(--ink);
   text-shadow:
     0 0 1px rgba(var(--ink-rgb), 0.9),
@@ -164,10 +138,9 @@
     radial-gradient(ellipse at 26% 55%, rgba(var(--ink-rgb), 0.25), transparent 58%),
     radial-gradient(ellipse at 72% 44%, rgba(var(--ink-rgb), 0.17), transparent 62%);
   filter: blur(5px);
-  transform: scaleX(0);
+  opacity: var(--splash-underline, 0);
+  transform: scaleX(var(--splash-underline-scale, 0));
   transform-origin: left center;
-  opacity: 0;
-  animation: ink-wash 1.15s 0.52s ease-out forwards;
   pointer-events: none;
 }
 
@@ -180,20 +153,17 @@
   bottom: 0.04em;
   height: 2px;
   background: linear-gradient(90deg, transparent, rgba(var(--ink-rgb), 0.58) 12%, rgba(var(--ink-rgb), 0.22) 64%, transparent);
-  transform: scaleX(0) rotate(-0.4deg);
+  opacity: var(--splash-rule-opacity, 0);
+  transform: scaleX(var(--splash-rule-scale, 0)) rotate(-0.4deg);
   transform-origin: left center;
-  opacity: 0.72;
-  animation: ink-stroke 1.15s 1.18s var(--ease) forwards;
   pointer-events: none;
 }
 
 .splash-word b span {
   display: inline-block;
   opacity: 0;
-  clip-path: inset(-24% 100% -24% 0);
-  transform: translate3d(-0.05em, 0.14em, 0) rotate(-2.4deg) scale(1.04);
-  transform-origin: left bottom;
-  animation: ink-letter 0.82s cubic-bezier(0.2, 0.72, 0.22, 1) forwards;
+  transform-origin: 0% 100%;
+  will-change: translate, scale, opacity, clip-path;
 }
 
 .splash-word b span + span {
@@ -206,53 +176,6 @@
   letter-spacing: 8px;
   color: var(--muted);
   opacity: 0;
-  animation: fade-in 0.8s 1.85s ease-out forwards;
-}
-
-@keyframes ink-letter {
-  0% {
-    opacity: 0;
-    clip-path: inset(-24% 100% -24% 0);
-    transform: translate3d(-0.05em, 0.14em, 0) rotate(-2.4deg) scale(1.04);
-  }
-  16% {
-    opacity: 1;
-  }
-  66% {
-    clip-path: inset(-24% 0 -24% 0);
-    transform: translate3d(0.012em, 0.012em, 0) rotate(-0.5deg) scale(0.997);
-  }
-  100% {
-    opacity: 1;
-    clip-path: inset(-24% 0 -24% 0);
-    transform: none;
-  }
-}
-
-@keyframes ink-bloom {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.8); }
-  to { opacity: 0.72; transform: translate(-50%, -50%) scale(1.04); }
-}
-
-@keyframes ink-wash {
-  from { opacity: 0; transform: scaleX(0); }
-  to { opacity: 0.8; transform: scaleX(1); }
-}
-
-@keyframes ink-stroke {
-  from { opacity: 0; transform: scaleX(0) rotate(-0.4deg); }
-  to { opacity: 0.72; transform: scaleX(1) rotate(-0.4deg); }
-}
-
-@keyframes ink-droplets {
-  from { opacity: 0; transform: translate(-50%, -50%) scale(0.88); }
-  to { opacity: 0.7; transform: translate(-50%, -50%) scale(1); }
-}
-
-@keyframes fade-in {
-  to {
-    opacity: 1;
-  }
 }
 
 .splash-status {
@@ -261,7 +184,6 @@
   justify-items: center;
   min-height: 34px;
   opacity: 0;
-  animation: fade-in 0.6s 1.2s ease-out forwards;
 }
 
 .splash-line {
@@ -278,7 +200,6 @@
   transform-origin: left center;
   transform: scaleX(var(--p, 0.04));
   background: var(--ink);
-  transition: transform 0.4s var(--ease);
 }
 
 .splash-text {
@@ -296,67 +217,10 @@
   letter-spacing: 1.6px;
   color: var(--muted);
   opacity: 0;
-  animation: fade-in 0.5s 1.6s ease-out forwards;
 }
 
 .splash-skip:hover {
   color: var(--ink);
-}
-
-/* Short version: everything arrives at once. */
-.splash[data-style="short"] .splash-mark .loop,
-.splash[data-style="short"] .splash-mark .core,
-.splash[data-style="short"] .splash-word b span,
-.splash[data-style="short"] .splash-word i,
-.splash[data-style="short"] .splash-status,
-.splash[data-style="short"] .splash-word b::before,
-.splash[data-style="short"] .splash-word b::after,
-.splash[data-style="short"] .splash::before,
-.splash[data-style="short"] .splash-inner::after {
-  animation-duration: 0.4s;
-  animation-delay: 0.02s;
-}
-
-.splash[data-style="short"] .splash-word i,
-.splash[data-style="short"] .splash-status {
-  animation-delay: 0.18s;
-}
-
-.splash[data-style="short"] .splash-skip {
-  animation-delay: 0.38s;
-}
-
-.splash[data-style="short"] .splash-word b::before {
-  animation-delay: 0.06s;
-}
-
-.splash[data-style="short"] .splash-word b::after {
-  animation-delay: 0.31s;
-}
-
-/* A thin sweep of light that crosses the screen as the shelf is revealed. */
-.splash::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(100deg, transparent 40%, rgba(var(--accent-rgb), 0.12) 50%, transparent 60%);
-  transform: translateX(-100%);
-  animation: sweep 2.4s 0.8s ease-in-out 1 forwards;
-  pointer-events: none;
-}
-
-@keyframes sweep {
-  to {
-    transform: translateX(100%);
-  }
-}
-
-#stage.reduce-motion .splash-mark .loop {
-  stroke-dashoffset: 0;
-}
-
-#stage.reduce-motion .splash-mark .core {
-  opacity: 0;
 }
 
 #stage.reduce-motion .splash-word b span,
@@ -364,22 +228,16 @@
 #stage.reduce-motion .splash-status,
 #stage.reduce-motion .splash-skip {
   opacity: 1;
-  clip-path: none;
-  transform: none;
 }
 
-#stage.reduce-motion .splash-word b::before,
-#stage.reduce-motion .splash-word b::after,
+#stage.reduce-motion .splash-mark .loop {
+  stroke-dashoffset: 0;
+}
+
 #stage.reduce-motion .splash::before,
 #stage.reduce-motion .splash-inner::after {
-  animation: none;
-  opacity: 0;
-}
-
-#stage.reduce-motion .splash::after {
   display: none;
 }
-
 
 /* ------------------------------------------------------------------------------------------ start-up problems */
 
@@ -390,7 +248,7 @@
   z-index: 90;
   width: min(560px, 86%);
   padding: 34px 38px;
-  transform: translate(-50%, -50%);
+  translate: -50% -50%;
   background: var(--panel, #edebe4);
   border: 1px solid var(--ink, #080a08);
   color: var(--ink, #080a08);

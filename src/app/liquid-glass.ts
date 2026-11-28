@@ -305,8 +305,8 @@ export function installLiquidGlass(root: HTMLElement): () => void {
     tint: GLASS.tint,
     innerBlur: 20,
     innerSpread: -5,
-    outerBlur: 24,
-    outerOpacity: 0.18,
+    outerBlur: 32,
+    outerOpacity: 0.10,
   };
 
   const material = new ShaderMaterial({

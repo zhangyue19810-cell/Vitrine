@@ -237,8 +237,8 @@ let open: ModalHandle | undefined;
 let revealTimer = 0;
 const sectionCapsules = new WeakMap<HTMLElement, CapsuleTabs>();
 
-/** Top-to-bottom reveal shared with the page-switch cascade. It also gives
- * the WebGL glass batches enough time to paint while rows slide in. */
+/** Top-to-bottom spring cascade; no row or navigation item is revealed by a
+ * CSS duration. */
 function revealSettingsSheet(sheet: ModalHandle) {
   const head = sheet.root.querySelector<HTMLElement>(".sheet-head");
   const nav = [...sheet.body.querySelectorAll<HTMLElement>(".settings-nav button")];
@@ -249,10 +249,10 @@ function revealSettingsSheet(sheet: ModalHandle) {
   void springReveal(items, {
     origin: "top-right",
     distance: 26,
-    stiffness: 175,
-    dampingRatio: 0.7,
+    response: 0.42,
+    dampingRatio: 0.8,
     force: currentSpringForce(),
-    delayFor: (_element, index) => Math.min(420, index * 42),
+    delayFor: (_element, index) => Math.min(360, index * 36),
   });
 }
 
@@ -383,7 +383,7 @@ export function openSettings(sectionId = "general") {
   });
   selectSection(sheet.body, sectionId);
   syncControls(sheet.body, true);
-  if (sectionId === "general") revealSettingsSheet(sheet);
+  revealSettingsSheet(sheet);
 }
 
 function fieldOptions(path: string): Opt[] {
@@ -397,70 +397,83 @@ function fieldOptions(path: string): Opt[] {
   return [];
 }
 
-let sectionTransition = 0;
+function resetPanelStyles(panel: HTMLElement) {
+  for (const property of [
+    "position", "inset", "height", "z-index", "pointer-events", "overflow",
+    "translate", "scale", "rotate", "opacity", "filter", "will-change", "clip-path",
+  ]) panel.style.removeProperty(property);
+}
 
 function selectSection(root: HTMLElement, id: string, animate = false) {
   const buttons = [...root.querySelectorAll<HTMLElement>("[data-section]")];
   const previousIndex = buttons.findIndex((button) => button.getAttribute("aria-selected") === "true");
   const nextIndex = buttons.findIndex((button) => button.dataset.section === id);
-  const previous = root.querySelector<HTMLElement>("[data-panel]:not([hidden])");
+  const panels = [...root.querySelectorAll<HTMLElement>("[data-panel]")];
+  const previous = panels.find((panel) => panel.dataset.active === "true") ?? panels.find((panel) => !panel.hidden) ?? null;
   const next = root.querySelector<HTMLElement>(`[data-panel="${id}"]`);
   buttons.forEach((button) => button.setAttribute("aria-selected", String(button.dataset.section === id)));
   const body = root.querySelector<HTMLElement>("[data-f='body']");
   if (!next) return;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(root.closest(".reduce-motion"));
   const shouldAnimate = animate && previous && previous !== next && !reduced;
-  const token = ++sectionTransition;
-
-  for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) {
-    if (panel !== next && panel !== (shouldAnimate ? previous : null)) panel.hidden = true;
+  // A new selection always owns exactly one active panel. Any older panel
+  // still running its exit spring is hidden now, which prevents two panels
+  // from remaining in flow if the person changes sections quickly.
+  for (const panel of panels) {
+    delete panel.dataset.active;
+    if (panel !== next && panel !== previous) {
+      panel.hidden = true;
+      resetPanelStyles(panel);
+    }
   }
+  next.dataset.active = "true";
   next.hidden = false;
+  next.style.removeProperty("opacity");
+  next.style.removeProperty("translate");
+  next.style.removeProperty("scale");
+  next.style.removeProperty("rotate");
   if (body) body.scrollTop = 0;
 
   if (shouldAnimate && previous) {
+    previous.hidden = false;
     const down = nextIndex >= previousIndex;
-    const oldHeight = previous.offsetHeight;
     previous.style.position = "absolute";
     previous.style.inset = "0 0 auto";
-    previous.style.height = `${oldHeight}px`;
+    previous.style.height = `${previous.offsetHeight}px`;
     previous.style.zIndex = "2";
     previous.style.pointerEvents = "none";
     previous.style.overflow = "hidden";
     void springElement(previous, {
-      fromY: down ? -30 : 30,
+      fromY: 0,
+      toY: down ? -26 : 26,
       fromOpacity: 1,
       toOpacity: 0,
-      stiffness: 210,
-      dampingRatio: 0.92,
+      fromScale: 1,
+      toScale: 0.985,
+      response: 0.32,
+      dampingRatio: 0.94,
+      retainFinal: true,
     }).then(() => {
-      if (token !== sectionTransition) return;
-      previous.hidden = true;
-      previous.style.removeProperty("position");
-      previous.style.removeProperty("inset");
-      previous.style.removeProperty("height");
-      previous.style.removeProperty("z-index");
-      previous.style.removeProperty("pointer-events");
-      previous.style.removeProperty("overflow");
+      // If the person selected this panel again while it was leaving, it is
+      // the active panel and must not be hidden by the stale exit promise.
+      if (previous.dataset.active !== "true") previous.hidden = true;
+      resetPanelStyles(previous);
     });
     void springElement(next, {
       fromY: down ? 46 : -46,
+      toY: 0,
       fromOpacity: 0,
       toOpacity: 1,
-      stiffness: 155,
-      dampingRatio: 0.72,
+      response: 0.42,
+      dampingRatio: 0.8,
       force: currentSpringForce(),
     });
   } else {
-    for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) panel.hidden = panel !== next;
-    if (previous) {
-      previous.style.removeProperty("position");
-      previous.style.removeProperty("inset");
-      previous.style.removeProperty("height");
-      previous.style.removeProperty("z-index");
-      previous.style.removeProperty("pointer-events");
-      previous.style.removeProperty("overflow");
+    for (const panel of panels) {
+      panel.hidden = panel !== next;
+      if (panel !== next) resetPanelStyles(panel);
     }
+    resetPanelStyles(next);
   }
 
   const active = root.querySelector<HTMLElement>(`[data-section="${id}"]`);
@@ -519,8 +532,32 @@ function flash(root: HTMLElement, path: string, message: string, error = false) 
   element.textContent = message;
   element.dataset.kind = error ? "error" : "ok";
   element.dataset.show = "true";
+  void springElement(element, {
+    fromY: 0,
+    toY: 0,
+    fromScale: 0.94,
+    toScale: 1,
+    fromOpacity: 0,
+    toOpacity: 1,
+    response: 0.28,
+    dampingRatio: 0.82,
+    force: currentSpringForce(),
+  });
   clearTimeout(Number(element.dataset.timer));
-  element.dataset.timer = String(window.setTimeout(() => (element.dataset.show = "false"), error ? 5000 : 1400));
+  element.dataset.timer = String(window.setTimeout(() => {
+    void springElement(element, {
+      toOpacity: 0,
+      response: 0.26,
+      dampingRatio: 0.96,
+      retainFinal: true,
+    }).then(() => {
+      element.dataset.show = "false";
+      element.style.removeProperty("opacity");
+      element.style.removeProperty("translate");
+      element.style.removeProperty("scale");
+      element.style.removeProperty("will-change");
+    });
+  }, error ? 5000 : 1400));
 }
 
 // ---------------------------------------------------------------------------------------------- custom rows

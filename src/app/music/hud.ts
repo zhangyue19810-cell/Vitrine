@@ -1,6 +1,7 @@
 import type { SceneHost } from "../scene-host";
 import type { MusicPlayer, PlayerChange } from "./player";
 import { MODE_LABEL, type PlayMode } from "./queue";
+import { currentSpringForce, springElement } from "../spring-ui";
 
 /**
  * The words around the black hole of the music page, in HTML laid over the picture: what is playing on the left (the cover, the
@@ -241,11 +242,43 @@ export class MusicHud {
     this.root.remove();
   }
 
-  /** Show or hide the panels (the music page is open or not). */
+  /** Show or hide the panels with the same spring language as the rest of the page. */
   show(on: boolean) {
     this.on = on;
     this.root.dataset.on = String(on);
-    if (on) this.refreshAll();
+    if (on) {
+      this.refreshAll();
+      this.root.style.removeProperty("visibility");
+      void springElement(this.root, {
+        fromY: 24,
+        toY: 0,
+        fromScale: 0.985,
+        toScale: 1,
+        fromOpacity: 0,
+        toOpacity: 1,
+        response: 0.52,
+        dampingRatio: 0.8,
+        force: currentSpringForce(),
+        delay: 90,
+      });
+    } else {
+      this.root.style.visibility = "visible";
+      void springElement(this.root, {
+        toY: 16,
+        toScale: 0.99,
+        toOpacity: 0,
+        response: 0.32,
+        dampingRatio: 0.94,
+        retainFinal: true,
+      }).then(() => {
+        if (this.on) return;
+        this.root.style.visibility = "hidden";
+        this.root.style.removeProperty("translate");
+        this.root.style.removeProperty("scale");
+        this.root.style.removeProperty("opacity");
+        this.root.style.removeProperty("will-change");
+      });
+    }
   }
 
   /** Every frame the page is open: the things that move (the bars, the place in the song, the floating boxes). `seeking` is the place the black hole's track is being dragged to. */

@@ -1,5 +1,6 @@
 import type { StageItem } from "../archive-stage";
 import { html } from "./dom";
+import { currentSpringForce, springReveal } from "./spring-ui";
 import type { ProjectPayload } from "./faces";
 
 /**
@@ -22,6 +23,7 @@ export class FlatDownloadStage {
   private items: StageItem[] = [];
   private index = 0;
   private lastMore = 0;
+  private listSignature = "";
 
   constructor(mount: HTMLElement, private readonly callbacks: FlatDownloadCallbacks) {
     this.element = document.createElement("div");
@@ -150,6 +152,9 @@ export class FlatDownloadStage {
 
   private render(keepScroll: boolean) {
     const scroll = keepScroll ? this.track.scrollLeft : 0;
+    const signature = this.items.map((item) => `${item.key}:${item.revision ?? 0}`).join("|");
+    const fresh = signature !== this.listSignature;
+    this.listSignature = signature;
     this.track.innerHTML = html`${this.items.map((item, index) => this.card(item, index))}${
       this.items.length ? html`<button class="dl-flat-more" data-flat-more type="button"><span>继续加载</span><small>滚轮或 → 查看后面的项目</small></button>` : ""
     }`.value;
@@ -158,6 +163,21 @@ export class FlatDownloadStage {
     const selected = this.track.querySelector<HTMLElement>(`[data-flat-index="${this.index}"]`);
     selected?.setAttribute("data-selected", "true");
     selected?.setAttribute("aria-selected", "true");
+    if (fresh) {
+      const cards = [...this.track.querySelectorAll<HTMLElement>(".dl-flat-card")];
+      requestAnimationFrame(() => {
+        void springReveal(cards, {
+          origin: "bottom",
+          distance: 28,
+          stagger: 130,
+          fromScale: 0.94,
+          fromBlur: 2.5,
+          response: 0.4,
+          dampingRatio: 0.8,
+          force: currentSpringForce(),
+        });
+      });
+    }
   }
 
   private card(item: StageItem, index: number) {

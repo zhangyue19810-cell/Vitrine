@@ -1,6 +1,7 @@
 import { CapsuleTabs } from "./capsule-tabs";
 import { html, setHtml } from "./dom";
 import type { ContentKind } from "./types";
+import { springNumber } from "./spring-ui";
 
 /**
  * The strip of views under the brand: the home ring, then one tab per kind of online content. Every tab other than 首页
@@ -29,9 +30,23 @@ function wireReveal(root: HTMLElement) {
   root.classList.add("view-tabs-reveal");
   const coarse = matchMedia("(hover: none), (pointer: coarse)").matches;
   let closeTimer: ReturnType<typeof setTimeout> | undefined;
-  const setOpen = (open: boolean) => {
+  const setOpen = (open: boolean, immediate = false) => {
     root.classList.toggle("view-tabs-open", open);
     root.dataset.expanded = String(open);
+    const from = Number.parseFloat(root.style.getPropertyValue("--tabs-open"));
+    const start = Number.isFinite(from) ? from : (root.dataset.expanded === "true" ? 1 : 0);
+    const target = open ? 1 : 0;
+    if (immediate) {
+      root.style.setProperty("--tabs-open", String(target));
+      return;
+    }
+    void springNumber({
+      from: start,
+      to: target,
+      response: 0.4,
+      dampingRatio: 0.82,
+      onUpdate: (value) => root.style.setProperty("--tabs-open", String(Math.max(0, Math.min(1, value)))),
+    });
   };
   const open = () => {
     clearTimeout(closeTimer);
@@ -44,7 +59,7 @@ function wireReveal(root: HTMLElement) {
       setOpen(false);
     }, 150);
   };
-  setOpen(coarse);
+  setOpen(coarse, true);
   root.addEventListener("pointerenter", open);
   root.addEventListener("pointerleave", closeSoon);
   root.addEventListener("focusin", open);

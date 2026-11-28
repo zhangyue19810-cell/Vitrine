@@ -52,10 +52,13 @@ interface PlateView {
   fillMaterial: THREE.ShaderMaterial;
   canvas: HTMLCanvasElement;
   texture: THREE.CanvasTexture;
-  /** Springs, each 0…1. */
+  /** Spring positions, each 0…1, with their own velocity state. */
   hover: number;
   press: number;
   appear: number;
+  hoverVelocity: number;
+  pressVelocity: number;
+  appearVelocity: number;
   /** Cell of a `segments` plate that the pointer is over. */
   cell: number | null;
   dead: boolean;
@@ -93,7 +96,22 @@ const DROP_FRAGMENT = /* glsl */ `
   }
 `;
 const ease = (amount: number) => amount * amount * (3 - 2 * amount);
-const follow = (value: number, target: number, rate: number, dt: number) => value + (target - value) * (1 - Math.exp(-rate * dt));
+/** One integration step of an underdamped spring used by every rail control. */
+function springTowards(value: number, velocity: number, target: number, stiffness: number, ratio: number, dt: number): [number, number] {
+  const damping = 2 * ratio * Math.sqrt(stiffness);
+  let x = value;
+  let v = velocity;
+  let remaining = Math.max(0, dt);
+  while (remaining > 0) {
+    const h = Math.min(1 / 120, remaining);
+    const acceleration = -stiffness * (x - target) - damping * v;
+    v += acceleration * h;
+    x += v * h;
+    remaining -= h;
+  }
+  if (Math.abs(x - target) < 0.0005 && Math.abs(v) < 0.003) return [target, 0];
+  return [x, v];
+}
 
 function keyOf(spec: PlateSpec, dark: boolean, caret: boolean): string {
   return JSON.stringify([spec.kind, spec.label, spec.value, spec.active, spec.disabled, spec.options, spec.selected, spec.amount === undefined ? undefined : Math.round(spec.amount * 100), spec.text, spec.placeholder, spec.focused, spec.width, spec.height, dark, spec.focused ? caret : false]);
@@ -133,6 +151,11 @@ export class ControlRail {
   private discHover = 0;
   private discPress = 0;
   private discAppear = 0;
+  private discBigVelocity = 0;
+  private discHoverVelocity = 0;
+  private discPressVelocity = 0;
+  private discAppearVelocity = 0;
+  private discSpeedVelocity = 0;
   private discGhost: number | null = null;
   private discDrag?: { start: number; moved: boolean };
   private discGroup?: THREE.Group;
@@ -304,7 +327,7 @@ export class ControlRail {
     const group = new THREE.Group();
     group.add(shadow, body, face, fill);
     this.scene.add(group);
-    return { spec, key: "", rect: this.rects.get(spec.id) ?? { x: 0, y: 0, w: spec.width, h: plateHeight(spec) }, group, face, body, shadow, fill, fillMaterial, canvas, texture, hover: 0, press: 0, appear: 0, cell: null, dead: false };
+    return { spec, key: "", rect: this.rects.get(spec.id) ?? { x: 0, y: 0, w: spec.width, h: plateHeight(spec) }, group, face, body, shadow, fill, fillMaterial, canvas, texture, hover: 0, press: 0, appear: 0, hoverVelocity: 0, pressVelocity: 0, appearVelocity: 0, cell: null, dead: false };
   }
 
   private print(view: PlateView, caret: boolean) {
@@ -367,7 +390,7 @@ export class ControlRail {
   /** Advance the animation by `dt` seconds and draw if anything changed. */
   update(dt: number, time: number) {
     if (this.disposed) return;
-    dt = Math.min(dt, 0.1);
+    dt = Math.min(dt, 0.2);
     this.clock = time;
     const caret = Math.floor(time * 2) % 2 === 0;
     if (this.inputFor && caret !== this.lastCaret) {
@@ -381,12 +404,9 @@ export class ControlRail {
       const pressTarget = this.pressed?.id === id ? 1 : 0;
       const appearTarget = view.dead ? 0 : 1;
       const before = view.hover + view.press * 3 + view.appear * 7;
-      view.hover = follow(view.hover, hoverTarget, 16, dt);
-      view.press = follow(view.press, pressTarget, 30, dt);
-      view.appear = follow(view.appear, appearTarget, view.dead ? 18 : 9, dt);
-      if (Math.abs(view.hover - hoverTarget) < 0.002) view.hover = hoverTarget;
-      if (Math.abs(view.press - pressTarget) < 0.002) view.press = pressTarget;
-      if (Math.abs(view.appear - appearTarget) < 0.002) view.appear = appearTarget;
+      [view.hover, view.hoverVelocity] = springTowards(view.hover, view.hoverVelocity, hoverTarget, 250, 0.8, dt);
+      [view.press, view.pressVelocity] = springTowards(view.press, view.pressVelocity, pressTarget, 420, 0.88, dt);
+      [view.appear, view.appearVelocity] = springTowards(view.appear, view.appearVelocity, appearTarget, view.dead ? 220 : 130, view.dead ? 0.94 : 0.8, dt);
       if (view.dead && view.appear === 0) dead.push(id);
       else {
         if (before !== view.hover + view.press * 3 + view.appear * 7) moving = true;
@@ -452,19 +472,25 @@ export class ControlRail {
     const spec = this.disc;
     if (!group) return false;
     const appearTarget = spec ? 1 : 0;
-    this.discAppear = follow(this.discAppear, appearTarget, 8, dt);
-    if (Math.abs(this.discAppear - appearTarget) < 0.002) this.discAppear = appearTarget;
+    [this.discAppear, this.discAppearVelocity] = springTowards(this.discAppear, this.discAppearVelocity, appearTarget, 150, 0.84, dt);
     group.visible = this.discAppear > 0.001;
     if (!spec && this.discAppear === 0) return false;
     let moving = this.discAppear !== appearTarget;
     const bigTarget = spec?.big ? 1 : 0;
     const before = this.discBig + this.discHover + this.discPress;
-    this.discBig = follow(this.discBig, bigTarget, 7, dt);
-    if (Math.abs(this.discBig - bigTarget) < 0.002) this.discBig = bigTarget;
+    [this.discBig, this.discBigVelocity] = springTowards(this.discBig, this.discBigVelocity, bigTarget, 120, 0.8, dt);
     const hoverTarget = this.discOver() ? 1 : 0;
-    this.discHover = follow(this.discHover, hoverTarget, 14, dt);
-    this.discPress = follow(this.discPress, this.discDrag || (this.pressed?.id === "$disc") ? 1 : 0, 24, dt);
+    [this.discHover, this.discHoverVelocity] = springTowards(this.discHover, this.discHoverVelocity, hoverTarget, 230, 0.82, dt);
+    [this.discPress, this.discPressVelocity] = springTowards(
+      this.discPress,
+      this.discPressVelocity,
+      this.discDrag || (this.pressed?.id === "$disc") ? 1 : 0,
+      360,
+      0.9,
+      dt,
+    );
     if (before !== this.discBig + this.discHover + this.discPress) moving = true;
+    if (this.discBig !== bigTarget || this.discHover !== hoverTarget) moving = true;
 
     // Where it is and how large: between the small and the big disc.
     const small = discGeometry(this.view, false, this.scale);
@@ -489,7 +515,7 @@ export class ControlRail {
 
     // The turning: a song's disc spins at 33⅓ r/min in spirit (a little slower so that the cover stays readable); a pause lets it coast to a stop.
     const speed = spec?.playing ? 1 : 0;
-    this.discSpeed = follow(this.discSpeed, speed, spec?.playing ? 3 : 1.6, dt);
+    [this.discSpeed, this.discSpeedVelocity] = springTowards(this.discSpeed, this.discSpeedVelocity, speed, 80, 0.9, dt);
     if (this.discSpeed < 0.002 && !spec?.playing) this.discSpeed = 0;
     else moving = true;
     this.discSpin += dt * this.discSpeed * 1.3 * (1 + (spec?.level ?? 0) * 0.5);

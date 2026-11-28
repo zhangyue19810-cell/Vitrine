@@ -14,6 +14,7 @@ import "./styles/flowing-cards.css";
 import "./styles/glass-depth.css";
 import "./styles/button-depth.css";
 import "./styles/liquid-glass-webgl.css";
+import "./styles/apple-motion.css";
 import { startApp } from "./app/app";
 import { installSelectMenus } from "./app/select-menu";
 import { preloadVisualAssets } from "./app/warmup";
