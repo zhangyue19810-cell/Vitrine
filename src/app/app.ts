@@ -15,6 +15,7 @@ import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
 import { installGlassTuner } from "./glass-tuner";
 import { installWaterRingTuner } from "./water-ring-tuner";
+import { currentSpringForce, springReveal } from "./spring-ui";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { MusicDock } from "./music/dock";
@@ -97,8 +98,6 @@ export class App implements PerfApp {
   private selected = 0;
   private readonly laneMemory = new Map<number, number>();
   private splashActive = true;
-  private transitionTimer = 0;
-  private entranceTimer = 0;
   private reduced = false;
   private dark = false;
   private hoverIndex: number | null = null;
@@ -305,9 +304,17 @@ export class App implements PerfApp {
     await splash?.finish();
     this.stage.dataset.entered = "true";
     this.island?.start();
-    this.stage.classList.add("ui-entering");
-    clearTimeout(this.entranceTimer);
-    this.entranceTimer = window.setTimeout(() => this.stage.classList.remove("ui-entering"), 2400);
+    const entrance = this.stage.querySelectorAll<HTMLElement>(
+      ".brand, .system-nav, .view-tabs, .home > *, .download > *, .detail > *, .system-footer",
+    );
+    void springReveal(entrance, {
+      origin: "top-right",
+      distance: 40,
+      stagger: 320,
+      stiffness: 150,
+      dampingRatio: 0.72,
+      force: 1.08,
+    });
     this.exposeDebug();
 
     if (!store.instances.length) toast("先点“新建实例”安装一个版本，或把整合包文件拖进窗口导入。", "info", 9000);
@@ -480,37 +487,31 @@ export class App implements PerfApp {
    */
   private pulsePageTransition() {
     const stage = this.stage;
-    stage.dataset.staggering = "false";
+    for (const item of stage.querySelectorAll<HTMLElement>("[data-page-item]")) {
+      delete item.dataset.pageItem;
+      item.style.removeProperty("--page-delay");
+    }
+    delete stage.dataset.staggering;
+    const targets = new Set<HTMLElement>();
     for (const page of stage.querySelectorAll<HTMLElement>(".home, .download, .detail")) {
-      const top = new Map<HTMLElement, number>();
-      let topIndex = 0;
-      for (const item of page.querySelectorAll<HTMLElement>(":scope > *")) {
-        top.set(item, topIndex * 100);
-        item.dataset.pageItem = "";
-        item.style.setProperty("--page-delay", `${topIndex * 100}ms`);
-        topIndex++;
-      }
+      for (const child of page.children) if (child instanceof HTMLElement) targets.add(child);
       for (const parent of page.querySelectorAll<HTMLElement>(".callout, .dl-bar, .detail-panel")) {
-        const parentDelay = top.get(parent) ?? 0;
-        let childIndex = 0;
         for (const child of parent.children) {
           if (!(child instanceof HTMLElement)) continue;
-          if (child.classList.contains("liquid-edge") || child.classList.contains("liquid-sheen") || child.classList.contains("liquid-glass-layer") || child.classList.contains("liquid-glass-tint")) continue;
-          child.dataset.pageItem = "";
-          child.style.setProperty("--page-delay", `${parentDelay + 60 + childIndex * 38}ms`);
-          childIndex++;
+          if (child.classList.contains("liquid-edge") || child.classList.contains("liquid-sheen")) continue;
+          if (child.classList.contains("liquid-glass-layer") || child.classList.contains("liquid-glass-tint")) continue;
+          targets.add(child);
         }
       }
     }
-    // Force the old animation state to detach before applying the new one.
-    // The delay is intentionally not driven by requestAnimationFrame: the 3D
-    // scheduler can throttle a frame while it regroups the stage.
-    void stage.offsetWidth;
-    stage.dataset.staggering = "true";
-    clearTimeout(this.transitionTimer);
-    this.transitionTimer = window.setTimeout(() => {
-      delete stage.dataset.staggering;
-    }, 1800);
+    void springReveal(targets, {
+      origin: "bottom",
+      distance: 42,
+      stagger: 230,
+      stiffness: 165,
+      dampingRatio: 0.72,
+      force: currentSpringForce(),
+    });
   }
 
   private setView(view: View) {

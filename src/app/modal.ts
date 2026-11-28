@@ -1,5 +1,6 @@
 import { action, el, html, raw, type Raw } from "./dom";
 import { sound } from "./sound";
+import { currentSpringForce, springElement } from "./spring-ui";
 
 /**
  * Sheets are full pages that slide over the shelf (settings, downloads, browsing…); because they are opaque the 3D scene
@@ -137,6 +138,7 @@ export function openSheet(options: SheetOptions): ModalHandle {
     <div class="sheet-body${options.scroll ? " scroll" : ""}" data-slot="body"></div>`.value;
   rootElement().append(root);
   const { entry, closed } = register({ kind: "sheet", root, opener: document.activeElement, onClose: options.onClose, beforeClose: options.beforeClose }, root);
+  void springElement(root, { fromY: 24, fromOpacity: 0, stiffness: 165, dampingRatio: 0.74, force: currentSpringForce() });
   return {
     root,
     body: root.querySelector<HTMLElement>('[data-slot="body"]')!,
@@ -203,6 +205,8 @@ export function openDialog(options: DialogOptions): DialogHandle {
   const cancelId = options.cancelId ?? "cancel";
   let chosen = cancelId;
   const registered = register({ kind: "dialog", root, scrim, opener: document.activeElement, onClose: () => resolveResult(chosen) }, root);
+  void springElement(scrim, { fromY: 0, fromOpacity: 0, toOpacity: 1, stiffness: 220, dampingRatio: 0.9 });
+  void springElement(root, { fromY: 18, fromOpacity: 0, stiffness: 175, dampingRatio: 0.73, force: currentSpringForce() });
   const handle: DialogHandle = {
     root,
     body,

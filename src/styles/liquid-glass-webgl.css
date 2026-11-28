@@ -267,3 +267,42 @@
 .water-tuner .glass-tuner-body + .water-section-title {
   margin-top: 12px;
 }
+
+
+/* Major overlays are driven by the rAF spring runner, not CSS timelines. */
+.sheet,
+.dialog,
+.scrim {
+  animation: none !important;
+}
+
+/* Strip the remaining old CSS frames from the shader hosts: their straight
+ * borders and clipped shadows showed as dark vertical corners around rounded
+ * glass surfaces. */
+:root:root .liquid-shader-host:not(.toggle) {
+  border: 0 !important;
+  outline: 0 !important;
+}
+:root:root .liquid-shader-host.settings-nav {
+  border-right: 0 !important;
+}
+:root:root .liquid-shader-host.setting {
+  border-bottom: 0 !important;
+}
+:root:root .liquid-shader-host.sheet,
+:root:root .liquid-shader-host.dialog {
+  border: 0 !important;
+}
+:root:root .liquid-shader-host > .liquid-edge,
+:root:root .liquid-shader-host > .liquid-sheen,
+:root:root .liquid-shader-host > .liquid-glass-layer,
+:root:root .liquid-shader-host > .liquid-glass-tint,
+:root:root .liquid-shader-host > .liquid-drop {
+  display: none !important;
+}
+
+/* The old scanner frame belongs to the cassette inspection sequence; it must
+ * not sit over a settings sheet and read as a rectangular UI outline. */
+#stage:has(.modal-root[data-open="true"]) #inspection-marks {
+  opacity: 0 !important;
+}

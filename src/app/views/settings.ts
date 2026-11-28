@@ -6,6 +6,7 @@ import { formatBytes } from "../format";
 import { confirmDialog, openSheet, promptDialog, toast, type ModalHandle } from "../modal";
 import { store } from "../store";
 import { memoryOptions } from "../ui-bits";
+import { currentSpringForce, springElement, springReveal } from "../spring-ui";
 import type { JavaInstall, Settings } from "../types";
 import { PRODUCT } from "../../brand";
 import { RING_MATERIALS, type RingMaterialId } from "../../ring-materials";
@@ -239,27 +240,20 @@ const sectionCapsules = new WeakMap<HTMLElement, CapsuleTabs>();
 /** Top-to-bottom reveal shared with the page-switch cascade. It also gives
  * the WebGL glass batches enough time to paint while rows slide in. */
 function revealSettingsSheet(sheet: ModalHandle) {
-  const stage = document.querySelector<HTMLElement>("#stage");
-  if (!stage) return;
   const head = sheet.root.querySelector<HTMLElement>(".sheet-head");
   const nav = [...sheet.body.querySelectorAll<HTMLElement>(".settings-nav button")];
   const panel = sheet.body.querySelector<HTMLElement>("[data-panel]:not([hidden])");
   const rows = panel ? [...panel.querySelectorAll<HTMLElement>(".setting")] : [];
   const items = [head, ...nav, ...rows].filter((item): item is HTMLElement => Boolean(item));
-  let maxDelay = 0;
-  items.forEach((item, index) => {
-    const delay = index === 0 ? 0 : 90 + index * 42;
-    maxDelay = Math.max(maxDelay, delay);
-    item.dataset.pageItem = "";
-    item.style.setProperty("--page-delay", `${delay}ms`);
-  });
-  stage.dataset.staggering = "false";
-  void sheet.root.offsetWidth;
-  stage.dataset.staggering = "true";
   clearTimeout(revealTimer);
-  revealTimer = window.setTimeout(() => {
-    delete stage.dataset.staggering;
-  }, maxDelay + 1000);
+  void springReveal(items, {
+    origin: "top-right",
+    distance: 26,
+    stiffness: 175,
+    dampingRatio: 0.7,
+    force: currentSpringForce(),
+    delayFor: (_element, index) => Math.min(420, index * 42),
+  });
 }
 
 export function openSettings(sectionId = "general") {
@@ -403,7 +397,7 @@ function fieldOptions(path: string): Opt[] {
   return [];
 }
 
-let panelAnimations: Animation[] = [];
+let sectionTransition = 0;
 
 function selectSection(root: HTMLElement, id: string, animate = false) {
   const buttons = [...root.querySelectorAll<HTMLElement>("[data-section]")];
@@ -416,8 +410,7 @@ function selectSection(root: HTMLElement, id: string, animate = false) {
   if (!next) return;
   const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches || Boolean(root.closest(".reduce-motion"));
   const shouldAnimate = animate && previous && previous !== next && !reduced;
-  panelAnimations.forEach((animation) => animation.cancel());
-  panelAnimations = [];
+  const token = ++sectionTransition;
 
   for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) {
     if (panel !== next && panel !== (shouldAnimate ? previous : null)) panel.hidden = true;
@@ -426,8 +419,6 @@ function selectSection(root: HTMLElement, id: string, animate = false) {
   if (body) body.scrollTop = 0;
 
   if (shouldAnimate && previous) {
-    // TikTok-style vertical hand-off: the old panel leaves upward while the
-    // next one rises from the bottom (reverse when moving back up the list).
     const down = nextIndex >= previousIndex;
     const oldHeight = previous.offsetHeight;
     previous.style.position = "absolute";
@@ -436,23 +427,14 @@ function selectSection(root: HTMLElement, id: string, animate = false) {
     previous.style.zIndex = "2";
     previous.style.pointerEvents = "none";
     previous.style.overflow = "hidden";
-    const oldAnimation = previous.animate(
-      [
-        { opacity: 1, transform: "translateY(0)" },
-        { opacity: 0, transform: `translateY(${down ? -26 : 26}px)` },
-      ],
-      { duration: 320, easing: "cubic-bezier(0.4, 0, 0.8, 1)", fill: "both" },
-    );
-    const newAnimation = next.animate(
-      [
-        { opacity: 0, transform: `translateY(${down ? 46 : -46}px)` },
-        { opacity: 1, transform: "translateY(0)" },
-      ],
-      { duration: 440, easing: "cubic-bezier(0.16, 0.95, 0.25, 1)", fill: "both" },
-    );
-    panelAnimations = [oldAnimation, newAnimation];
-    void oldAnimation.finished.catch(() => undefined).finally(() => {
-      if (!previous.isConnected || previous === next) return;
+    void springElement(previous, {
+      fromY: down ? -30 : 30,
+      fromOpacity: 1,
+      toOpacity: 0,
+      stiffness: 210,
+      dampingRatio: 0.92,
+    }).then(() => {
+      if (token !== sectionTransition) return;
       previous.hidden = true;
       previous.style.removeProperty("position");
       previous.style.removeProperty("inset");
@@ -461,7 +443,14 @@ function selectSection(root: HTMLElement, id: string, animate = false) {
       previous.style.removeProperty("pointer-events");
       previous.style.removeProperty("overflow");
     });
-    void newAnimation.finished.catch(() => undefined);
+    void springElement(next, {
+      fromY: down ? 46 : -46,
+      fromOpacity: 0,
+      toOpacity: 1,
+      stiffness: 155,
+      dampingRatio: 0.72,
+      force: currentSpringForce(),
+    });
   } else {
     for (const panel of root.querySelectorAll<HTMLElement>("[data-panel]")) panel.hidden = panel !== next;
     if (previous) {
