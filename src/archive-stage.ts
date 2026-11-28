@@ -3,6 +3,7 @@ import { newFrame, wrapSigned, type RingFrame } from "./mobius-ring";
 import { BAND, BOUNCE, BandPath, TRACK, newPlate, lapFlip, plateAt, turnPlate, unrollOrder, type PlateFrame } from "./fin-band";
 import type { SpectrumField } from "./spectrum";
 import { FinMesh } from "./fin-mesh";
+import { WaterMobiusRing } from "./water-mobius-ring";
 import { ROW, rowFrame } from "./row-track";
 import {
   TIMING,
@@ -304,6 +305,8 @@ export class ArchiveStage {
   private readonly detailFace: Face;
   /** The Möbius ring's plates (the same ones become the track of the download view). */
   readonly fins = new FinMesh();
+  private readonly waterRing = new WaterMobiusRing();
+  private waterRingActive = false;
   private faceTint = new THREE.Color("#ffffff");
   private faceTone?: import("./ring-materials").RingMaterialId;
   private readonly bandPath = new BandPath();
@@ -392,7 +395,7 @@ export class ArchiveStage {
     this.detailFace = new Face("detail", this.painter, this.faceGeometry, this.anisotropy);
     this.group.add(this.infoFace.mesh, this.detailFace.mesh);
 
-    this.group.add(this.fins.mesh);
+    this.group.add(this.fins.mesh, this.waterRing.group);
     this.group.add(this.sky.group, this.hole.group, this.turntable.group, this.lyrics.group);
     this.glow.userData.ownLight = true;
     this.glow.castShadow = false;
@@ -1393,8 +1396,13 @@ export class ArchiveStage {
       this.lyrics.hide();
     }
     this.fins.setDeep(smooth(mix));
-    this.fins.update({ turn, shift, morph: clamp(this.morph.value, 0, 1), clock: this.clock, presence: smooth(this.presence) * clamp(this.assemble.value, 0, 1), audio: this.audio, dt, world });
-    this.fins.setVisible(this.started && this.presence > 0.002);
+    const morph = clamp(this.morph.value, 0, 1);
+    const presence = smooth(this.presence) * clamp(this.assemble.value, 0, 1);
+    this.fins.update({ turn, shift, morph, clock: this.clock, presence, audio: this.audio, dt, world });
+    const waterVisible = this.waterRingActive && this.started && presence > 0.002 && morph < 0.58;
+    this.waterRing.update({ clock: this.clock, presence, morph, started: this.started });
+    this.waterRing.group.visible = waterVisible;
+    this.fins.setVisible(!waterVisible && this.started && this.presence > 0.002);
     // The turntable rises out of the dark as the plates come in rings round its place.
     if (this.halo) this.turntable.place(this.halo, smooth((this.deckAmount - 0.35) / 0.65));
     else this.turntable.place(DUMMY_HALO, 0);
@@ -1687,11 +1695,14 @@ export class ArchiveStage {
   /** Recolour the Möbius plates together with the archive shells. */
   setRingMaterial(preset: RingMaterialPreset | undefined) {
     this.fins.setRingMaterial(preset);
+    this.waterRingActive = preset?.id === "liquid-water";
     this.faceTone = preset?.id;
     const tint = !preset || preset.original
       ? "#ffffff"
-      : preset.id === "flow-white"
-        ? "#eaf4ff"
+      : preset.id === "liquid-water"
+        ? "#e9fbff"
+        : preset.id === "flow-white"
+          ? "#eaf4ff"
         : preset.id === "azure"
           ? "#d9efff"
           : preset.id === "crimson"
@@ -1724,6 +1735,7 @@ export class ArchiveStage {
     this.detailFace.dispose();
     this.faceGeometry.dispose();
     this.fins.dispose();
+    this.waterRing.dispose();
     this.sky.dispose();
     this.lyrics.dispose();
     this.turntable.dispose();

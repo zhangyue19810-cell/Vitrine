@@ -27,6 +27,7 @@ const GLASS_TARGETS = [
   ".system-nav", ".view-tabs", ".callout", ".detail-panel", ".dl-bar",
   ".sheet", ".dialog", ".card", ".dl-flat-card",
   ".stat", ".setting", ".mod-row", ".mod-update-row", ".material-option",
+  ".dl-task", ".dl-detail", ".dl-top",
   ".hud-left", ".hud-capsule", ".hud-queue", ".hud-float", ".item", ".empty", ".logview",
   ".settings-nav", ".menu", ".together-room", ".toast", ".launch-card", ".version-row", ".pick",
 ].join(",");

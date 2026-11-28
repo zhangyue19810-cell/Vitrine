@@ -14,6 +14,7 @@ import { installDropZone } from "./dropzone";
 import { HomeView, STAGE_TEMPLATE } from "./home";
 import { installLiquidGlass } from "./liquid-glass";
 import { installGlassTuner } from "./glass-tuner";
+import { installWaterRingTuner } from "./water-ring-tuner";
 import { Layout } from "./layout";
 import { modals, toast, wireModals } from "./modal";
 import { MusicDock } from "./music/dock";
@@ -197,6 +198,7 @@ export class App implements PerfApp {
     document.title = `${PRODUCT.name} ${PRODUCT.nameCn}`;
     installLiquidGlass(stage);
     installGlassTuner();
+    installWaterRingTuner();
     wireModals();
     this.layout = new Layout(this.viewport, stage);
 

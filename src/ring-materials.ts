@@ -7,7 +7,7 @@
  * keeps readable highlights and depth at every angle.
  */
 
-export type RingMaterialId = "black-gold" | "crimson" | "violet" | "azure" | "pearl" | "jade" | "copper" | "obsidian" | "carbon" | "flow-white";
+export type RingMaterialId = "black-gold" | "crimson" | "violet" | "azure" | "pearl" | "jade" | "copper" | "obsidian" | "carbon" | "flow-white" | "liquid-water";
 
 export interface RingMaterialPreset {
   id: RingMaterialId;
@@ -213,6 +213,26 @@ export const RING_MATERIALS: readonly RingMaterialPreset[] = [
     thickness: 0.38,
     attenuation: "#eef3fb",
     attenuationDistance: 1.9,
+  },
+  {
+    id: "liquid-water",
+    label: "液态水环",
+    tag: "LIQUID MÖBIUS",
+    description: "连续水膜莫比乌斯带，实时波纹、清透折射与水面高光。",
+    swatch: "linear-gradient(135deg,#dff8ff,#78c7d9 46%,#ffffff)",
+    metal: "#dff6ff",
+    glass: "#e9fbff",
+    accent: "#ffffff",
+    dark: "#8ccad8",
+    metalness: 0,
+    roughness: 0.03,
+    clearcoat: 1,
+    clearcoatRoughness: 0.015,
+    envMapIntensity: 1.65,
+    transmission: 1,
+    thickness: 0.95,
+    attenuation: "#d7f5ff",
+    attenuationDistance: 6.2,
   },
   {
     id: "carbon",
