@@ -4,25 +4,43 @@ import { BAND, BandPath, newPlate, plateAt } from "./fin-band";
 export interface WaterRingTuning {
   widthScale: number;
   waveAmplitude: number;
+  waveFrequency: number;
   waveSpeed: number;
+  flowScale: number;
+  turbulence: number;
   opacity: number;
   transmission: number;
   ior: number;
   roughness: number;
+  clearcoat: number;
+  clearcoatRoughness: number;
+  dispersion: number;
+  attenuationDistance: number;
   envMapIntensity: number;
+  bumpScale: number;
   color: string;
+  attenuation: string;
 }
 
 export const WATER_RING_DEFAULTS: WaterRingTuning = {
-  widthScale: 1,
-  waveAmplitude: 0.035,
-  waveSpeed: 1.35,
-  opacity: 0.68,
+  widthScale: 1.35,
+  waveAmplitude: 0.16,
+  waveFrequency: 7,
+  waveSpeed: 3,
+  flowScale: 3,
+  turbulence: 0.018,
+  opacity: 0.82,
   transmission: 1,
   ior: 1.333,
-  roughness: 0.012,
-  envMapIntensity: 2.4,
-  color: "#c9f2fb",
+  roughness: 0.018,
+  clearcoat: 1,
+  clearcoatRoughness: 0.018,
+  dispersion: 0.018,
+  attenuationDistance: 5.8,
+  envMapIntensity: 1.3,
+  bumpScale: 0.018,
+  color: "#f4fbff",
+  attenuation: "#e5f5ff",
 };
 
 let waterTuningHook: ((patch: Partial<WaterRingTuning>) => void) | undefined;
@@ -56,7 +74,16 @@ export class WaterMobiusRing {
   private readonly material: THREE.MeshPhysicalMaterial;
   private readonly params: WaterRingTuning = { ...waterTuningState };
   private readonly bumpTexture: THREE.CanvasTexture;
-  private shader?: { uniforms: { uTime: { value: number }; uWave: { value: number }; uSpeed: { value: number } } };
+  private shader?: {
+    uniforms: {
+      uTime: { value: number };
+      uWave: { value: number };
+      uSpeed: { value: number };
+      uFrequency: { value: number };
+      uFlowScale: { value: number };
+      uTurbulence: { value: number };
+    };
+  };
 
   constructor() {
     const bumpCanvas = document.createElement("canvas");
@@ -86,7 +113,7 @@ export class WaterMobiusRing {
 
     this.material = new THREE.MeshPhysicalMaterial({
       bumpMap: this.bumpTexture,
-      bumpScale: 0.028,
+      bumpScale: this.params.bumpScale,
       sheen: 0.32,
       sheenColor: new THREE.Color("#e9fcff"),
       sheenRoughness: 0.35,
@@ -95,13 +122,14 @@ export class WaterMobiusRing {
       color: new THREE.Color(this.params.color),
       metalness: 0,
       roughness: this.params.roughness,
+      dispersion: this.params.dispersion,
       clearcoat: 1,
-      clearcoatRoughness: 0.012,
+      clearcoatRoughness: this.params.clearcoatRoughness,
       transmission: this.params.transmission,
-      thickness: 0.62,
+      thickness: 0.82,
       ior: this.params.ior,
-      attenuationColor: new THREE.Color("#a9e7f2"),
-      attenuationDistance: 7.5,
+      attenuationColor: new THREE.Color(this.params.attenuation),
+      attenuationDistance: this.params.attenuationDistance,
       envMapIntensity: this.params.envMapIntensity,
       transparent: true,
       opacity: this.params.opacity,
@@ -112,14 +140,17 @@ export class WaterMobiusRing {
       shader.uniforms.uTime = { value: 0 };
       shader.uniforms.uWave = { value: this.params.waveAmplitude };
       shader.uniforms.uSpeed = { value: this.params.waveSpeed };
-      shader.vertexShader = `uniform float uTime;\nuniform float uWave;\nuniform float uSpeed;\n${shader.vertexShader}`.replace(
+      shader.uniforms.uFrequency = { value: this.params.waveFrequency };
+      shader.uniforms.uFlowScale = { value: this.params.flowScale };
+      shader.uniforms.uTurbulence = { value: this.params.turbulence };
+      shader.vertexShader = `uniform float uTime;\nuniform float uWave;\nuniform float uSpeed;\nuniform float uFrequency;\nuniform float uFlowScale;\nuniform float uTurbulence;\n${shader.vertexShader}`.replace(
         "#include <begin_vertex>",
         `#include <begin_vertex>
         float waterWave = sin(position.x * 0.72 + position.y * 0.48 + uTime * uSpeed) * uWave;
         waterWave += sin(position.z * 1.4 - uTime * uSpeed * 0.62) * uWave * 0.52;
         transformed += normal * waterWave;`,
       );
-      this.shader = shader as unknown as { uniforms: { uTime: { value: number }; uWave: { value: number }; uSpeed: { value: number } } };
+      this.shader = shader as unknown as typeof this.shader;
     };
     this.material.customProgramCacheKey = () => "vitrine-water-mobius-v2";
 
@@ -187,11 +218,20 @@ export class WaterMobiusRing {
     this.material.transmission = this.params.transmission;
     this.material.ior = this.params.ior;
     this.material.roughness = this.params.roughness;
+    this.material.clearcoat = this.params.clearcoat;
+    this.material.clearcoatRoughness = this.params.clearcoatRoughness;
+    this.material.dispersion = this.params.dispersion;
+    this.material.attenuationColor.set(this.params.attenuation);
+    this.material.attenuationDistance = this.params.attenuationDistance;
     this.material.envMapIntensity = this.params.envMapIntensity;
+    this.material.bumpScale = this.params.bumpScale;
     this.material.needsUpdate = true;
     if (this.shader) {
       this.shader.uniforms.uWave.value = this.params.waveAmplitude;
       this.shader.uniforms.uSpeed.value = this.params.waveSpeed;
+      this.shader.uniforms.uFrequency.value = this.params.waveFrequency;
+      this.shader.uniforms.uFlowScale.value = this.params.flowScale;
+      this.shader.uniforms.uTurbulence.value = this.params.turbulence;
     }
   }
 
@@ -204,6 +244,9 @@ export class WaterMobiusRing {
       this.shader.uniforms.uTime.value = state.clock;
       this.shader.uniforms.uWave.value = this.params.waveAmplitude;
       this.shader.uniforms.uSpeed.value = this.params.waveSpeed;
+      this.shader.uniforms.uFrequency.value = this.params.waveFrequency;
+      this.shader.uniforms.uFlowScale.value = this.params.flowScale;
+      this.shader.uniforms.uTurbulence.value = this.params.turbulence;
     }
     this.group.rotation.z = Math.sin(state.clock * 0.075) * 0.045;
   }

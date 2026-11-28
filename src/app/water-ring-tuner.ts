@@ -3,7 +3,7 @@ import { WATER_RING_DEFAULTS, getWaterRingTuning, updateWaterRingTuning, type Wa
 const STORAGE_KEY = "vitrine.waterRingTuning.v1";
 
 interface Spec {
-  key: Exclude<keyof WaterRingTuning, "color">;
+  key: Exclude<keyof WaterRingTuning, "color" | "attenuation">;
   label: string;
   min: number;
   max: number;
@@ -13,13 +13,21 @@ interface Spec {
 
 const SPECS: Spec[] = [
   { key: "widthScale", label: "水膜宽度", min: 0.4, max: 1.6, step: 0.01 },
-  { key: "waveAmplitude", label: "波纹幅度", min: 0, max: 0.16, step: 0.001 },
-  { key: "waveSpeed", label: "流动速度", min: 0, max: 3, step: 0.01 },
+  { key: "waveAmplitude", label: "波纹幅度", min: 0, max: 0.5, step: 0.001 },
+  { key: "waveFrequency", label: "波纹频率", min: 0, max: 14, step: 0.1 },
+  { key: "waveSpeed", label: "流动速度", min: 0, max: 5, step: 0.01 },
+  { key: "flowScale", label: "流动尺度", min: 0, max: 6, step: 0.01 },
+  { key: "turbulence", label: "湍流", min: 0, max: 0.2, step: 0.001 },
   { key: "opacity", label: "不透明度", min: 0.1, max: 1, step: 0.01 },
   { key: "transmission", label: "透射", min: 0, max: 1, step: 0.01 },
   { key: "ior", label: "折射率", min: 1, max: 2.5, step: 0.01 },
   { key: "roughness", label: "粗糙度", min: 0, max: 0.3, step: 0.005 },
+  { key: "clearcoat", label: "清漆", min: 0, max: 1, step: 0.01 },
+  { key: "clearcoatRoughness", label: "清漆粗糙度", min: 0, max: 0.3, step: 0.005 },
+  { key: "dispersion", label: "色散", min: 0, max: 0.1, step: 0.001 },
+  { key: "attenuationDistance", label: "衰减距离", min: 0.5, max: 15, step: 0.1 },
   { key: "envMapIntensity", label: "环境反射", min: 0, max: 3, step: 0.01 },
+  { key: "bumpScale", label: "波纹凹凸", min: 0, max: 0.08, step: 0.001 },
 ];
 
 function load(): Partial<WaterRingTuning> {
@@ -43,7 +51,8 @@ export function installWaterRingTuner(): () => void {
       <button type="button" class="glass-tuner-close" aria-label="关闭">×</button>
     </header>
     <div class="glass-tuner-body"></div>
-    <label class="glass-tuner-row water-color-row"><span>水色</span><input type="color"><output></output></label>
+    <label class="glass-tuner-row water-color-row"><span>水色</span><input type="color" data-water-color="color"><output></output></label>
+    <label class="glass-tuner-row water-color-row"><span>衰减色</span><input type="color" data-water-color="attenuation"><output></output></label>
     <footer class="glass-tuner-foot">
       <button type="button" data-water="reset">重置</button>
       <button type="button" data-water="copy">复制参数</button>
@@ -66,14 +75,17 @@ export function installWaterRingTuner(): () => void {
     });
     body.append(row);
   }
-  const colorInput = panel.querySelector<HTMLInputElement>(".water-color-row input")!;
-  const colorOutput = panel.querySelector<HTMLOutputElement>(".water-color-row output")!;
-  colorInput.value = state.color;
-  colorOutput.value = state.color;
-  colorInput.addEventListener("input", () => {
-    state.color = colorInput.value;
-    colorOutput.value = state.color;
-    apply();
+  const colorInputs = [...panel.querySelectorAll<HTMLInputElement>("input[data-water-color]")];
+  const colorOutputs = [...panel.querySelectorAll<HTMLOutputElement>(".water-color-row output")];
+  colorInputs.forEach((input, index) => {
+    const key = input.dataset.waterColor as "color" | "attenuation";
+    input.value = state[key];
+    colorOutputs[index].value = state[key];
+    input.addEventListener("input", () => {
+      state[key] = input.value;
+      colorOutputs[index].value = input.value;
+      apply();
+    });
   });
 
   const apply = () => {
@@ -93,8 +105,11 @@ export function installWaterRingTuner(): () => void {
       const output = outputs.get(spec.key);
       if (output) output.value = `${state[spec.key]}${spec.suffix ?? ""}`;
     }
-    colorInput.value = state.color;
-    colorOutput.value = state.color;
+    colorInputs.forEach((input, index) => {
+      const key = input.dataset.waterColor as "color" | "attenuation";
+      input.value = state[key];
+      colorOutputs[index].value = state[key];
+    });
   };
   // Give each range a stable key so reset can refresh it.
   panel.querySelectorAll<HTMLInputElement>(".glass-tuner-body input[type=range]").forEach((input, index) => {
@@ -114,6 +129,10 @@ export function installWaterRingTuner(): () => void {
     panel.querySelectorAll<HTMLInputElement>(".glass-tuner-body input[type=range]").forEach((input) => {
       const key = input.dataset.waterKey as Spec["key"] | undefined;
       if (key) input.value = String(state[key]);
+    });
+    colorInputs.forEach((input) => {
+      const key = input.dataset.waterColor as "color" | "attenuation";
+      input.value = state[key];
     });
     refresh();
     apply();
